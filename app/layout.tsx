@@ -39,9 +39,6 @@ export const metadata: Metadata = {
     title: `${site.name} — ${site.tagline}`,
     description: site.description,
   },
-  icons: {
-    icon: '/brand/rhyze-logo-dark.png',
-  },
 };
 
 export default function RootLayout({
@@ -52,8 +49,16 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${bebas.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-rhyze-black font-sans text-rhyze-cream antialiased">
+        <a
+          href="#content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-full focus:bg-rhyze-coral focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-rhyze-black"
+        >
+          Skip to content
+        </a>
         <Header />
-        <div className="pt-20">{children}</div>
+        <div id="content" className="pt-20">
+          {children}
+        </div>
         <Footer />
         <CartDrawer />
       </body>
