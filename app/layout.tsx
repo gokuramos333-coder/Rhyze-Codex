@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Bebas_Neue, Inter } from 'next/font/google';
 import './globals.css';
 import { site } from '@/lib/site';
+import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
 
 const bebas = Bebas_Neue({
   subsets: ['latin'],
@@ -49,7 +51,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${bebas.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-rhyze-black font-sans text-rhyze-cream antialiased">
-        {children}
+        <Header />
+        <div className="pt-20">{children}</div>
+        <Footer />
       </body>
     </html>
   );
