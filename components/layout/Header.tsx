@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { primaryNav, site } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 import { MobileNav } from '@/components/layout/MobileNav';
+import { CartButton } from '@/components/layout/CartButton';
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -105,6 +106,7 @@ export function Header() {
           </nav>
 
           <div className="hidden items-center gap-3 lg:flex">
+            <CartButton />
             <Link
               href="/signin"
               className="focus-ring rounded-md px-3 py-2 text-sm font-medium uppercase tracking-wide text-rhyze-cream/80 hover:text-rhyze-coral"
@@ -116,15 +118,18 @@ export function Header() {
             </Button>
           </div>
 
-          <button
-            type="button"
-            aria-label="Open menu"
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen(true)}
-            className="focus-ring rounded-md p-2 text-rhyze-cream lg:hidden"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
+          <div className="flex items-center gap-2 lg:hidden">
+            <CartButton />
+            <button
+              type="button"
+              aria-label="Open menu"
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen(true)}
+              className="focus-ring rounded-md p-2 text-rhyze-cream"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+          </div>
         </div>
       </header>
       <MobileNav open={mobileOpen} onClose={() => setMobileOpen(false)} />

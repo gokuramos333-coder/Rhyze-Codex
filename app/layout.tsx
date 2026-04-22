@@ -4,6 +4,7 @@ import './globals.css';
 import { site } from '@/lib/site';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { CartDrawer } from '@/components/sections/CartDrawer';
 
 const bebas = Bebas_Neue({
   subsets: ['latin'],
@@ -54,6 +55,7 @@ export default function RootLayout({
         <Header />
         <div className="pt-20">{children}</div>
         <Footer />
+        <CartDrawer />
       </body>
     </html>
   );
