@@ -1,12 +1,25 @@
-export default function HomePlaceholder() {
+import { Hero } from '@/components/sections/Hero';
+import { WelcomeCopy } from '@/components/sections/WelcomeCopy';
+import { ThreePillars } from '@/components/sections/ThreePillars';
+import { SchedulePreview } from '@/components/sections/SchedulePreview';
+import { PricingTeaser } from '@/components/sections/PricingTeaser';
+import { FoundersStrip } from '@/components/sections/FoundersStrip';
+import { LocationBlock } from '@/components/sections/LocationBlock';
+import { FinalCTA } from '@/components/sections/FinalCTA';
+
+// The pt-20 spacer in layout.tsx makes room for the fixed header. We negate
+// it here so the hero truly fills the viewport on the home page.
+export default function HomePage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <div className="text-center">
-        <h1 className="mb-4 text-6xl">RHYZE FITNESS</h1>
-        <p className="text-rhyze-cream/70">
-          Scaffold ready. Home page coming in step 4.
-        </p>
-      </div>
+    <main className="-mt-20">
+      <Hero />
+      <WelcomeCopy />
+      <ThreePillars />
+      <SchedulePreview />
+      <PricingTeaser />
+      <FoundersStrip />
+      <LocationBlock />
+      <FinalCTA />
     </main>
   );
 }
