@@ -64,3 +64,16 @@ test('new instructor image assets exist', () => {
     );
   }
 });
+
+test('founder specialties include approved branded prefixes', () => {
+  const bySlug = Object.fromEntries(
+    instructors.map((instructor) => [instructor.slug, instructor]),
+  );
+
+  assert.deepEqual(bySlug['vanessa-ramos'].specialties, ['RHYZE UP', 'Dance', 'HIIT']);
+  assert.deepEqual(bySlug['melissa-llanos'].specialties, [
+    'RITMO',
+    'Latin Dance',
+    'Choreography',
+  ]);
+});
