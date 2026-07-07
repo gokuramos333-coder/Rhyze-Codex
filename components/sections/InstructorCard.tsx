@@ -16,15 +16,14 @@ export function InstructorCard({ instructor: i, reverse }: Props) {
         reverse && 'lg:[&>*:first-child]:order-2',
       )}
     >
-      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl">
+      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-rhyze-black/40">
         <Image
           src={i.photo}
           alt={`${i.firstName} ${i.lastName}, co-founder of Rhyze Fitness`}
           fill
           sizes="(max-width: 1024px) 100vw, 50vw"
-          className="object-cover"
+          className="object-contain"
         />
-        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-rhyze-charcoal/80 to-transparent" />
       </div>
 
       <div>

@@ -15,7 +15,7 @@ export default function SignInPlaceholder() {
         <Lock className="h-8 w-8 text-rhyze-gold" aria-hidden />
       </div>
       <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-gold">
-        Members Only — Coming Soon
+        Members Only, Coming Soon
       </p>
       <h1 className="font-display text-5xl tracking-wider md:text-7xl">
         MEMBER PORTAL <br />

@@ -18,7 +18,7 @@ export default function ShopPage() {
           SHOP THE <span className="rhyze-gradient-text">DROP</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/75">
-          Launch capsule — cropped tees and hats designed for how we move.
+          Launch capsule, cropped tees and hats designed for how we move.
           More drops coming as we open the doors.
         </p>
       </section>

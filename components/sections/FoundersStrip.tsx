@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 
 export function FoundersStrip() {
@@ -6,16 +5,17 @@ export function FoundersStrip() {
     <section className="relative overflow-hidden bg-rhyze-black py-24">
       <div className="mx-auto grid max-w-7xl gap-12 px-6 lg:grid-cols-2 lg:items-center">
         <div className="relative">
-          <div className="relative aspect-[4/5] overflow-hidden rounded-3xl">
-            <Image
-              src="/founders/founders-vanessa-melissa-1.jpg"
-              alt="Vanessa Ramos and Melissa Llanos, co-founders of Rhyze Fitness"
-              fill
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover"
+          <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-rhyze-black/40">
+            <video
+              src="/founders/meet-vanessa-and-melissa-clip.MOV"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-label="Vanessa Ramos and Melissa Llanos, co-founders of Rhyze Fitness"
+              className="absolute inset-0 h-full w-full object-contain"
             />
-            {/* Edge glow */}
-            <div className="absolute inset-y-0 right-0 w-2/5 bg-gradient-to-l from-rhyze-coral/30 via-rhyze-orange/10 to-transparent mix-blend-soft-light" />
           </div>
           {/* Outer glow */}
           <div
@@ -38,7 +38,7 @@ export function FoundersStrip() {
             the kind of workout that lights you up from the inside out.
           </p>
           <p className="mb-8 text-lg leading-relaxed text-rhyze-cream/80">
-            Rhyze Fitness started as a conversation over coffee in Sussex — and
+            Rhyze Fitness started as a conversation over coffee in Sussex, and
             grew into a studio built for the neighbors, friends, and strangers
             ready to move together.
           </p>

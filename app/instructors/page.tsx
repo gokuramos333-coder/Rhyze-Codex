@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 export const metadata: Metadata = {
   title: 'Instructors',
   description:
-    'Meet the co-founders and instructors of Rhyze Fitness — Vanessa Ramos and Melissa Llanos.',
+    'Meet the co-founders and instructors of Rhyze Fitness, Vanessa Ramos and Melissa Llanos.',
 };
 
 export default function InstructorsPage() {
@@ -20,7 +20,7 @@ export default function InstructorsPage() {
           YOUR <span className="rhyze-gradient-text">RHYZE</span> CREW
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/75">
-          Rhyze Fitness was built by two women who love to move — and who
+          Rhyze Fitness was built by two women who love to move, and who
           believe that your best workout happens when you&apos;re surrounded
           by people cheering you on.
         </p>

@@ -51,13 +51,13 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'ritmo-rhyze',
-    name: 'Ritmo Rhyze',
+    name: 'Rhyze Ritmo',
     category: 'dance',
     level: 'signature',
     duration: 60,
-    tagline: 'A nod to Latin roots — pure rhythm and soul',
+    tagline: 'A nod to Latin roots, pure rhythm and soul',
     description:
-      'A love letter to the rhythms of Latin America. Salsa, bachata, reggaetón, Afro-Latin flavor — choreography with hips, heart, and heat.',
+      'Get ready to move! Rhyze Ritmo blends high-energy Latin rhythms with easy-to-follow dance fitness choreography. It’s a full-body cardio party designed to let you lose yourself in the music, torch calories, and leave feeling completely empowered. No dance experience required—just bring your energy!',
     whatToExpect: [
       'Latin-rooted choreography with styling breakdowns',
       'Taught bilingually when it counts',
@@ -89,9 +89,9 @@ export const classes: RhyzeClass[] = [
     duration: 45,
     tagline: 'That midday energy boost',
     description:
-      'A 45-minute midday reset — dance-cardio that shakes off the morning and relaunches your afternoon.',
+      'A 45-minute midday reset, dance-cardio that shakes off the morning and relaunches your afternoon.',
     whatToExpect: [
-      '45 tight minutes — perfect lunch break',
+      '45 tight minutes, perfect lunch break',
       'Upbeat, accessible choreography',
       'Back to your day feeling lit up',
     ],
@@ -124,7 +124,7 @@ export const classes: RhyzeClass[] = [
     description:
       'Slow, restorative, candlelit. Long holds, deep opens, and space to breathe. The recovery your body keeps asking for.',
     whatToExpect: [
-      'Longer passive holds (2–4 minutes)',
+      'Longer passive holds (2-4 minutes)',
       'Props and bolsters for full support',
       'Guided breathwork throughout',
     ],
@@ -136,7 +136,7 @@ export const classes: RhyzeClass[] = [
     category: 'yoga',
     level: 'signature',
     duration: 50,
-    tagline: 'Pilates-focused — strengthen your powerhouse',
+    tagline: 'Pilates-focused, strengthen your powerhouse',
     description:
       'A Pilates-informed core-and-glute burner. Small movements, big shakes, real strength that shows up in everything else you do.',
     whatToExpect: [
@@ -187,7 +187,7 @@ export const classes: RhyzeClass[] = [
     duration: 60,
     tagline: 'Heavy lifting for explosive strength',
     description:
-      'Our most traditional strength class. Deadlifts, squats, presses, pulls — coached technique, progressive load, real results.',
+      'Our most traditional strength class. Deadlifts, squats, presses, pulls, coached technique, progressive load, real results.',
     whatToExpect: [
       'Barbell and dumbbell work',
       'Form cues every set',
@@ -203,7 +203,7 @@ export const classes: RhyzeClass[] = [
     duration: 45,
     tagline: 'Gritty, high-octane HIIT',
     description:
-      'No-equipment HIIT that uses every inch of the floor. Sprints, burpees, jumps — the one you brag about surviving.',
+      'No-equipment HIIT that uses every inch of the floor. Sprints, burpees, jumps, the one you brag about surviving.',
     whatToExpect: [
       'Tabata and EMOM-style intervals',
       'Bodyweight plus minimal equipment',

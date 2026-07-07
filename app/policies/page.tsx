@@ -27,8 +27,8 @@ const sections: PolicySection[] = [
     subtitle: 'The “Rhyze” Time',
     body: null,
     list: [
-      'Early cancel — at least 8 hours before class to keep your credit',
-      'Late cancel / no show — lost credit (pack holders) or $15 fee (unlimited)',
+      'Early cancel, at least 8 hours before class to keep your credit',
+      'Late cancel / no show, lost credit (pack holders) or $15 fee (unlimited)',
     ],
   },
   {
@@ -126,12 +126,12 @@ export default function PoliciesPage() {
 
       <section className="mx-auto mt-16 max-w-4xl px-6 text-center text-sm text-rhyze-cream/60">
         <p>
-          Policies last updated April 2026. Questions? Email{' '}
+          Policies last updated April 2026. Questions?{' '}
           <a
-            href="mailto:hello@rhyzefit.com"
+            href="/contact"
             className="text-rhyze-coral hover:underline"
           >
-            hello@rhyzefit.com
+            Get in touch
           </a>
           .
         </p>

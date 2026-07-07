@@ -12,7 +12,6 @@ export const site = {
   phone: '(201) 921-7133',
   phoneTel: '+12019217133',
   emails: {
-    general: 'hello@rhyzefit.com',
     vanessa: 'vanessa@rhyzefit.com',
     melissa: 'melissa@rhyzefit.com',
   },
@@ -21,8 +20,8 @@ export const site = {
     url: 'https://instagram.com/rhyze.fitness',
   },
   hours: [
-    { days: 'Mon – Fri', hours: '7:00 AM – 8:00 PM' },
-    { days: 'Sat – Sun', hours: '8:00 AM – 2:00 PM' },
+    { days: 'Mon - Fri', hours: '7:00 AM - 8:00 PM' },
+    { days: 'Sat - Sun', hours: '8:00 AM - 2:00 PM' },
   ],
 } as const;
 

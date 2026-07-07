@@ -81,7 +81,7 @@ export function CartDrawer() {
                   <div className="flex h-full flex-col items-center justify-center text-center">
                     <ShoppingBag className="mb-4 h-10 w-10 text-rhyze-cream/30" />
                     <p className="text-rhyze-cream/60">
-                      Your cart is empty — for now.
+                      Your cart is empty, for now.
                     </p>
                     <Link
                       href="/shop"
@@ -185,12 +185,12 @@ export function CartDrawer() {
         </p>
         {/* TODO: Integrate Shopify or Stripe for real checkout */}
         <p className="mt-4 text-sm text-rhyze-cream/60">
-          Want to reserve gear early? Email{' '}
+          Want to reserve gear early?{' '}
           <a
-            href="mailto:hello@rhyzefit.com"
+            href="/contact"
             className="text-rhyze-coral hover:underline"
           >
-            hello@rhyzefit.com
+            Reach out via our contact page
           </a>
           .
         </p>

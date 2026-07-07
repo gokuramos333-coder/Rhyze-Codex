@@ -41,7 +41,7 @@ export const tiers: PricingTier[] = [
     price: '$169',
     cadence: 'per month',
     perClass: '~$21.12 / class · 8 classes / mo',
-    blurb: 'Our most popular tier — 30% savings over drop-in.',
+    blurb: 'Our most popular tier, 30% savings over drop-in.',
     popular: true,
     cta: { label: 'Join Twice-A-Week', href: '/join' },
   },
@@ -60,7 +60,7 @@ export const tiers: PricingTier[] = [
 export const memberPerks = [
   {
     title: 'Glow-in-the-Dark Pop-ups',
-    body: 'Member-only late-night fusion events — neon, black lights, and the whole Rhyze Tribe.',
+    body: 'Member-only late-night fusion events, neon, black lights, and the whole Rhyze Tribe.',
   },
   {
     title: 'Buddy Pass',

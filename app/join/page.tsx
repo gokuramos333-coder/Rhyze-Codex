@@ -7,7 +7,7 @@ import { trial } from '@/lib/pricing';
 export const metadata: Metadata = {
   title: 'Start Your $7 Trial',
   description:
-    'Start your $7 seven-day unlimited trial at Rhyze Fitness — new members get unlimited classes for one full week.',
+    'Start your $7 seven-day unlimited trial at Rhyze Fitness, new members get unlimited classes for one full week.',
 };
 
 const steps = [
@@ -33,14 +33,14 @@ const firstDay = [
   'Wear clothes you can move and sweat in',
   'Bring a water bottle and a hand towel',
   'Grip socks recommended for yoga or Pilates',
-  'Leave your shoes at the entry — we’ll show you where',
+  'Leave your shoes at the entry, we’ll show you where',
   'Tell us about any injuries before class starts',
 ];
 
 const faq: AccordionItem[] = [
   {
     q: 'Is there parking at the studio?',
-    a: 'Yes — free parking is available on-site at The Shoppes at Lafayette. Head toward the rear of the complex and look for the Rhyze signage.',
+    a: 'Yes, free parking is available on-site at The Shoppes at Lafayette. Head toward the rear of the complex and look for the Rhyze signage.',
   },
   {
     q: 'What should I wear?',
@@ -56,7 +56,7 @@ const faq: AccordionItem[] = [
   },
   {
     q: 'Do you have showers or changing rooms?',
-    a: 'Yes — we’ve got changing areas with cubbies, mirrors, and our signature warm lighting. Shower details coming with opening week.',
+    a: 'Yes, we’ve got changing areas with cubbies, mirrors, and our signature warm lighting. Shower details coming with opening week.',
   },
   {
     q: 'Can I freeze or cancel my membership?',

@@ -7,7 +7,7 @@ import { MemberPerks } from '@/components/sections/MemberPerks';
 export const metadata: Metadata = {
   title: 'Pricing & Memberships',
   description:
-    'Start with a $7 seven-day trial, then pick your rhythm — weekly, twice-a-week, or unlimited memberships at Rhyze Fitness.',
+    'Start with a $7 seven-day trial, then pick your rhythm, weekly, twice-a-week, or unlimited memberships at Rhyze Fitness.',
 };
 
 export default function PricingPage() {
@@ -26,7 +26,7 @@ export default function PricingPage() {
         </p>
       </section>
 
-      {/* $7 Trial banner — prominent */}
+      {/* $7 Trial banner, prominent */}
       <section className="mx-auto mt-14 max-w-5xl px-6">
         <div className="overflow-hidden rounded-3xl bg-rhyze-gradient p-[2px]">
           <div className="relative flex flex-col items-center gap-6 overflow-hidden rounded-[calc(1.5rem-2px)] bg-rhyze-black p-8 text-center md:p-14">
@@ -82,7 +82,7 @@ export default function PricingPage() {
           QUESTIONS?
         </h3>
         <p className="mt-4 text-rhyze-cream/70">
-          We&apos;re a small team — we&apos;d love to hear from you. Reach out
+          We&apos;re a small team, we&apos;d love to hear from you. Reach out
           for private events, corporate packages, or anything else not listed
           here.
         </p>

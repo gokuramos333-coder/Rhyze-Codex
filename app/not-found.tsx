@@ -13,7 +13,7 @@ export default function NotFound() {
         THIS PAGE IS RESTING
       </h1>
       <p className="mb-10 text-rhyze-cream/70">
-        The page you’re looking for doesn’t exist — but the floor’s still open.
+        The page you’re looking for doesn’t exist, but the floor’s still open.
       </p>
       <div className="flex flex-wrap justify-center gap-3">
         <Button href="/" size="lg">

@@ -128,7 +128,7 @@ export function ClassList() {
       </div>
       {filtered.length === 0 && (
         <p className="py-16 text-center text-rhyze-cream/60">
-          No classes match that combo yet — try widening your filters.
+          No classes match that combo yet, try widening your filters.
         </p>
       )}
     </div>

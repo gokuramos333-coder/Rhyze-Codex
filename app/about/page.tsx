@@ -6,7 +6,7 @@ import { ParallaxImage } from '@/components/sections/ParallaxImage';
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'The mission, the vibe, and the story behind Rhyze Fitness — Sussex County’s boutique dance, yoga, and HIIT studio.',
+    'The mission, the vibe, and the story behind Rhyze Fitness, Sussex County’s boutique dance, yoga, and HIIT studio.',
 };
 
 export default function AboutPage() {
@@ -37,7 +37,7 @@ export default function AboutPage() {
             </h2>
             <p className="text-lg leading-relaxed text-rhyze-cream/80">
               At Rhyze Fitness, our mission is to build more than just a
-              studio — we&apos;re building a movement. We are dedicated to
+              studio, we&apos;re building a movement. We are dedicated to
               providing an inclusive, high-vibe space where fitness meets
               friendship. Through the power of rhythm and collective energy,
               we help our members grow stronger together, one beat at a time.
@@ -45,11 +45,11 @@ export default function AboutPage() {
           </div>
           <div className="relative aspect-[4/5] overflow-hidden rounded-3xl">
             <Image
-              src="/founders/founders-vanessa-melissa-3.jpg"
-              alt="Vanessa and Melissa inside the studio space"
+              src="/founders/more-than-a-studio.jpg"
+              alt="More than a studio, inside Rhyze Fitness"
               fill
               sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover"
+              className="object-cover object-right"
             />
             <div className="absolute inset-0 bg-gradient-to-tr from-rhyze-black/60 via-transparent to-rhyze-coral/10" />
           </div>
@@ -61,10 +61,11 @@ export default function AboutPage() {
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <div className="relative aspect-[4/5] overflow-hidden rounded-3xl lg:order-2">
             <Image
-              src="/founders/founders-vanessa-melissa-1.jpg"
-              alt="Vanessa and Melissa at Rhyze Fitness"
+              src="/founders/come-as-you-are.gif"
+              alt="Come as you are, the Rhyze vibe"
               fill
               sizes="(max-width: 1024px) 100vw, 50vw"
+              unoptimized
               className="object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-bl from-rhyze-orange/20 via-transparent to-rhyze-black/50" />
@@ -80,7 +81,7 @@ export default function AboutPage() {
             <p className="text-lg leading-relaxed text-rhyze-cream/80">
               Rhyze Fitness is where high-octane energy meets a welcoming,
               &ldquo;come-as-you-are&rdquo; atmosphere. Think of it as your
-              daily sanctuary — an electric environment where the music is
+              daily sanctuary, an electric environment where the music is
               pumping, the lights are low, and the community is unmatched.
               We&apos;ve designed our space to be a judge-free zone that is
               equally beginner-friendly and athlete-challenging. Whether
@@ -92,7 +93,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* THE STORY — parallax */}
+      {/* THE STORY, parallax */}
       <section className="mt-28">
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-10 max-w-3xl">
@@ -107,8 +108,8 @@ export default function AboutPage() {
         </div>
         <div className="relative">
           <ParallaxImage
-            src="/founders/founders-vanessa-melissa-2.jpg"
-            alt="Vanessa and Melissa, the story of Rhyze Fitness"
+            src="/founders/dreams-over-coffee.jpg"
+            alt="Dreams over coffee, the story of Rhyze Fitness"
             className="mx-auto h-[60vh] max-w-6xl md:h-[80vh]"
             sizes="(max-width: 1024px) 100vw, 72rem"
             priority

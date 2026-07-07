@@ -34,19 +34,19 @@ export function Header() {
             : 'bg-transparent',
         )}
       >
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-6 px-6">
+        <div className="mx-auto flex h-44 max-w-7xl items-center justify-between gap-6 px-6">
           <Link
             href="/"
-            aria-label={`${site.name} — Home`}
+            aria-label={`${site.name}, Home`}
             className="focus-ring flex items-center gap-3 rounded-md"
           >
             <Image
-              src="/brand/rhyze-logo-dark.png"
+              src="/brand/rhyze-logo.png"
               alt=""
-              width={140}
-              height={40}
+              width={168}
+              height={168}
               priority
-              className="h-9 w-auto"
+              className="h-40 w-auto"
             />
             <span className="sr-only">{site.name}</span>
           </Link>

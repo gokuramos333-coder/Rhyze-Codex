@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -8,10 +9,29 @@ import { Button } from '@/components/ui/Button';
 export function Hero() {
   return (
     <section className="grain relative flex min-h-[92vh] items-center overflow-hidden bg-rhyze-black">
+      {/* Background photo */}
+      <Image
+        src="/founders/main-intro.jpg"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        aria-hidden
+        className="absolute inset-0 object-cover opacity-50"
+      />
+      {/* Darken + vignette so the headline pops */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-gradient-to-r from-rhyze-black/90 via-rhyze-black/70 to-rhyze-black/40"
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-rhyze-black/40"
+      />
       {/* Ambient sunrise glow */}
       <div
         aria-hidden
-        className="absolute -left-1/4 -top-1/4 h-[120%] w-[120%] animate-beam-drift bg-rhyze-gradient-radial blur-3xl"
+        className="absolute -left-1/4 -top-1/4 h-[120%] w-[120%] animate-beam-drift bg-rhyze-gradient-radial opacity-60 blur-3xl"
       />
       <div
         aria-hidden

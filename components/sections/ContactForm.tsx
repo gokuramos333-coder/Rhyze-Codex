@@ -125,13 +125,12 @@ export function ContactForm() {
         </Button>
         {status === 'ok' && (
           <p className="text-sm text-rhyze-gold">
-            Got it — we&apos;ll be in touch soon.
+            Got it, we&apos;ll be in touch soon.
           </p>
         )}
         {status === 'err' && (
           <p className="text-sm text-rhyze-coral">
-            Something broke on our end. Email hello@rhyzefit.com and
-            we&apos;ll get you sorted.
+            Something broke on our end. Please try again in a moment.
           </p>
         )}
       </div>

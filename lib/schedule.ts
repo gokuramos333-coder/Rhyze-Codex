@@ -24,7 +24,7 @@ export const statusStyles: Record<SlotStatus, string> = {
   full: 'bg-rhyze-coral/20 text-rhyze-coral border-rhyze-coral/40',
 };
 
-// Weekly schedule. Mon–Fri 7 AM – 8 PM · Sat–Sun 8 AM – 2 PM.
+// Weekly schedule. Mon-Fri 7 AM - 8 PM · Sat-Sun 8 AM - 2 PM.
 export const schedule: ScheduleSlot[] = [
   // Monday
   { day: 'Mon', time: '7:00 AM', classSlug: 'the-daily-rhyze', className: 'The Daily Rhyze', instructor: 'Vanessa', status: 'open' },
@@ -35,7 +35,7 @@ export const schedule: ScheduleSlot[] = [
   // Tuesday
   { day: 'Tue', time: '7:00 AM', classSlug: 'rhyze-and-grind', className: 'Rhyze & Grind', instructor: 'Vanessa', status: 'open' },
   { day: 'Tue', time: '9:30 AM', classSlug: 'core-rhyze', className: 'Core Rhyze', instructor: 'Melissa', status: 'open' },
-  { day: 'Tue', time: '5:30 PM', classSlug: 'ritmo-rhyze', className: 'Ritmo Rhyze', instructor: 'Melissa', status: 'full' },
+  { day: 'Tue', time: '5:30 PM', classSlug: 'ritmo-rhyze', className: 'Rhyze Ritmo', instructor: 'Melissa', status: 'full' },
   { day: 'Tue', time: '6:45 PM', classSlug: 'zen-rhyze', className: 'Zen Rhyze', instructor: 'Melissa', status: 'open' },
   // Wednesday
   { day: 'Wed', time: '7:00 AM', classSlug: 'the-daily-rhyze', className: 'The Daily Rhyze', instructor: 'Vanessa', status: 'open' },
@@ -49,13 +49,13 @@ export const schedule: ScheduleSlot[] = [
   { day: 'Thu', time: '6:45 PM', classSlug: 'core-rhyze', className: 'Core Rhyze', instructor: 'Melissa', status: 'open' },
   // Friday
   { day: 'Fri', time: '7:00 AM', classSlug: 'the-daily-rhyze', className: 'The Daily Rhyze', instructor: 'Vanessa', status: 'open' },
-  { day: 'Fri', time: '12:15 PM', classSlug: 'ritmo-rhyze', className: 'Ritmo Rhyze', instructor: 'Melissa', status: 'full' },
+  { day: 'Fri', time: '12:15 PM', classSlug: 'ritmo-rhyze', className: 'Rhyze Ritmo', instructor: 'Melissa', status: 'full' },
   { day: 'Fri', time: '5:30 PM', classSlug: 'rhyze-and-grind', className: 'Rhyze & Grind', instructor: 'Vanessa', status: 'open' },
   { day: 'Fri', time: '6:45 PM', classSlug: 'zen-rhyze', className: 'Zen Rhyze', instructor: 'Melissa', status: 'open' },
   // Saturday
   { day: 'Sat', time: '8:30 AM', classSlug: 'rhyze-and-groove', className: 'Rhyze & Groove', instructor: 'Vanessa', status: 'full' },
   { day: 'Sat', time: '10:00 AM', classSlug: 'power-rhyze', className: 'Power Rhyze', instructor: 'Vanessa', status: 'waitlist' },
-  { day: 'Sat', time: '11:30 AM', classSlug: 'ritmo-rhyze', className: 'Ritmo Rhyze', instructor: 'Melissa', status: 'open' },
+  { day: 'Sat', time: '11:30 AM', classSlug: 'ritmo-rhyze', className: 'Rhyze Ritmo', instructor: 'Melissa', status: 'open' },
   // Sunday
   { day: 'Sun', time: '9:00 AM', classSlug: 'rhyze-and-align', className: 'Rhyze & Align', instructor: 'Melissa', status: 'open' },
   { day: 'Sun', time: '10:30 AM', classSlug: 'zen-rhyze', className: 'Zen Rhyze', instructor: 'Melissa', status: 'open' },

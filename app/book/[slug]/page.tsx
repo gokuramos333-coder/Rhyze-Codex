@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, Calendar } from 'lucide-react';
-import { getClass } from '@/lib/classes';
+import { classes, getClass } from '@/lib/classes';
 import { Button } from '@/components/ui/Button';
 
 export const metadata: Metadata = {
@@ -9,7 +9,11 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-// TODO: Integrate booking system (Mindbody / Arketa / Momence — TBD)
+export function generateStaticParams() {
+  return classes.map((c) => ({ slug: c.slug }));
+}
+
+// TODO: Integrate booking system (Mindbody / Arketa / Momence, TBD)
 export default function BookingPlaceholder({
   params,
 }: {

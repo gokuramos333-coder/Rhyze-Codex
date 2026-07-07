@@ -1,11 +1,11 @@
-# Rhyze Fitness — Marketing Site
+# Rhyze Fitness, Marketing Site
 
 Production-ready marketing site for **Rhyze Fitness**, a boutique dance / yoga /
 HIIT studio opening Summer 2026 in Lafayette, NJ. Co-founded by Vanessa Ramos
 and Melissa Llanos.
 
 The site's primary job is converting visitors into **$7 / 7-day trial members**.
-Booking, payments, and account features are stubbed — see TODOs below.
+Booking, payments, and account features are stubbed, see TODOs below.
 
 ## Stack
 
@@ -34,7 +34,7 @@ back to npm for this build because pnpm wasn't on the dev machine.
 ## Environment Variables
 
 None required for local development. When real integrations land (booking,
-checkout, email), keys go in `.env.local` — don't commit that file; see
+checkout, email), keys go in `.env.local`, don't commit that file; see
 `.gitignore`.
 
 ## Project Layout
@@ -94,7 +94,7 @@ paths (`/founders/whoever.jpg`).
 6. On merge to `main`, Vercel rebuilds and deploys.
 
 OG image, sitemap, and robots are generated automatically by Next at build
-time — no extra config.
+time, no extra config.
 
 ## Accessibility & SEO
 
@@ -107,20 +107,20 @@ time — no extra config.
 
 ## Outstanding TODOs (integration work)
 
-Each TODO is live in the codebase — grep for `TODO` to find them:
+Each TODO is live in the codebase, grep for `TODO` to find them:
 
-- **Vanessa's final bio** — `lib/instructors.ts` (placeholder bio in place)
-- **Booking system** (Mindbody / Arketa / Momence TBD) — `/book/[slug]` is a
+- **Vanessa's final bio**, `lib/instructors.ts` (placeholder bio in place)
+- **Booking system** (Mindbody / Arketa / Momence TBD), `/book/[slug]` is a
   "Coming Soon" placeholder; `JoinForm` submit currently logs and shows a
   success state
-- **Checkout integration** — Shopify or Stripe — `components/sections/CartDrawer.tsx`
+- **Checkout integration**, Shopify or Stripe, `components/sections/CartDrawer.tsx`
   checkout modal stub
-- **Sign In / member portal** — `app/signin/page.tsx` placeholder
-- **Newsletter capture** — Mailchimp or Klaviyo — `app/api/newsletter/route.ts`
+- **Sign In / member portal**, `app/signin/page.tsx` placeholder
+- **Newsletter capture**, Mailchimp or Klaviyo, `app/api/newsletter/route.ts`
   currently only logs to the console
-- **Contact form delivery** — SendGrid or Resend — `app/api/contact/route.ts`
+- **Contact form delivery**, SendGrid or Resend, `app/api/contact/route.ts`
   currently only logs to the console
-- **Gallery photography** — `components/sections/GalleryGrid.tsx` placeholder
+- **Gallery photography**, `components/sections/GalleryGrid.tsx` placeholder
   tiles; swap for real shots once photography lands
 
 ## Decisions Locked

@@ -8,6 +8,10 @@ node_modules
 out
 build
 next-env.d.ts
+tsconfig.tsbuildinfo
+
+# local static deploy exports
+SESSION_CHANGES_May6/
 
 # envs
 .env*.local

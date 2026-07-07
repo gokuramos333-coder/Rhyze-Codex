@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { ClassList } from '@/components/sections/ClassList';
 import { ScheduleFull } from '@/components/sections/ScheduleFull';
 import { Badge } from '@/components/ui/Badge';
@@ -7,7 +8,7 @@ import { levelColor, levelLabel } from '@/lib/classes';
 export const metadata: Metadata = {
   title: 'Classes & Schedule',
   description:
-    'Browse the Rhyze Fitness class catalog — Dance, Yoga & Pilates, Strength & HIIT — and book your spot on the floor.',
+    'Browse the Rhyze Fitness class catalog, Dance, Yoga & Pilates, Strength & HIIT, and book your spot on the floor.',
 };
 
 export default function ClassesPage() {
@@ -21,10 +22,21 @@ export default function ClassesPage() {
           CLASSES
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/70">
-          Twelve signature formats across three pillars — Dance, Yoga &
-          Pilates, and Strength & HIIT — taught by your co-founders and a
+          Twelve signature formats across three pillars, Dance, Yoga &
+          Pilates, and Strength & HIIT, taught by your co-founders and a
           growing bench of guest instructors.
         </p>
+        <div className="relative mx-auto mt-12 aspect-[16/9] max-w-5xl overflow-hidden rounded-3xl">
+          <Image
+            src="/founders/classes.jpg"
+            alt="Inside a Rhyze Fitness class"
+            fill
+            sizes="(max-width: 1024px) 100vw, 64rem"
+            priority
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-rhyze-black/60 via-transparent to-transparent" />
+        </div>
       </section>
 
       <section id="levels" className="mb-20 scroll-mt-28">
@@ -50,7 +62,7 @@ export default function ClassesPage() {
                 {l === 'foundation' &&
                   'Approachable, welcoming, and built for first-timers or those easing back in.'}
                 {l === 'signature' &&
-                  'Our core experiences — challenging, energetic, and open to all levels.'}
+                  'Our core experiences, challenging, energetic, and open to all levels.'}
                 {l === 'peak' &&
                   'High-intensity, technical, or advanced programming for seasoned Rhyzers.'}
               </p>
@@ -64,10 +76,10 @@ export default function ClassesPage() {
       </section>
 
       <section className="mb-10 scroll-mt-28" id="yoga">
-        {/* Anchor target only — list is shared */}
+        {/* Anchor target only, list is shared */}
       </section>
       <section className="mb-10 scroll-mt-28" id="strength">
-        {/* Anchor target only — list is shared */}
+        {/* Anchor target only, list is shared */}
       </section>
 
       <ScheduleFull />

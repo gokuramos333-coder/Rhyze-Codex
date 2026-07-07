@@ -8,7 +8,7 @@ import { site } from '@/lib/site';
 export const metadata: Metadata = {
   title: 'Contact',
   description:
-    'Reach out to Rhyze Fitness — Lafayette, NJ. Membership questions, private events, press, or just to say hi.',
+    'Reach out to Rhyze Fitness, Lafayette, NJ. Membership questions, private events, press, or just to say hi.',
 };
 
 export default function ContactPage() {
@@ -19,11 +19,13 @@ export default function ContactPage() {
           Get In Touch
         </p>
         <h1 className="font-display text-6xl tracking-wider md:text-8xl">
-          SAY <span className="rhyze-gradient-text">HI</span>
+          SAY <span className="rhyze-gradient-text">HELLO</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/75">
-          Whether it&apos;s membership questions, a private event, or a quick
-          hello — we read every note.
+          Got a question, an idea, or just want to say hi? We&apos;d love to
+          hear from you. Whether you&apos;re booking your first class, planning
+          a private event, or asking about birthday parties and corporate
+          sessions. We answer every message, usually within 24 hours.
         </p>
       </section>
 
@@ -55,20 +57,14 @@ export default function ContactPage() {
                   <Mail className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-coral" />
                   <div className="space-y-1">
                     <a
-                      href={`mailto:${site.emails.general}`}
-                      className="block hover:text-rhyze-coral"
-                    >
-                      {site.emails.general}
-                    </a>
-                    <a
                       href={`mailto:${site.emails.vanessa}`}
-                      className="block text-rhyze-cream/60 hover:text-rhyze-coral"
+                      className="block hover:text-rhyze-coral"
                     >
                       {site.emails.vanessa}
                     </a>
                     <a
                       href={`mailto:${site.emails.melissa}`}
-                      className="block text-rhyze-cream/60 hover:text-rhyze-coral"
+                      className="block hover:text-rhyze-coral"
                     >
                       {site.emails.melissa}
                     </a>
