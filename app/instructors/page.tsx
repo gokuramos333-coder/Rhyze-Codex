@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 export const metadata: Metadata = {
   title: 'Instructors',
   description:
-    'Meet the co-founders and instructors of Rhyze Fitness, Vanessa Ramos and Melissa Llanos.',
+    'Meet the dance, yoga, strength, and fitness instructors of Rhyze Fitness in Lafayette, NJ.',
 };
 
 export default function InstructorsPage() {
@@ -20,25 +20,20 @@ export default function InstructorsPage() {
           YOUR <span className="rhyze-gradient-text">RHYZE</span> CREW
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/75">
-          Rhyze Fitness was built by two women who love to move, and who
-          believe that your best workout happens when you&apos;re surrounded
-          by people cheering you on.
+          Meet the instructors bringing dance, yoga, strength, and high-energy
+          movement to the Rhyze floor.
         </p>
       </section>
 
       <div className="flex flex-col gap-10">
         {instructors.map((i, idx) => (
-          <InstructorCard
-            key={i.slug}
-            instructor={i}
-            reverse={idx % 2 === 1}
-          />
+          <InstructorCard key={i.slug} instructor={i} reverse={idx % 2 === 1} />
         ))}
       </div>
 
       <section className="mt-20 rounded-3xl border border-white/10 bg-rhyze-charcoal p-10 text-center">
         <h2 className="font-display text-4xl tracking-wider md:text-5xl">
-          MORE COACHES COMING
+          JOIN THE RHYZE CREW
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-rhyze-cream/70">
           We&apos;re building a roster of passionate instructors to join us on

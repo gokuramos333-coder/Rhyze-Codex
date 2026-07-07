@@ -19,7 +19,7 @@ export function InstructorCard({ instructor: i, reverse }: Props) {
       <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-rhyze-black/40">
         <Image
           src={i.photo}
-          alt={`${i.firstName} ${i.lastName}, co-founder of Rhyze Fitness`}
+          alt={`${i.firstName} ${i.lastName}, instructor at Rhyze Fitness`}
           fill
           sizes="(max-width: 1024px) 100vw, 50vw"
           className="object-contain"
@@ -30,15 +30,22 @@ export function InstructorCard({ instructor: i, reverse }: Props) {
         <p className="mb-2 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
           {i.role}
         </p>
+        {i.descriptor && (
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-rhyze-gold">
+            {i.descriptor}
+          </p>
+        )}
         <h2 className="font-display text-5xl leading-none tracking-wider md:text-7xl">
           {i.firstName.toUpperCase()}
           <br />
           {i.lastName.toUpperCase()}
         </h2>
 
-        <blockquote className="mt-6 border-l-2 border-rhyze-coral pl-5 text-lg italic leading-relaxed text-rhyze-gold md:text-xl">
-          &ldquo;{i.quote}&rdquo;
-        </blockquote>
+        {i.quote && (
+          <blockquote className="mt-6 border-l-2 border-rhyze-coral pl-5 text-lg italic leading-relaxed text-rhyze-gold md:text-xl">
+            &ldquo;{i.quote}&rdquo;
+          </blockquote>
+        )}
 
         <p className="mt-6 whitespace-pre-line text-rhyze-cream/80">{i.bio}</p>
         {i.bioIsPlaceholder && (
