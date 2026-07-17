@@ -52,7 +52,7 @@ test('schedule embed opens a full-screen uncropped booking overlay when visitors
   assert.match(source, /onTouchStart=\{activateBookingMode\}/);
   assert.match(source, /fixed inset-0 z-\[100\]/);
   assert.match(source, /h-\[100dvh\]/);
-  assert.match(source, /h-full w-full translate-y-0/);
+  assert.match(source, /h-\[calc\(100dvh\+80px\)\] w-full -translate-y-\[80px\]/);
   assert.match(source, /Exit full screen/);
 });
 

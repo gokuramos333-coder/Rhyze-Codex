@@ -63,7 +63,7 @@ export function ScheduleFull() {
           onMouseDown={activateBookingMode}
           className={`somble-frame-crop bg-rhyze-black transition-transform duration-300 ${
             isBookingMode
-              ? 'h-full w-full translate-y-0'
+              ? 'h-[calc(100dvh+80px)] w-full -translate-y-[80px]'
               : 'h-[1250px] w-full -translate-y-[530px]'
           }`}
         />
