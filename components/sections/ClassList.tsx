@@ -6,17 +6,9 @@ import { Clock, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/cn';
 import { sombleScheduleUrl } from '@/lib/somble';
-import {
-  categoryLabel,
-  classes,
-  levelColor,
-  levelLabel,
-  type ClassCategory,
-  type ClassLevel,
-} from '@/lib/classes';
+import { categoryLabel, classes, type ClassCategory } from '@/lib/classes';
 
 type CatFilter = 'all' | ClassCategory;
-type LvlFilter = 'all' | ClassLevel;
 
 const cats: { id: CatFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -25,25 +17,12 @@ const cats: { id: CatFilter; label: string }[] = [
   { id: 'strength', label: 'Strength & HIIT' },
 ];
 
-const lvls: { id: LvlFilter; label: string }[] = [
-  { id: 'all', label: 'All Levels' },
-  { id: 'foundation', label: 'Foundation' },
-  { id: 'signature', label: 'Signature' },
-  { id: 'peak', label: 'Peak' },
-];
-
 export function ClassList() {
   const [cat, setCat] = useState<CatFilter>('all');
-  const [lvl, setLvl] = useState<LvlFilter>('all');
 
   const filtered = useMemo(
-    () =>
-      classes.filter(
-        (c) =>
-          (cat === 'all' || c.category === cat) &&
-          (lvl === 'all' || c.level === lvl),
-      ),
-    [cat, lvl],
+    () => classes.filter((c) => cat === 'all' || c.category === cat),
+    [cat],
   );
 
   return (
@@ -67,24 +46,6 @@ export function ClassList() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Level">
-          {lvls.map((l) => (
-            <button
-              key={l.id}
-              role="tab"
-              aria-selected={lvl === l.id}
-              onClick={() => setLvl(l.id)}
-              className={cn(
-                'focus-ring rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition',
-                lvl === l.id
-                  ? 'border-rhyze-gold bg-rhyze-gold/10 text-rhyze-gold'
-                  : 'border-white/10 text-rhyze-cream/60 hover:border-rhyze-gold/40 hover:text-rhyze-cream',
-              )}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -101,7 +62,6 @@ export function ClassList() {
                 <Clock className="mr-1 h-3 w-3" aria-hidden />
                 {c.duration} min
               </Badge>
-              <Badge className={levelColor[c.level]}>{levelLabel[c.level]}</Badge>
             </div>
             <h3 className="mb-2 font-display text-3xl tracking-wider">
               {c.name}
@@ -131,7 +91,7 @@ export function ClassList() {
       </div>
       {filtered.length === 0 && (
         <p className="py-16 text-center text-rhyze-cream/60">
-          No classes match that combo yet, try widening your filters.
+          No classes match that category yet, try widening your filter.
         </p>
       )}
     </div>

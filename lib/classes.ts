@@ -1,11 +1,9 @@
 export type ClassCategory = 'dance' | 'yoga' | 'strength';
-export type ClassLevel = 'foundation' | 'signature' | 'peak';
 
 export type RhyzeClass = {
   slug: string;
   name: string;
   category: ClassCategory;
-  level: ClassLevel;
   duration: number; // minutes
   tagline: string;
   description: string;
@@ -19,28 +17,45 @@ export const categoryLabel: Record<ClassCategory, string> = {
   strength: 'Strength & HIIT',
 };
 
-export const levelLabel: Record<ClassLevel, string> = {
-  foundation: 'Foundation',
-  signature: 'Signature',
-  peak: 'Peak',
-};
-
-export const levelColor: Record<ClassLevel, string> = {
-  foundation: 'bg-level-foundation/20 text-level-foundation border-level-foundation/40',
-  signature: 'bg-level-signature/20 text-level-signature border-level-signature/40',
-  peak: 'bg-level-peak/20 text-level-peak border-level-peak/40',
-};
-
 export const classes: RhyzeClass[] = [
+  {
+    slug: 'global-hiit-kenzie',
+    name: 'Global HIIT w/ Kenzie',
+    category: 'strength',
+    duration: 50,
+    tagline: 'World hits, HIIT conditioning, and light-weight strength',
+    description:
+      'Global HIIT with Kenzie is about listening to hits from around the world while getting fit, challenging your brain and body with heart-rate-raising intervals, light weights, bodyweight exercises, and a music-driven cooldown.',
+    whatToExpect: [
+      'HIIT intervals powered by global music',
+      'Light weights mixed with bodyweight exercises',
+      'A cardio challenge with a guided cooldown',
+    ],
+    whatToBring: ['Supportive sneakers', 'Comfortable workout clothes', 'Water bottle'],
+  },
+  {
+    slug: 'yoga-kenzie',
+    name: 'Yoga w/ Kenzie',
+    category: 'yoga',
+    duration: 50,
+    tagline: 'Vinyasa yoga linking movement, breath, strength, and flexibility',
+    description:
+      'Yoga with Kenzie links dynamic physical poses with steady conscious breaths to build strength, flexibility, and endurance. Each Vinyasa sequence is creative, physically engaging, and welcoming for students with any amount of yoga experience.',
+    whatToExpect: [
+      'Dynamic Vinyasa movement linked with breath',
+      'Strength, flexibility, and endurance work',
+      'A creative sequence that changes class to class',
+    ],
+    whatToBring: ['Yoga mat', 'Comfortable layers', 'Water bottle'],
+  },
   {
     slug: 'core-360-carla-rio',
     name: 'Core 360 w/ Carla Rio',
     category: 'strength',
-    level: 'signature',
     duration: 50,
     tagline: 'Functional core strength, posture, and balance from every angle',
     description:
-      'Core 360 builds functional core strength from every angle, blending standing stability work with mat-based training for the pelvic floor, lower back, and deep abdominals. Carla guides you through focused progressions that improve posture, balance, injury prevention, and confidence in how your body moves.',
+      'Core 360 builds functional core strength from every angle, blending standing stability work with mat-based training for the pelvic floor, lower back, and deep abdominals. Carla guides focused progressions that improve posture, balance, injury prevention, and confidence in how your body moves.',
     whatToExpect: [
       'Standing stability work fused with mat-based core sequencing',
       'Posture, balance, pelvic floor, lower back, and deep abdominal focus',
@@ -52,7 +67,6 @@ export const classes: RhyzeClass[] = [
     slug: 'dance-fit-jessica',
     name: 'Dance Fit w/ Jessica',
     category: 'dance',
-    level: 'signature',
     duration: 50,
     tagline: 'High-energy dance cardio with strength and toning',
     description:
@@ -68,7 +82,6 @@ export const classes: RhyzeClass[] = [
     slug: 'grind-and-grow-carla-reo',
     name: 'Grind & Grow w/ Carla Reo',
     category: 'strength',
-    level: 'signature',
     duration: 50,
     tagline: 'Full-body strength with dumbbells, kettlebells, bands, and more',
     description:
@@ -84,13 +97,12 @@ export const classes: RhyzeClass[] = [
     slug: 'heels-101-walk-with-me-jessica',
     name: 'Heels 101 "Walk with Me" with Jessica',
     category: 'dance',
-    level: 'foundation',
     duration: 50,
     tagline: 'Beginner-friendly heels fundamentals',
     description:
-      'Heels 101 "Walk with Me" with Jessica is a beginner-friendly heels class focused on posture, balance, walking technique, and confidence. It is designed to help you learn how to move safely and feel strong in heels before progressing into more choreographed heels work.',
+      'Heels 101 "Walk with Me" with Jessica is a beginner-friendly heels class focused on posture, balance, walking technique, and confidence. It helps you learn how to move safely and feel strong in heels before progressing into more choreographed heels work.',
     whatToExpect: [
-      'Foundational heels movement and walking technique',
+      'Heels movement and walking technique',
       'Beginner-friendly pacing with confidence-building support',
       'A focused class for learning how to move safely in heels',
     ],
@@ -100,11 +112,10 @@ export const classes: RhyzeClass[] = [
     slug: 'hypnotic-heels-jessica',
     name: 'Hypnotic Heels w/ Jessica',
     category: 'dance',
-    level: 'peak',
     duration: 75,
     tagline: 'A specialty heels class for confidence, technique, and flow',
     description:
-      'Hypnotic Heels with Jessica is a 75-minute specialty class for beginner to intermediate dancers ready to build confidence, technique, and flow in heels. You will warm up, practice posture and balance, learn a choreographed routine, and explore a fresh monthly theme.',
+      'Hypnotic Heels with Jessica is a 75-minute specialty class for dancers ready to build confidence, poise, technique, and flow in heels. You will warm up, practice posture and balance, learn a choreographed routine, and explore a fresh monthly theme.',
     whatToExpect: [
       'A barefoot or socks warm-up before heels work',
       'Posture, balance, strutting, and choreographed routine work',
@@ -116,31 +127,29 @@ export const classes: RhyzeClass[] = [
     slug: 'ignite-julie',
     name: 'Ignite w/ Julie',
     category: 'strength',
-    level: 'signature',
     duration: 50,
     tagline: 'Dynamic full-body conditioning with Julie',
     description:
-      'Ready to spark your strength and power up your week? Ignite with Julie is a full-body conditioning class using dumbbells, bands, gliders, and bodyweight work to build strength, core stability, balance, and confidence with safe, smart coaching for all levels.',
+      'Ready to spark your strength and power up your week? Ignite with Julie is a full-body conditioning class using dumbbells, bands, gliders, and bodyweight work to build strength, core stability, balance, and confidence with safe, smart coaching for everyone.',
     whatToExpect: [
       'Functional conditioning with dumbbells, bands, gliders, and bodyweight work',
       'Strength, core stability, balance, and conditioning in one class',
-      'All-levels coaching with progressions and modifications',
+      'Coaching with progressions and modifications',
     ],
     whatToBring: ['Comfortable supportive athletic wear', 'Sneakers', 'Water bottle'],
   },
   {
     slug: 'pilates-pulse-adrianna',
-    name: 'Pilates Pulse w/ Adrianna',
+    name: 'Pilates Pulse with Adrianna',
     category: 'yoga',
-    level: 'signature',
     duration: 50,
-    tagline: 'Pilates precision with a modern rhythmic pulse',
+    tagline: 'Functional flow, strength, stability, and mobility',
     description:
-      'Ready to find your fire? Pilates Pulse with Adrianna is a dynamic, high-energy fusion designed to sculpt, strengthen, and energize. Expect classic Pilates precision with a modern rhythmic pulse, using light weights, Pilates balls, and rings for a low-impact burn.',
+      'Pilates Pulse with Adrianna offers an inviting blend of challenge, curiosity, and self-discovery for modern bodies. This class combines functional movement with strength, stability, mobility, intelligent alignment, joint health, and balance training.',
     whatToExpect: [
-      'Classic Pilates precision with a modern rhythmic pulse',
-      'Light hand weights, Pilates balls, and Pilates rings',
-      'Low-impact strength with modifications and challenges',
+      'Functional movement with strength and stability work',
+      'Mobility, alignment, joint health, and balance training',
+      'A mindful challenge designed for modern bodies',
     ],
     whatToBring: ['Comfortable athletic wear', 'Water bottle', 'Grip socks or bare feet'],
   },
@@ -148,7 +157,6 @@ export const classes: RhyzeClass[] = [
     slug: 'real-riddim-dance-workout-vanessa',
     name: 'Real Riddim Dance Workout w/ Vanessa',
     category: 'dance',
-    level: 'signature',
     duration: 50,
     tagline: 'Caribbean-style follow-along dance fitness',
     description:
@@ -164,7 +172,6 @@ export const classes: RhyzeClass[] = [
     slug: 'rhyze-ritmo-melissa',
     name: 'Rhyze Ritmo w/ Melissa',
     category: 'dance',
-    level: 'signature',
     duration: 50,
     tagline: 'Latin rhythms and full-body cardio with Melissa',
     description:
@@ -172,7 +179,7 @@ export const classes: RhyzeClass[] = [
     whatToExpect: [
       'Latin rhythms with easy-to-follow dance-fitness choreography',
       'Salsa, Brazilian Funk, Merengue, Reggaeton, Samba, Cumbia, and Afro beats',
-      'A high-energy cardio party open to all levels',
+      'A high-energy cardio party for the whole room',
     ],
     whatToBring: ['Comfortable athletic wear', 'Supportive sneakers', 'Plenty of water'],
   },
@@ -180,9 +187,8 @@ export const classes: RhyzeClass[] = [
     slug: 'rhyze-up-vanessa',
     name: 'Rhyze Up w/ Vanessa',
     category: 'dance',
-    level: 'signature',
     duration: 50,
-    tagline: 'Signature rhythm-driven dance fitness with Vanessa',
+    tagline: 'Rhythm-driven dance fitness with Vanessa',
     description:
       'Rhyze Up with Vanessa is a signature dance-fitness experience created to elevate the mind, energize the body, and evolve the soul. This rhythm-driven, follow-along class blends electronic, Latin, and global-inspired music with high-intensity peaks and soulful flow.',
     whatToExpect: [
@@ -193,10 +199,24 @@ export const classes: RhyzeClass[] = [
     whatToBring: ['Comfortable athletic wear', 'Supportive sneakers', 'Water bottle'],
   },
   {
+    slug: 'seat-seduction-vanessa',
+    name: 'Seat Seduction With Vanessa',
+    category: 'dance',
+    duration: 75,
+    tagline: 'Friday night chair choreography for confidence and flow',
+    description:
+      'Seat Seduction with Vanessa is a Friday night special designed to help you unwind, let your hair down, and reclaim your confidence. This beginner-friendly chair choreography class taps into feminine energy with step-by-step movement, flow, and attitude.',
+    whatToExpect: [
+      'Beginner-friendly chair choreography',
+      'A Friday night vibe focused on confidence and expression',
+      'Step-by-step movement with room to let go',
+    ],
+    whatToBring: ['Comfortable clothes you can move in', 'Supportive shoes', 'Water bottle'],
+  },
+  {
     slug: 'soul-line-and-groove-rachel',
     name: 'Soul Line & Groove w/ Rachel',
     category: 'dance',
-    level: 'foundation',
     duration: 50,
     tagline: 'Soulful line-dancing, collective movement, and pure joy',
     description:
@@ -212,11 +232,10 @@ export const classes: RhyzeClass[] = [
     slug: 'tcj-hip-hop-happy-hour-tricia',
     name: 'TCJ Hip-Hop Happy Hour w/ Tricia',
     category: 'dance',
-    level: 'signature',
     duration: 75,
     tagline: 'Beginner-friendly hip-hop choreography that feels like a night out',
     description:
-      'TCJ Hip-Hop Happy Hour with Tricia is a beginner-friendly dance experience that feels more like a night out than a workout. Each session breaks down a hip-hop or pop routine step by step to a different track, so you can move, sweat, and have fun at any level.',
+      'TCJ Hip-Hop Happy Hour with Tricia is a beginner-friendly dance experience that feels more like a night out than a workout. Each session breaks down a hip-hop or pop routine step by step to a different track, so you can move, sweat, and have fun at any pace.',
     whatToExpect: [
       'Step-by-step hip-hop or pop choreography',
       'A different track and routine each session',
@@ -228,7 +247,6 @@ export const classes: RhyzeClass[] = [
     slug: 'yoga-flow-adrianna',
     name: 'Yoga Flow w/ Adrianna',
     category: 'yoga',
-    level: 'foundation',
     duration: 50,
     tagline: 'Vinyasa flow and functional movement for modern bodies',
     description:

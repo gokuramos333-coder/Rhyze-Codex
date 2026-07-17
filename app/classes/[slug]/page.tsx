@@ -2,13 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Clock, ExternalLink } from 'lucide-react';
-import {
-  categoryLabel,
-  classes,
-  getClass,
-  levelColor,
-  levelLabel,
-} from '@/lib/classes';
+import { categoryLabel, classes, getClass } from '@/lib/classes';
 import { sombleScheduleUrl } from '@/lib/somble';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -49,7 +43,6 @@ export default function ClassDetailPage({
         <Badge className="border-white/10 bg-rhyze-black/50 text-rhyze-cream/70">
           {categoryLabel[c.category]}
         </Badge>
-        <Badge className={levelColor[c.level]}>{levelLabel[c.level]}</Badge>
         <Badge className="border-white/10 bg-rhyze-black/50 text-rhyze-cream/70">
           <Clock className="mr-1 h-3 w-3" aria-hidden />
           {c.duration} min

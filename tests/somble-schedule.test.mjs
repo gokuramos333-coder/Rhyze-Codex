@@ -31,6 +31,8 @@ test('primary navigation uses Join Now instead of a duplicate memberships item',
   const sitemapSource = readFileSync('app/sitemap.ts', 'utf8');
 
   assert.doesNotMatch(source, /label: 'Memberships'/);
+  assert.doesNotMatch(source, /label: 'Levels'/);
+  assert.doesNotMatch(source, /href: '\/classes#levels'/);
   assert.match(headerSource, /<Button href="\/join" size="sm">/);
   assert.match(headerSource, /Join Now/);
   assert.match(mobileSource, /<Button href="\/join" size="lg" className="w-full">/);
@@ -146,6 +148,36 @@ test('schedule section embeds Somble with a direct fallback link', () => {
   assert.doesNotMatch(source, /slotsForDay/);
 });
 
+test('homepage On the Floor section embeds the live Somble weekly schedule', () => {
+  const source = readFileSync(
+    'components/sections/SchedulePreview.tsx',
+    'utf8',
+  );
+
+  assert.match(source, /ON THE FLOOR/);
+  assert.match(source, /<iframe/);
+  assert.match(source, /sombleScheduleUrl/);
+  assert.match(source, /This week's live schedule/);
+  assert.match(source, /Open Somble Schedule/);
+  assert.doesNotMatch(source, /liveScheduleNotes/);
+  assert.doesNotMatch(source, /Current class times/);
+});
+
+test('classes page shows schedule first, class list second, and no level guide', () => {
+  const source = readFileSync('app/classes/page.tsx', 'utf8');
+  const listSource = readFileSync('components/sections/ClassList.tsx', 'utf8');
+  const classDetailSource = readFileSync('app/classes/[slug]/page.tsx', 'utf8');
+
+  assert.ok(source.indexOf('<ScheduleFull />') < source.indexOf('<ClassList />'));
+  assert.doesNotMatch(source, /Level Guide/);
+  assert.doesNotMatch(source, /KNOW YOUR RHYTHM/);
+  assert.doesNotMatch(source, /id="levels"/);
+  assert.doesNotMatch(source, /levelColor|levelLabel/);
+  assert.doesNotMatch(listSource, /Foundation|Signature|Peak|All Levels/);
+  assert.doesNotMatch(listSource, /levelColor|levelLabel|LvlFilter|aria-label="Level"/);
+  assert.doesNotMatch(classDetailSource, /levelColor|levelLabel/);
+});
+
 test('schedule embed leaves breathing room, removes the gold frame, and limits blank bottom space', () => {
   const source = readFileSync(
     'components/sections/ScheduleFull.tsx',
@@ -186,6 +218,7 @@ test('homepage preview no longer renders hard-coded schedule slots', () => {
   );
 
   assert.match(source, /sombleScheduleUrl/);
+  assert.match(source, /<iframe/);
   assert.doesNotMatch(source, /slotsForDay/);
   assert.doesNotMatch(source, /statusLabel/);
 });
