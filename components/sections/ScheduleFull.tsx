@@ -7,7 +7,7 @@ import { sombleScheduleUrl } from '@/lib/somble';
 export function ScheduleFull() {
   const [isBookingMode, setIsBookingMode] = useState(false);
   const activateBookingMode = () => {
-    window.setTimeout(() => setIsBookingMode(true), 450);
+    setIsBookingMode(true);
   };
 
   return (
@@ -37,6 +37,8 @@ export function ScheduleFull() {
       </div>
 
       <div
+        onMouseEnter={activateBookingMode}
+        onTouchStart={activateBookingMode}
         className={`somble-frame-shell relative overflow-hidden bg-rhyze-black transition-[height] duration-300 ${
           isBookingMode ? 'fixed inset-0 z-[100] h-[100dvh]' : 'h-[720px]'
         }`}

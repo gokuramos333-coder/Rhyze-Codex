@@ -47,8 +47,9 @@ test('schedule embed opens a full-screen uncropped booking overlay when visitors
 
   assert.match(source, /useState/);
   assert.match(source, /isBookingMode/);
-  assert.match(source, /window\.setTimeout/);
   assert.match(source, /setIsBookingMode\(true\)/);
+  assert.match(source, /onMouseEnter=\{activateBookingMode\}/);
+  assert.match(source, /onTouchStart=\{activateBookingMode\}/);
   assert.match(source, /fixed inset-0 z-\[100\]/);
   assert.match(source, /h-\[100dvh\]/);
   assert.match(source, /h-full w-full translate-y-0/);
