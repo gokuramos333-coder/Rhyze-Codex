@@ -31,9 +31,9 @@ test('schedule embed leaves breathing room, removes the gold frame, and limits b
 
   assert.match(source, /somble-frame-shell/);
   assert.match(source, /somble-frame-crop/);
-  assert.match(source, /h-\[980px\]/);
-  assert.match(source, /h-\[1480px\]/);
-  assert.match(source, /-translate-y-\[500px\]/);
+  assert.match(source, /h-\[720px\]/);
+  assert.match(source, /h-\[1250px\]/);
+  assert.match(source, /-translate-y-\[530px\]/);
   assert.match(source, /bg-rhyze-black/);
   assert.doesNotMatch(source, /border-rhyze-gold/);
   assert.doesNotMatch(source, /shadow-glow-gold/);
