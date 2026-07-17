@@ -23,7 +23,7 @@ test('schedule section embeds Somble with a direct fallback link', () => {
   assert.doesNotMatch(source, /slotsForDay/);
 });
 
-test('schedule embed crops the Somble header and expands the visible schedule area', () => {
+test('schedule embed leaves breathing room, removes the gold frame, and limits blank bottom space', () => {
   const source = readFileSync(
     'components/sections/ScheduleFull.tsx',
     'utf8',
@@ -31,8 +31,12 @@ test('schedule embed crops the Somble header and expands the visible schedule ar
 
   assert.match(source, /somble-frame-shell/);
   assert.match(source, /somble-frame-crop/);
-  assert.match(source, /h-\[1180px\]/);
-  assert.match(source, /-translate-y-\[544px\]/);
+  assert.match(source, /h-\[980px\]/);
+  assert.match(source, /h-\[1480px\]/);
+  assert.match(source, /-translate-y-\[500px\]/);
+  assert.match(source, /bg-rhyze-black/);
+  assert.doesNotMatch(source, /border-rhyze-gold/);
+  assert.doesNotMatch(source, /shadow-glow-gold/);
 });
 
 test('homepage preview no longer renders hard-coded schedule slots', () => {
