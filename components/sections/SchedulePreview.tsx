@@ -1,18 +1,26 @@
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
-import { cn } from '@/lib/cn';
-import {
-  days,
-  slotsForDay,
-  statusLabel,
-  statusStyles,
-  type Day,
-} from '@/lib/schedule';
+import { ArrowRight, CalendarDays, ExternalLink, Sparkles } from 'lucide-react';
+import { sombleScheduleUrl } from '@/lib/somble';
 
-export function SchedulePreview({ from = 'Mon' as Day }: { from?: Day }) {
-  const startIdx = days.indexOf(from);
-  const previewDays: Day[] = [0, 1, 2].map((o) => days[(startIdx + o) % 7]);
+const liveScheduleNotes = [
+  {
+    icon: CalendarDays,
+    title: 'Current class times',
+    body: 'Somble shows the live Rhyze Fitness calendar as classes are added.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Real booking flow',
+    body: 'Reserve your spot, view class access, and manage your schedule there.',
+  },
+  {
+    icon: ExternalLink,
+    title: 'Opens on Somble',
+    body: 'If the embedded schedule ever needs more room, open it directly.',
+  },
+];
 
+export function SchedulePreview() {
   return (
     <section className="border-y border-white/5 bg-rhyze-charcoal/30 py-24">
       <div className="mx-auto max-w-7xl px-6">
@@ -24,6 +32,10 @@ export function SchedulePreview({ from = 'Mon' as Day }: { from?: Day }) {
             <h2 className="font-display text-5xl tracking-wider md:text-7xl">
               ON THE FLOOR
             </h2>
+            <p className="mt-4 max-w-2xl text-rhyze-cream/65">
+              The live class calendar now lives on Somble, so the website stays
+              matched with the actual booking schedule.
+            </p>
           </div>
           <Link
             href="/classes#schedule"
@@ -35,44 +47,32 @@ export function SchedulePreview({ from = 'Mon' as Day }: { from?: Day }) {
         </div>
 
         <div className="grid gap-5 md:grid-cols-3">
-          {previewDays.map((d) => {
-            const slots = slotsForDay(d).slice(0, 4);
-            return (
-              <div
-                key={d}
-                className="rounded-2xl border border-white/10 bg-rhyze-black/50 p-6"
-              >
-                <div className="mb-5 inline-flex items-center rounded-full bg-rhyze-black px-4 py-1.5 text-sm font-bold uppercase tracking-widest">
-                  {d}
-                </div>
-                <ul className="space-y-3">
-                  {slots.map((slot) => (
-                    <li
-                      key={`${slot.day}-${slot.time}-${slot.classSlug}`}
-                      className="flex items-start justify-between gap-3 border-b border-white/5 pb-3 last:border-0 last:pb-0"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-rhyze-cream">
-                          {slot.className}
-                        </p>
-                        <p className="text-xs text-rhyze-cream/50">
-                          {slot.time} · {slot.instructor}
-                        </p>
-                      </div>
-                      <span
-                        className={cn(
-                          'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
-                          statusStyles[slot.status],
-                        )}
-                      >
-                        {statusLabel[slot.status]}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+          {liveScheduleNotes.map(({ icon: Icon, title, body }) => (
+            <div
+              key={title}
+              className="rounded-2xl border border-white/10 bg-rhyze-black/50 p-6"
+            >
+              <div className="mb-5 inline-flex rounded-2xl border border-rhyze-coral/30 bg-rhyze-coral/10 p-3 text-rhyze-coral">
+                <Icon className="h-5 w-5" aria-hidden />
               </div>
-            );
-          })}
+              <h3 className="font-display text-2xl tracking-wider">{title}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-rhyze-cream/65">
+                {body}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-8">
+          <a
+            href={sombleScheduleUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="focus-ring inline-flex items-center gap-2 rounded-full bg-rhyze-gradient px-6 py-3 text-sm font-bold uppercase tracking-widest text-rhyze-black hover:shadow-glow"
+          >
+            Book on Somble
+            <ExternalLink className="h-4 w-4" aria-hidden />
+          </a>
         </div>
       </div>
     </section>

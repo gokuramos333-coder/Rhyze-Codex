@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Clock } from 'lucide-react';
+import { ArrowLeft, Clock, ExternalLink } from 'lucide-react';
 import {
   categoryLabel,
   classes,
@@ -9,7 +9,7 @@ import {
   levelColor,
   levelLabel,
 } from '@/lib/classes';
-import { schedule } from '@/lib/schedule';
+import { sombleScheduleUrl } from '@/lib/somble';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 
@@ -34,11 +34,6 @@ export default function ClassDetailPage({
 }) {
   const c = getClass(params.slug);
   if (!c) notFound();
-
-  const upcoming = schedule.filter((s) => s.classSlug === c.slug);
-  const instructor =
-    upcoming[0]?.instructor ??
-    (c.category === 'dance' ? 'Vanessa' : 'Melissa');
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-20">
@@ -100,48 +95,22 @@ export default function ClassDetailPage({
 
       <div className="mt-14">
         <h2 className="mb-4 font-display text-2xl tracking-wider">
-          INSTRUCTOR
+          LIVE TIMES & BOOKING
         </h2>
-        <p className="text-rhyze-cream/80">
-          Typically led by{' '}
-          <span className="font-semibold text-rhyze-cream">{instructor}</span>.
+        <p className="max-w-2xl text-rhyze-cream/80">
+          Class times, instructor assignments, availability, and reservations
+          are managed live through Somble.
         </p>
       </div>
 
-      {upcoming.length > 0 && (
-        <div className="mt-14">
-          <h2 className="mb-4 font-display text-2xl tracking-wider">
-            UPCOMING SESSIONS
-          </h2>
-          <ul className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-rhyze-charcoal">
-            {upcoming.map((u) => (
-              <li
-                key={`${u.day}-${u.time}`}
-                className="flex items-center justify-between gap-4 px-4 py-3"
-              >
-                <div>
-                  <p className="font-semibold">
-                    {u.day} · {u.time}
-                  </p>
-                  <p className="text-xs text-rhyze-cream/55">
-                    w/ {u.instructor}
-                  </p>
-                </div>
-                <Link
-                  href={`/book/${c.slug}`}
-                  className="focus-ring rounded-full border border-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest hover:border-rhyze-coral hover:text-rhyze-coral"
-                >
-                  Book
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="mt-16 flex flex-wrap gap-3">
-        <Button href={`/book/${c.slug}`} size="lg">
-          Book This Class →
+        <Button
+          href={sombleScheduleUrl}
+          size="lg"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Book on Somble <ExternalLink className="h-4 w-4" aria-hidden />
         </Button>
         <Button href="/join" size="lg" variant="outline">
           New? Start $7 Trial

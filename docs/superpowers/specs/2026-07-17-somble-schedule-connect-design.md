@@ -20,6 +20,7 @@ To avoid fake or stale schedule information, remove hard-coded schedule previews
 - Add `lib/somble.ts` for the canonical Somble URLs.
 - Update `components/sections/ScheduleFull.tsx` to render the Somble iframe and direct booking link.
 - Update `components/sections/SchedulePreview.tsx` to promote the live Somble schedule without hard-coded slots.
+- Update `components/sections/ClassList.tsx` so class-card “Book” buttons open Somble.
 - Update `app/classes/[slug]/page.tsx` so class detail booking buttons go directly to Somble.
 
 ## Error handling

@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+import { sombleProfileUrl, sombleScheduleUrl } from '../lib/somble.ts';
+
+test('Somble URLs point to the approved Rhyze Fitness profile and class schedule', () => {
+  assert.equal(sombleProfileUrl, 'https://www.somble.com/vanessaramos');
+  assert.equal(
+    sombleScheduleUrl,
+    'https://www.somble.com/vanessaramos/classes',
+  );
+});
+
+test('schedule section embeds Somble with a direct fallback link', () => {
+  const source = readFileSync(
+    'components/sections/ScheduleFull.tsx',
+    'utf8',
+  );
+
+  assert.match(source, /<iframe/);
+  assert.match(source, /sombleScheduleUrl/);
+  assert.match(source, /Open Somble Schedule/);
+  assert.doesNotMatch(source, /slotsForDay/);
+});
+
+test('homepage preview no longer renders hard-coded schedule slots', () => {
+  const source = readFileSync(
+    'components/sections/SchedulePreview.tsx',
+    'utf8',
+  );
+
+  assert.match(source, /sombleScheduleUrl/);
+  assert.doesNotMatch(source, /slotsForDay/);
+  assert.doesNotMatch(source, /statusLabel/);
+});
+
+test('class detail booking points to Somble instead of the placeholder booking route', () => {
+  const source = readFileSync('app/classes/[slug]/page.tsx', 'utf8');
+
+  assert.match(source, /sombleScheduleUrl/);
+  assert.doesNotMatch(source, /@\/lib\/schedule/);
+  assert.doesNotMatch(source, /`\/book\/\$\{c.slug\}`/);
+});
+
+test('class list book buttons point to Somble instead of the placeholder booking route', () => {
+  const source = readFileSync('components/sections/ClassList.tsx', 'utf8');
+
+  assert.match(source, /sombleScheduleUrl/);
+  assert.doesNotMatch(source, /`\/book\/\$\{c.slug\}`/);
+});
