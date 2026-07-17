@@ -39,7 +39,7 @@ test('schedule embed leaves breathing room, removes the gold frame, and limits b
   assert.doesNotMatch(source, /shadow-glow-gold/);
 });
 
-test('schedule embed expands and uncrops when visitors interact with Somble booking', () => {
+test('schedule embed opens a full-screen uncropped booking overlay when visitors interact', () => {
   const source = readFileSync(
     'components/sections/ScheduleFull.tsx',
     'utf8',
@@ -49,8 +49,10 @@ test('schedule embed expands and uncrops when visitors interact with Somble book
   assert.match(source, /isBookingMode/);
   assert.match(source, /window\.setTimeout/);
   assert.match(source, /setIsBookingMode\(true\)/);
-  assert.match(source, /h-\[1100px\]/);
-  assert.match(source, /h-\[1100px\] w-full translate-y-0/);
+  assert.match(source, /fixed inset-0 z-\[100\]/);
+  assert.match(source, /h-\[100dvh\]/);
+  assert.match(source, /h-full w-full translate-y-0/);
+  assert.match(source, /Exit full screen/);
 });
 
 test('homepage preview no longer renders hard-coded schedule slots', () => {

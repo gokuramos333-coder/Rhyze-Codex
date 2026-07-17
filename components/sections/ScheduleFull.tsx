@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, X } from 'lucide-react';
 import { sombleScheduleUrl } from '@/lib/somble';
 
 export function ScheduleFull() {
@@ -38,9 +38,19 @@ export function ScheduleFull() {
 
       <div
         className={`somble-frame-shell relative overflow-hidden bg-rhyze-black transition-[height] duration-300 ${
-          isBookingMode ? 'h-[1100px]' : 'h-[720px]'
+          isBookingMode ? 'fixed inset-0 z-[100] h-[100dvh]' : 'h-[720px]'
         }`}
       >
+        {isBookingMode && (
+          <button
+            type="button"
+            onClick={() => setIsBookingMode(false)}
+            className="focus-ring absolute bottom-5 right-5 z-10 inline-flex items-center gap-2 rounded-full border border-white/15 bg-rhyze-black/85 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-rhyze-cream shadow-2xl backdrop-blur hover:border-rhyze-coral hover:text-rhyze-coral"
+          >
+            Exit full screen
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        )}
         <iframe
           src={sombleScheduleUrl}
           title="Rhyze Fitness live class schedule on Somble"
@@ -51,7 +61,7 @@ export function ScheduleFull() {
           onMouseDown={activateBookingMode}
           className={`somble-frame-crop bg-rhyze-black transition-transform duration-300 ${
             isBookingMode
-              ? 'h-[1100px] w-full translate-y-0'
+              ? 'h-full w-full translate-y-0'
               : 'h-[1250px] w-full -translate-y-[530px]'
           }`}
         />
