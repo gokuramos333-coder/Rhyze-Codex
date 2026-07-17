@@ -79,14 +79,6 @@ export function Footer() {
             ))}
             <li>
               <Link
-                href="/pricing"
-                className="focus-ring rounded text-rhyze-cream/70 hover:text-rhyze-coral"
-              >
-                Pricing
-              </Link>
-            </li>
-            <li>
-              <Link
                 href="/policies"
                 className="focus-ring rounded text-rhyze-cream/70 hover:text-rhyze-coral"
               >

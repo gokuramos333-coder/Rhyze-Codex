@@ -1,32 +1,14 @@
 import type { Metadata } from 'next';
-import { Sparkles, Calendar, Flame } from 'lucide-react';
-import { JoinForm } from '@/components/sections/JoinForm';
 import { Accordion, type AccordionItem } from '@/components/ui/Accordion';
-import { trial } from '@/lib/pricing';
+import { Button } from '@/components/ui/Button';
+import { PricingCards } from '@/components/sections/PricingCards';
+import { sombleMembershipsUrl } from '@/lib/somble';
 
 export const metadata: Metadata = {
-  title: 'Start Your $7 Trial',
+  title: 'Join Now',
   description:
-    'Start your $7 seven-day unlimited trial at Rhyze Fitness, new members get unlimited classes for one full week.',
+    'Choose your Rhyze Fitness membership, complete checkout through Somble, and get ready for your first day in studio.',
 };
-
-const steps = [
-  {
-    Icon: Sparkles,
-    title: 'Sign Up',
-    body: 'Drop your info below. Takes about a minute.',
-  },
-  {
-    Icon: Calendar,
-    title: 'Book Classes',
-    body: 'We’ll reach out with your trial credentials and our opening schedule.',
-  },
-  {
-    Icon: Flame,
-    title: 'Rhyze Up',
-    body: 'Show up 15 min early for your first class. We’ll handle the rest.',
-  },
-];
 
 const firstDay = [
   'Arrive 15 minutes early to meet your instructor',
@@ -71,62 +53,74 @@ const faq: AccordionItem[] = [
 export default function JoinPage() {
   return (
     <main className="py-20">
-      <section className="mx-auto max-w-5xl px-6 text-center">
+      <section className="mx-auto max-w-7xl px-6 text-center">
         <p className="mb-4 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
-          New Rhyzer Special
+          Pricing
         </p>
-        <h1 className="font-display text-6xl leading-none tracking-wider md:text-[10rem]">
-          START YOUR <br />
-          <span className="rhyze-gradient-text">$7 RHYZE WEEK</span>
+        <h1 className="font-display text-6xl tracking-wider md:text-8xl">
+          PICK YOUR <span className="rhyze-gradient-text">RHYTHM</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/75">
-          Seven days of unlimited classes for seven dollars. No contracts. No
-          commitments. Just the floor, a playlist, and your new favorite
-          community.
-        </p>
       </section>
 
-      <section className="mx-auto mt-16 max-w-6xl px-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          {steps.map((s, idx) => (
+      <section className="mx-auto mt-14 max-w-5xl px-6">
+        <div className="overflow-hidden rounded-3xl bg-rhyze-gradient p-[2px]">
+          <div className="relative flex flex-col items-center gap-6 overflow-hidden rounded-[calc(1.5rem-2px)] bg-rhyze-black p-8 text-center md:p-14">
             <div
-              key={s.title}
-              className="rounded-2xl border border-white/10 bg-rhyze-charcoal p-6"
-            >
-              <div className="mb-4 flex items-center gap-3">
-                <span className="font-display text-4xl tracking-wider text-rhyze-gold">
-                  0{idx + 1}
-                </span>
-                <div className="inline-flex rounded-xl border border-white/10 bg-rhyze-black/50 p-2 text-rhyze-coral">
-                  <s.Icon className="h-5 w-5" aria-hidden />
-                </div>
-              </div>
-              <h3 className="font-display text-2xl tracking-wider">
-                {s.title.toUpperCase()}
-              </h3>
-              <p className="mt-2 text-sm text-rhyze-cream/70">{s.body}</p>
+              aria-hidden
+              className="grain absolute inset-0 opacity-10 mix-blend-overlay"
+            />
+            <div className="relative">
+              <h2 className="font-display text-5xl leading-none tracking-wider md:text-7xl">
+                MEMBERSHIPS ARE OPEN
+              </h2>
+              <p className="mx-auto mt-4 max-w-md text-sm text-rhyze-cream/70 md:text-base">
+                Plans, account creation, and checkout are handled through the
+                official Rhyze Fitness Somble page.
+              </p>
+              <Button
+                href={sombleMembershipsUrl}
+                size="lg"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-8"
+              >
+                View Memberships on Somble →
+              </Button>
             </div>
-          ))}
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto mt-16 max-w-5xl px-6">
-        <div className="rounded-3xl border border-rhyze-coral/30 bg-rhyze-charcoal p-6 md:p-10">
-          <div className="mb-8 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="mb-2 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
-                Claim the Trial
-              </p>
-              <h2 className="font-display text-4xl tracking-wider md:text-5xl">
-                {trial.price} · {trial.duration}
-              </h2>
-            </div>
-            <p className="max-w-sm text-sm text-rhyze-cream/60">
-              We&apos;ll email you with your trial credentials and
-              opening-week schedule.
+      <section className="mx-auto mt-20 max-w-7xl px-6">
+        <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
+              Memberships
             </p>
           </div>
-          <JoinForm />
+          <p className="max-w-sm text-sm text-rhyze-cream/60">
+            These options mirror the current Rhyze Fitness memberships listed
+            on Somble.
+          </p>
+        </div>
+        <PricingCards />
+      </section>
+
+      <section className="mx-auto mt-24 max-w-4xl px-6 text-center">
+        <h3 className="font-display text-3xl tracking-wider md:text-5xl">
+          QUESTIONS?
+        </h3>
+        <p className="mt-4 text-rhyze-cream/70">
+          We&apos;re a small team, we&apos;d love to hear from you. Reach out
+          for any questions, events, packages, or anything else not listed here.
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Button href="/contact" size="lg" variant="outline">
+            Contact Us
+          </Button>
+          <Button href="/policies" size="lg" variant="ghost">
+            Studio Policies
+          </Button>
         </div>
       </section>
 

@@ -14,9 +14,6 @@ export function ScheduleFull() {
     <section id="schedule" className="scroll-mt-28">
       <div className="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <p className="mb-2 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
-            Live on Somble
-          </p>
           <h2 className="font-display text-4xl tracking-wider md:text-6xl">
             SCHEDULE
           </h2>

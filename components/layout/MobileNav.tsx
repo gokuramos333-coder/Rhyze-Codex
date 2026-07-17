@@ -78,7 +78,7 @@ export function MobileNav({ open, onClose }: Props) {
               </Link>
             </nav>
             <Button href="/join" size="lg" className="w-full">
-              Start $7 Trial →
+              Join Now
             </Button>
           </motion.div>
         </motion.div>

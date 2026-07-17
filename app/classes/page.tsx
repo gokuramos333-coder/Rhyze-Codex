@@ -22,9 +22,9 @@ export default function ClassesPage() {
           CLASSES
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/70">
-          Twelve signature formats across three pillars, Dance, Yoga &
-          Pilates, and Strength & HIIT, taught by your co-founders and a
-          growing bench of guest instructors.
+          Thirteen official formats across three pillars, Dance, Yoga &
+          Pilates, and Strength & HIIT, matched to the current Rhyze Fitness
+          class schedule on Somble.
         </p>
         <div className="relative mx-auto mt-12 aspect-[16/9] max-w-5xl overflow-hidden rounded-3xl">
           <Image

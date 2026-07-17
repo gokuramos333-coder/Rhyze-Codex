@@ -47,6 +47,8 @@ export function PricingCards() {
           <p className="mb-6 flex-1 text-sm text-rhyze-cream/70">{t.blurb}</p>
           <Button
             href={t.cta.href}
+            target="_blank"
+            rel="noreferrer"
             variant={t.popular ? 'primary' : 'outline'}
             className="w-full"
           >

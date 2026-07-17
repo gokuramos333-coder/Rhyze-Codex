@@ -9,7 +9,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/about',
     '/classes',
     '/instructors',
-    '/pricing',
     '/shop',
     '/gallery',
     '/contact',

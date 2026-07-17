@@ -1,8 +1,54 @@
 import Link from 'next/link';
-import { Check, Star } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { tiers, trial } from '@/lib/pricing';
+import { sombleMembershipsUrl } from '@/lib/somble';
 import { Button } from '@/components/ui/Button';
+
+const homeMemberships = [
+  {
+    id: 'intro-offer',
+    name: 'Intro Offer 7-Days',
+    price: '$7',
+    cadence: '/ 7 credits',
+    eyebrow: 'Class Pack',
+    popular: false,
+    blurb:
+      'Includes 7 consecutive days of unlimited access to all standard classes. Excludes all premium specialty classes and workshops. Valid for first-time clients only.',
+    cta: 'Join Membership',
+  },
+  {
+    id: 'full-rhythm',
+    name: 'Full Rhythm',
+    price: '$168',
+    cadence: '/ month',
+    eyebrow: '8 Classes / Month Membership',
+    popular: true,
+    blurb:
+      'Includes 8 standard classes per billing cycle. 20% off merchandise. Credits do not roll over.',
+    cta: 'Join Membership',
+  },
+  {
+    id: 'elevate',
+    name: 'Elevate',
+    price: '$92',
+    cadence: '/ month',
+    eyebrow: '4 Classes / Month Membership',
+    popular: false,
+    blurb:
+      'Includes 4 standard classes per billing cycle. 10% off all Rhyze Merchandise. Credits do not roll over.',
+    cta: 'Join Membership',
+  },
+  {
+    id: 'vip-access-pass',
+    name: 'The VIP Access Pass',
+    price: '$199',
+    cadence: '/ month',
+    eyebrow: 'AUGUST ONLY',
+    popular: false,
+    blurb:
+      'Founding Members lock in $199/month for life. Unlimited full access to all standard classes and 1 specialty class per month. 30% off all Rhyze Fitness merchandise.',
+    cta: 'Join Membership',
+  },
+] as const;
 
 export function PricingTeaser() {
   return (
@@ -16,26 +62,30 @@ export function PricingTeaser() {
         </h2>
       </div>
 
-      {/* Trial banner */}
       <div className="mb-10 overflow-hidden rounded-3xl bg-rhyze-gradient p-[1px]">
         <div className="flex flex-col items-center justify-between gap-4 rounded-[calc(1.5rem-1px)] bg-rhyze-black p-6 md:flex-row md:p-8">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-rhyze-gold">
-              New Rhyzer Special
+            <p className="font-display text-3xl tracking-wider md:text-5xl">
+              MEMBERSHIPS ARE OPEN
             </p>
-            <p className="mt-1 font-display text-3xl tracking-wider md:text-5xl">
-              {trial.price} · {trial.duration}
+            <p className="mt-1 text-sm text-rhyze-cream/70">
+              Choose your plan on Rhyze, then complete checkout securely on
+              Somble.
             </p>
-            <p className="mt-1 text-sm text-rhyze-cream/70">{trial.subtitle}</p>
           </div>
-          <Button href={trial.cta.href} size="lg">
-            {trial.cta.label} →
+          <Button
+            href={sombleMembershipsUrl}
+            size="lg"
+            target="_blank"
+            rel="noreferrer"
+          >
+            View Memberships on Somble →
           </Button>
         </div>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        {tiers.map((t) => (
+        {homeMemberships.map((t) => (
           <div
             key={t.id}
             className={cn(
@@ -67,15 +117,17 @@ export function PricingTeaser() {
               </span>
               <span className="text-sm text-rhyze-cream/60">{t.cadence}</span>
             </div>
-            {t.perClass && (
-              <p className="mb-3 text-xs text-rhyze-gold">{t.perClass}</p>
-            )}
+            <p className="mb-3 text-xs uppercase tracking-widest text-rhyze-gold">
+              {t.eyebrow}
+            </p>
             <p className="mb-6 text-sm text-rhyze-cream/70">{t.blurb}</p>
             <Link
-              href={t.cta.href}
+              href={sombleMembershipsUrl}
+              target="_blank"
+              rel="noreferrer"
               className="focus-ring inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-widest text-rhyze-cream hover:text-rhyze-coral"
             >
-              {t.cta.label} →
+              {t.cta} →
             </Link>
           </div>
         ))}
@@ -83,10 +135,12 @@ export function PricingTeaser() {
 
       <div className="mt-10 text-center">
         <Link
-          href="/pricing"
+          href={sombleMembershipsUrl}
+          target="_blank"
+          rel="noreferrer"
           className="focus-ring inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold uppercase tracking-wide hover:border-rhyze-coral hover:text-rhyze-coral"
         >
-          Full pricing & member perks →
+          View Memberships on Somble →
         </Link>
       </div>
     </section>

@@ -1,3 +1,5 @@
+import { sombleMembershipsUrl } from '@/lib/somble';
+
 export type PricingTier = {
   id: string;
   name: string;
@@ -18,56 +20,47 @@ export const trial = {
 
 export const tiers: PricingTier[] = [
   {
-    id: 'drop-in',
-    name: 'Single Class (Drop-In)',
-    price: '$30',
-    cadence: 'per class',
-    blurb: 'Your anchor rate. Perfect for trying a class or dropping in.',
-    cta: { label: 'Book a Class', href: '/classes' },
-  },
-  {
-    id: 'weekly',
-    name: 'The Weekly Rhyzer',
-    price: '$99',
-    cadence: 'per month',
-    perClass: '~$24.75 / class · 4 classes / mo',
+    id: 'intro-offer',
+    name: 'Intro Offer 7-Days',
+    price: '$7',
+    cadence: '/ 7 credits',
+    perClass: 'Class Pack',
+    popular: false,
     blurb:
-      'For the member supplementing their routine with one Rhyze session a week.',
-    cta: { label: 'Join Weekly', href: '/join' },
+      'Includes 7 consecutive days of unlimited access to all standard classes. Excludes all premium specialty classes and workshops. Valid for first-time clients only.',
+    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
   },
   {
-    id: 'twice',
-    name: 'The Twice-A-Week',
-    price: '$169',
-    cadence: 'per month',
-    perClass: '~$21.12 / class · 8 classes / mo',
-    blurb: 'Our most popular tier, 30% savings over drop-in.',
+    id: 'full-rhythm',
+    name: 'Full Rhythm',
+    price: '$168',
+    cadence: '/ month',
+    perClass: '8 Classes / Month Membership',
     popular: true,
-    cta: { label: 'Join Twice-A-Week', href: '/join' },
-  },
-  {
-    id: 'unlimited',
-    name: 'The Rhyze Up Unlimited',
-    price: '$219',
-    cadence: 'per month',
-    perClass: '~$18 / class at 3x/week',
     blurb:
-      'For our dedicated community members. Unlimited access to the floor.',
-    cta: { label: 'Go Unlimited', href: '/join' },
-  },
-];
-
-export const memberPerks = [
-  {
-    title: 'Glow-in-the-Dark Pop-ups',
-    body: 'Member-only late-night fusion events, neon, black lights, and the whole Rhyze Tribe.',
+      'Includes 8 standard classes per billing cycle. 20% off merchandise. Credits do not roll over.',
+    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
   },
   {
-    title: 'Buddy Pass',
-    body: 'One guest pass per month. Bring a friend to Rhyze with you, on the house.',
+    id: 'elevate',
+    name: 'Elevate',
+    price: '$92',
+    cadence: '/ month',
+    perClass: '4 Classes / Month Membership',
+    popular: false,
+    blurb:
+      'Includes 4 standard classes per billing cycle. 10% off all Rhyze Merchandise. Credits do not roll over.',
+    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
   },
   {
-    title: 'Retail Discount',
-    body: '10% off all Rhyze-branded gear in-studio and online.',
+    id: 'vip-access-pass',
+    name: 'The VIP Access Pass',
+    price: '$199',
+    cadence: '/ month',
+    perClass: 'AUGUST ONLY',
+    popular: false,
+    blurb:
+      'Founding Members lock in $199/month for life. Unlimited full access to all standard classes and 1 specialty class per month. 30% off all Rhyze Fitness merchandise.',
+    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
   },
 ];
