@@ -23,6 +23,18 @@ test('schedule section embeds Somble with a direct fallback link', () => {
   assert.doesNotMatch(source, /slotsForDay/);
 });
 
+test('schedule embed crops the Somble header and expands the visible schedule area', () => {
+  const source = readFileSync(
+    'components/sections/ScheduleFull.tsx',
+    'utf8',
+  );
+
+  assert.match(source, /somble-frame-shell/);
+  assert.match(source, /somble-frame-crop/);
+  assert.match(source, /h-\[1180px\]/);
+  assert.match(source, /-translate-y-\[544px\]/);
+});
+
 test('homepage preview no longer renders hard-coded schedule slots', () => {
   const source = readFileSync(
     'components/sections/SchedulePreview.tsx',

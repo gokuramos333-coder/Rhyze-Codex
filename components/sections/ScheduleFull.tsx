@@ -28,13 +28,15 @@ export function ScheduleFull() {
         </a>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-white/10 bg-rhyze-charcoal shadow-2xl">
+      <div className="somble-frame-shell relative h-[1180px] overflow-hidden rounded-3xl border border-rhyze-gold/30 bg-rhyze-black shadow-glow-gold">
+        <div className="pointer-events-none absolute inset-0 z-10 rounded-3xl ring-1 ring-inset ring-rhyze-coral/20" />
         <iframe
           src={sombleScheduleUrl}
           title="Rhyze Fitness live class schedule on Somble"
           loading="lazy"
           referrerPolicy="strict-origin-when-cross-origin"
-          className="h-[760px] w-full bg-white"
+          scrolling="no"
+          className="somble-frame-crop h-[1724px] w-full -translate-y-[544px] bg-white"
         />
       </div>
     </section>
