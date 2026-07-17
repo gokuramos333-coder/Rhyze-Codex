@@ -1,7 +1,15 @@
+'use client';
+
+import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { sombleScheduleUrl } from '@/lib/somble';
 
 export function ScheduleFull() {
+  const [isBookingMode, setIsBookingMode] = useState(false);
+  const activateBookingMode = () => {
+    window.setTimeout(() => setIsBookingMode(true), 450);
+  };
+
   return (
     <section id="schedule" className="scroll-mt-28">
       <div className="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
@@ -28,14 +36,24 @@ export function ScheduleFull() {
         </a>
       </div>
 
-      <div className="somble-frame-shell relative h-[720px] overflow-hidden bg-rhyze-black">
+      <div
+        className={`somble-frame-shell relative overflow-hidden bg-rhyze-black transition-[height] duration-300 ${
+          isBookingMode ? 'h-[1100px]' : 'h-[720px]'
+        }`}
+      >
         <iframe
           src={sombleScheduleUrl}
           title="Rhyze Fitness live class schedule on Somble"
           loading="lazy"
           referrerPolicy="strict-origin-when-cross-origin"
           scrolling="no"
-          className="somble-frame-crop h-[1250px] w-full -translate-y-[530px] bg-rhyze-black"
+          onFocus={activateBookingMode}
+          onMouseDown={activateBookingMode}
+          className={`somble-frame-crop bg-rhyze-black transition-transform duration-300 ${
+            isBookingMode
+              ? 'h-[1100px] w-full translate-y-0'
+              : 'h-[1250px] w-full -translate-y-[530px]'
+          }`}
         />
       </div>
     </section>
