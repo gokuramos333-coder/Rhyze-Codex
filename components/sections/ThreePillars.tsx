@@ -7,7 +7,7 @@ const pillars = [
     title: 'DANCE',
     sub: 'Find your rhythm',
     body: 'Signature dance-cardio, Latin ritmos, and choreography-based sweat sessions.',
-    href: '/classes#dance',
+    href: '/classes?category=dance#list',
     tint: 'from-rhyze-coral/30',
   },
   {
@@ -15,7 +15,7 @@ const pillars = [
     title: 'YOGA & PILATES',
     sub: 'Find your center',
     body: 'Flow-based yoga, restorative holds, and Pilates-informed core burners.',
-    href: '/classes#yoga',
+    href: '/classes?category=yoga#list',
     tint: 'from-rhyze-orange/30',
   },
   {
@@ -23,7 +23,7 @@ const pillars = [
     title: 'STRENGTH & HIIT',
     sub: 'Find your power',
     body: 'Circuit strength, heavy lifting, and gritty, high-octane HIIT.',
-    href: '/classes#strength',
+    href: '/classes?category=strength#list',
     tint: 'from-rhyze-gold/30',
   },
 ];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Clock, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
@@ -17,8 +17,16 @@ const cats: { id: CatFilter; label: string }[] = [
   { id: 'strength', label: 'Strength & HIIT' },
 ];
 
-export function ClassList() {
-  const [cat, setCat] = useState<CatFilter>('all');
+type ClassListProps = {
+  initialCategory?: CatFilter;
+};
+
+export function ClassList({ initialCategory = 'all' }: ClassListProps) {
+  const [cat, setCat] = useState<CatFilter>(initialCategory);
+
+  useEffect(() => {
+    setCat(initialCategory);
+  }, [initialCategory]);
 
   const filtered = useMemo(
     () => classes.filter((c) => cat === 'all' || c.category === cat),

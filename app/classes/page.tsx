@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import { ClassList } from '@/components/sections/ClassList';
 import { ScheduleFull } from '@/components/sections/ScheduleFull';
+import type { ClassCategory } from '@/lib/classes';
 
 export const metadata: Metadata = {
   title: 'Classes & Schedule',
@@ -9,7 +10,25 @@ export const metadata: Metadata = {
     'Browse the Rhyze Fitness class catalog, Dance, Yoga & Pilates, Strength & HIIT, and book your spot on the floor.',
 };
 
-export default function ClassesPage() {
+type ClassesPageProps = {
+  searchParams?: {
+    category?: string | string[];
+  };
+};
+
+const classCategories: ClassCategory[] = ['dance', 'yoga', 'strength'];
+
+function getInitialCategory(category?: string | string[]) {
+  const value = Array.isArray(category) ? category[0] : category;
+
+  return classCategories.includes(value as ClassCategory)
+    ? (value as ClassCategory)
+    : 'all';
+}
+
+export default function ClassesPage({ searchParams }: ClassesPageProps) {
+  const initialCategory = getInitialCategory(searchParams?.category);
+
   return (
     <main className="mx-auto max-w-7xl px-6 py-20">
       <section className="mb-20 text-center">
@@ -40,7 +59,7 @@ export default function ClassesPage() {
       <ScheduleFull />
 
       <section id="dance" className="mb-20 scroll-mt-28">
-        <ClassList />
+        <ClassList initialCategory={initialCategory} />
       </section>
 
       <section className="mb-10 scroll-mt-28" id="yoga">

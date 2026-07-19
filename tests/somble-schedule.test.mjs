@@ -168,7 +168,7 @@ test('classes page shows schedule first, class list second, and no level guide',
   const listSource = readFileSync('components/sections/ClassList.tsx', 'utf8');
   const classDetailSource = readFileSync('app/classes/[slug]/page.tsx', 'utf8');
 
-  assert.ok(source.indexOf('<ScheduleFull />') < source.indexOf('<ClassList />'));
+  assert.ok(source.indexOf('<ScheduleFull />') < source.indexOf('<ClassList'));
   assert.doesNotMatch(source, /Level Guide/);
   assert.doesNotMatch(source, /KNOW YOUR RHYTHM/);
   assert.doesNotMatch(source, /id="levels"/);

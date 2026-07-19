@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
@@ -44,43 +43,18 @@ export function Hero() {
       />
 
       <div className="relative mx-auto w-full max-w-7xl px-6">
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-rhyze-coral/30 bg-rhyze-coral/10 px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-rhyze-coral"
-        >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rhyze-coral" />
-          Opening Summer 2026 · Lafayette, NJ
-        </motion.p>
-
-        <motion.h1
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="max-w-5xl font-display text-[clamp(3.75rem,11vw,10rem)] leading-[0.9] tracking-wider text-rhyze-cream"
-        >
+        <h1 className="max-w-5xl font-display text-[clamp(3.75rem,11vw,10rem)] leading-[0.9] tracking-wider text-rhyze-cream">
           IN <span className="rhyze-gradient-text">RHYTHM</span>
           <br />
           WE RISE
-        </motion.h1>
+        </h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.45 }}
-          className="mt-8 max-w-xl text-lg text-rhyze-cream/75 md:text-xl"
-        >
+        <p className="mt-8 max-w-xl text-lg text-rhyze-cream/75 md:text-xl">
           Elevate your energy. Rhyze together. Boutique dance, yoga, and HIIT
           for the Sussex County community.
-        </motion.p>
+        </p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.6 }}
-          className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center"
-        >
+        <div className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
           <div>
             <Button href="/join" size="lg">
               Start Your $7 Trial <ArrowRight className="h-4 w-4" />
@@ -98,7 +72,7 @@ export function Hero() {
               →
             </span>
           </Link>
-        </motion.div>
+        </div>
       </div>
 
       {/* Scroll cue */}

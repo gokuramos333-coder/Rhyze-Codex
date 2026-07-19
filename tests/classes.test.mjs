@@ -95,3 +95,23 @@ test('class model no longer exposes Foundation Signature Peak level metadata', (
   assert.doesNotMatch(source, /levelColor/);
   assert.doesNotMatch(source, /level:/);
 });
+
+test('home class category cards deep link to filtered class tabs', () => {
+  const source = readFileSync('components/sections/ThreePillars.tsx', 'utf8');
+
+  assert.ok(source.includes("href: '/classes?category=dance#list'"));
+  assert.ok(source.includes("href: '/classes?category=yoga#list'"));
+  assert.ok(source.includes("href: '/classes?category=strength#list'"));
+});
+
+test('classes page passes URL category filter into the class list', () => {
+  const pageSource = readFileSync('app/classes/page.tsx', 'utf8');
+  const listSource = readFileSync('components/sections/ClassList.tsx', 'utf8');
+
+  assert.match(pageSource, /searchParams\?:/);
+  assert.match(pageSource, /getInitialCategory\(searchParams\?\.category\)/);
+  assert.match(pageSource, /<ClassList initialCategory=\{initialCategory\} \/>/);
+  assert.match(listSource, /initialCategory = 'all'/);
+  assert.match(listSource, /useEffect\(\(\) => \{/);
+  assert.match(listSource, /setCat\(initialCategory\)/);
+});
