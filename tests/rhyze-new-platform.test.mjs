@@ -90,3 +90,13 @@ test('member portal and Studio OS dashboard are available as separate Rhyze #2 r
   assert.match(dashboardSource, /Automations/);
   assert.doesNotMatch(portalSource + dashboardSource, /Somble|somble|iframe/);
 });
+
+test('gallery uses the approved Elfsight Instagram integration', () => {
+  const instagramSource = readFileSync('components/sections/InstagramFeed.tsx', 'utf8');
+
+  assert.match(instagramSource, /next\/script/);
+  assert.match(instagramSource, /https:\/\/elfsightcdn\.com\/platform\.js/);
+  assert.match(instagramSource, /30afe97e-55a2-4095-9f83-112e1eae34d8/);
+  assert.match(instagramSource, /data-elfsight-app-lazy/);
+  assert.doesNotMatch(instagramSource, /NEXT_PUBLIC_LIGHTWIDGET_URL|LightWidget|iframe|FallbackTiles/);
+});
