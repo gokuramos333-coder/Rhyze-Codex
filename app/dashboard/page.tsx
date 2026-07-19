@@ -10,6 +10,7 @@ import {
   ownedSchedule,
   studioMetrics,
 } from '@/lib/rhyze-platform';
+import { StudioOSDetailLayer } from '@/components/sections/StudioOSDetailLayer';
 
 export const metadata: Metadata = {
   title: 'Studio OS',
@@ -91,6 +92,15 @@ const settingItems = [
   'Waiver requirements',
   'Membership credit reset day',
 ] as const;
+
+const metricDetailIds: Record<string, string> = {
+  "Today's income": 'today-income',
+  'Monthly recurring': 'monthly-recurring',
+  'Bookings this week': 'bookings-this-week',
+  'Waivers needed': 'waivers-needed',
+  'Attendance rate': 'attendance-rate',
+  'Active members': 'active-members',
+};
 
 export default function DashboardPage() {
   const nextClass =
@@ -192,9 +202,11 @@ export default function DashboardPage() {
             />
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {metricDeck.map((metric, index) => (
-                <article
+                <button
+                  type="button"
+                  data-studio-detail={metricDetailIds[metric.label]}
                   key={metric.label}
-                  className="border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20"
+                  className="focus-ring group border border-white/10 bg-rhyze-charcoal/75 p-5 text-left shadow-2xl shadow-black/20 transition hover:border-rhyze-gold/40 hover:bg-rhyze-charcoal"
                 >
                   <div
                     className={[
@@ -215,12 +227,19 @@ export default function DashboardPage() {
                   <span className="mt-3 block text-sm font-bold text-rhyze-cream/55">
                     {metric.detail}
                   </span>
-                </article>
+                  <span className="mt-4 block text-xs font-black uppercase tracking-widest text-rhyze-gold opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                    View detail
+                  </span>
+                </button>
               ))}
             </div>
 
             <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
-              <article className="border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20">
+              <button
+                type="button"
+                data-studio-detail="income-growth"
+                className="focus-ring group border border-white/10 bg-rhyze-charcoal/75 p-5 text-left shadow-2xl shadow-black/20 transition hover:border-rhyze-gold/40 hover:bg-rhyze-charcoal"
+              >
                 <div className="mb-5 flex items-start justify-between gap-4">
                   <h3 className="font-display text-4xl tracking-wider">
                     INCOME + GROWTH
@@ -239,7 +258,10 @@ export default function DashboardPage() {
                     />
                   ))}
                 </div>
-              </article>
+                <span className="mt-4 block text-xs font-black uppercase tracking-widest text-rhyze-gold opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                  View projection
+                </span>
+              </button>
 
               <article className="border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20">
                 <div className="mb-5 flex items-start justify-between gap-4">
@@ -252,11 +274,14 @@ export default function DashboardPage() {
                 </div>
                 <ul className="grid gap-3">
                   {adminQueues.map((item) => (
-                    <li
-                      key={item}
-                      className="border-l-4 border-rhyze-coral bg-rhyze-coral/10 px-4 py-3 text-sm font-bold text-rhyze-cream/80"
-                    >
-                      {item}
+                    <li key={item}>
+                      <button
+                        type="button"
+                        data-studio-detail="owner-queue"
+                        className="focus-ring w-full border-l-4 border-rhyze-coral bg-rhyze-coral/10 px-4 py-3 text-left text-sm font-bold text-rhyze-cream/80 transition hover:bg-rhyze-coral/20"
+                      >
+                        {item}
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -273,9 +298,11 @@ export default function DashboardPage() {
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
               <div className="grid gap-3">
                 {ownedSchedule.slice(0, 7).map((slot) => (
-                  <article
+                  <button
+                    type="button"
+                    data-studio-detail="calendar"
                     key={slot.id}
-                    className="grid gap-3 border border-white/10 bg-rhyze-charcoal/75 p-4 md:grid-cols-[6rem_1fr_auto] md:items-center"
+                    className="focus-ring grid gap-3 border border-white/10 bg-rhyze-charcoal/75 p-4 text-left transition hover:border-rhyze-gold/40 hover:bg-rhyze-charcoal md:grid-cols-[6rem_1fr_auto] md:items-center"
                   >
                     <div className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
                       {slot.day}
@@ -292,10 +319,13 @@ export default function DashboardPage() {
                     <span className="text-sm font-black text-rhyze-gold">
                       {slot.booked}/{slot.capacity} booked
                     </span>
-                  </article>
+                  </button>
                 ))}
               </div>
-              <aside className="border border-white/10 bg-rhyze-charcoal/75 p-5">
+              <aside
+                data-studio-detail="calendar"
+                className="cursor-pointer border border-white/10 bg-rhyze-charcoal/75 p-5 transition hover:border-rhyze-gold/40"
+              >
                 <h3 className="font-display text-4xl tracking-wider">
                   CLASS DETAIL
                 </h3>
@@ -323,16 +353,19 @@ export default function DashboardPage() {
             />
             <div className="grid gap-4 xl:grid-cols-3">
               <BookingStep
+                detailId="booking"
                 step="1"
                 title="Select class"
                 body={`${nextClass.className} - ${nextClass.date} at ${nextClass.time}`}
               />
               <BookingStep
+                detailId="booking"
                 step="2"
                 title="Select access"
                 body={`${ownedMemberships[1].name} membership or ${dropInOffers[0].name}`}
               />
               <BookingStep
+                detailId="booking"
                 step="3"
                 title="Confirm"
                 body="Waiver checked, credit reserved, confirmation email queued."
@@ -391,6 +424,7 @@ export default function DashboardPage() {
                   </label>
                   <button
                     type="button"
+                    data-studio-detail="add-class"
                     className="md:col-span-2 bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase tracking-widest text-rhyze-black"
                   >
                     Add Class
@@ -401,23 +435,29 @@ export default function DashboardPage() {
                   {ownedSchedule.slice(0, 6).map((slot) => (
                     <article
                       key={slot.id}
-                      className="grid gap-3 border border-white/10 bg-rhyze-black/45 p-3 md:grid-cols-[4rem_1fr_auto_auto] md:items-center"
+                      className="grid gap-3 border border-white/10 bg-rhyze-black/45 p-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center"
                     >
-                      <div className="relative h-16 w-16 overflow-hidden bg-rhyze-black">
-                        <Image
-                          src={slot.photo}
-                          alt={slot.instructor}
-                          fill
-                          sizes="64px"
-                          className="object-cover object-[center_18%]"
-                        />
-                      </div>
-                      <div>
-                        <strong className="block text-sm">{slot.className}</strong>
-                        <span className="text-xs font-bold text-rhyze-cream/55">
-                          {slot.instructor} - {slot.price} - {slot.room}
-                        </span>
-                      </div>
+                      <button
+                        type="button"
+                        data-studio-detail="class-template"
+                        className="focus-ring grid grid-cols-[4rem_1fr] items-center gap-3 text-left"
+                      >
+                        <div className="relative h-16 w-16 overflow-hidden bg-rhyze-black">
+                          <Image
+                            src={slot.photo}
+                            alt={slot.instructor}
+                            fill
+                            sizes="64px"
+                            className="object-cover object-[center_18%]"
+                          />
+                        </div>
+                        <div>
+                          <strong className="block text-sm">{slot.className}</strong>
+                          <span className="text-xs font-bold text-rhyze-cream/55">
+                            {slot.instructor} - {slot.price} - {slot.room}
+                          </span>
+                        </div>
+                      </button>
                       <Link
                         href={slot.bookingHref}
                         className="focus-ring border border-white/10 px-4 py-2 text-center text-xs font-black uppercase hover:border-rhyze-gold hover:text-rhyze-gold"
@@ -426,6 +466,7 @@ export default function DashboardPage() {
                       </Link>
                       <button
                         type="button"
+                        data-studio-detail="class-template"
                         className="border border-rhyze-coral/30 bg-rhyze-coral/10 px-4 py-2 text-xs font-black uppercase text-rhyze-coral"
                       >
                         Delete
@@ -435,7 +476,10 @@ export default function DashboardPage() {
                 </div>
               </article>
 
-              <aside className="border border-rhyze-gold/20 bg-rhyze-charcoal/75 p-4 shadow-2xl shadow-black/20">
+              <aside
+                data-studio-detail="class-template"
+                className="cursor-pointer border border-rhyze-gold/20 bg-rhyze-charcoal/75 p-4 shadow-2xl shadow-black/20 transition hover:border-rhyze-gold/50"
+              >
                 <div className="relative aspect-[16/10] overflow-hidden bg-rhyze-black">
                   <Image
                     src={previewClass.photo}
@@ -480,8 +524,9 @@ export default function DashboardPage() {
             <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
               {ownedMemberships.map((plan) => (
                 <article
+                  data-studio-detail="memberships"
                   key={plan.id}
-                  className="border border-white/10 bg-rhyze-charcoal/75 p-4 shadow-2xl shadow-black/20"
+                  className="cursor-pointer border border-white/10 bg-rhyze-charcoal/75 p-4 shadow-2xl shadow-black/20 transition hover:border-rhyze-gold/40 hover:bg-rhyze-charcoal"
                 >
                   <span className="border border-rhyze-gold/40 bg-rhyze-gold/10 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-rhyze-gold">
                     {plan.id === 'intro-offer' ? 'Trial' : 'Membership'}
@@ -508,6 +553,7 @@ export default function DashboardPage() {
                   </ul>
                   <Link
                     href={plan.href}
+                    data-studio-detail="memberships"
                     className="focus-ring mt-6 block bg-rhyze-gradient px-5 py-3 text-center text-xs font-black uppercase tracking-widest text-rhyze-black"
                   >
                     Edit Package
@@ -516,7 +562,10 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            <article className="mt-4 border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20">
+            <article
+              data-studio-detail="membership-rules"
+              className="mt-4 cursor-pointer border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20 transition hover:border-rhyze-gold/40"
+            >
               <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <h3 className="font-display text-4xl tracking-wider">
                   MEMBERSHIP RULES
@@ -527,12 +576,14 @@ export default function DashboardPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {membershipRules.map((rule) => (
-                  <article
+                  <button
+                    type="button"
+                    data-studio-detail="membership-rules"
                     key={rule}
-                    className="border border-white/10 bg-rhyze-black/35 p-4 text-sm font-bold text-rhyze-cream/80"
+                    className="focus-ring border border-white/10 bg-rhyze-black/35 p-4 text-left text-sm font-bold text-rhyze-cream/80 transition hover:border-rhyze-gold/40"
                   >
                     {rule}
-                  </article>
+                  </button>
                 ))}
               </div>
             </article>
@@ -545,15 +596,20 @@ export default function DashboardPage() {
               action="Owner finance queue"
             />
             <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-              <article className="border border-white/10 bg-rhyze-charcoal/75 p-5">
+              <article
+                data-studio-detail="sales"
+                className="cursor-pointer border border-white/10 bg-rhyze-charcoal/75 p-5 transition hover:border-rhyze-gold/40"
+              >
                 <h3 className="font-display text-4xl tracking-wider">
                   REVENUE SNAPSHOT
                 </h3>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   {studioMetrics.slice(0, 2).map((metric) => (
-                    <div
+                    <button
+                      type="button"
+                      data-studio-detail={metricDetailIds[metric.label]}
                       key={metric.label}
-                      className="border border-white/10 bg-rhyze-black/35 p-4"
+                      className="focus-ring border border-white/10 bg-rhyze-black/35 p-4 text-left transition hover:border-rhyze-gold/40"
                     >
                       <p className="text-sm font-bold text-rhyze-cream/55">
                         {metric.label}
@@ -561,11 +617,11 @@ export default function DashboardPage() {
                       <strong className="mt-2 block font-display text-4xl tracking-wider">
                         {metric.value}
                       </strong>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </article>
-              <AdminPanel title="Sales Queue" items={salesItems} />
+              <AdminPanel title="Sales Queue" items={salesItems} detailId="sales" />
             </div>
           </section>
 
@@ -576,19 +632,28 @@ export default function DashboardPage() {
               action="Attendance and retention"
             />
             <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-              <AdminPanel title="Customer Activity" items={customerItems} />
+              <AdminPanel
+                title="Customer Activity"
+                items={customerItems}
+                detailId="customer-activity"
+                itemDetailIds={{
+                  'New customers: 27 this month': 'new-customers',
+                }}
+              />
               <article className="border border-white/10 bg-rhyze-charcoal/75 p-5">
                 <h3 className="font-display text-4xl tracking-wider">
                   NEW CUSTOMER DETAIL
                 </h3>
                 <div className="mt-5 grid gap-3">
                   {['Maya Collins - 5 credits left', 'Priya Santos - waiver signed', 'Jordan Lee - first class booked'].map((item) => (
-                    <div
+                    <button
+                      type="button"
+                      data-studio-detail="customer-activity"
                       key={item}
-                      className="border-l-2 border-rhyze-gold bg-rhyze-black/35 px-4 py-3 text-sm font-bold text-rhyze-cream/75"
+                      className="focus-ring border-l-2 border-rhyze-gold bg-rhyze-black/35 px-4 py-3 text-left text-sm font-bold text-rhyze-cream/75 transition hover:bg-rhyze-black/55"
                     >
                       {item}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </article>
@@ -599,19 +664,20 @@ export default function DashboardPage() {
             id="waivers"
             className="grid scroll-mt-8 gap-4 py-8 xl:grid-cols-2"
           >
-            <AdminPanel title="Waivers" items={waiverItems} />
-            <AdminPanel title="Automations" items={automations} id="automations" />
-            <AdminPanel title="Drop-ins" items={dropInOffers.map((offer) => `${offer.name} - ${offer.price}`)} />
-            <AdminPanel title="Customer Queue" items={adminQueues} />
+            <AdminPanel title="Waivers" items={waiverItems} detailId="waivers" />
+            <AdminPanel title="Automations" items={automations} id="automations" detailId="automations" />
+            <AdminPanel title="Drop-ins" items={dropInOffers.map((offer) => `${offer.name} - ${offer.price}`)} detailId="sales" />
+            <AdminPanel title="Customer Queue" items={adminQueues} detailId="owner-queue" />
           </section>
 
           <section className="grid scroll-mt-8 gap-4 pb-8 xl:grid-cols-3">
-            <AdminPanel title="Reports" items={reportItems} id="reports" />
-            <AdminPanel title="Staff" items={staffItems} id="staff" />
-            <AdminPanel title="Settings" items={settingItems} id="settings" />
+            <AdminPanel title="Reports" items={reportItems} id="reports" detailId="reports" />
+            <AdminPanel title="Staff" items={staffItems} id="staff" detailId="staff" />
+            <AdminPanel title="Settings" items={settingItems} id="settings" detailId="settings" />
           </section>
         </div>
       </div>
+      <StudioOSDetailLayer />
     </main>
   );
 }
@@ -696,16 +762,22 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function BookingStep({
+  detailId,
   step,
   title,
   body,
 }: {
+  detailId: string;
   step: string;
   title: string;
   body: string;
 }) {
   return (
-    <article className="border border-white/10 bg-rhyze-charcoal/75 p-5">
+    <button
+      type="button"
+      data-studio-detail={detailId}
+      className="focus-ring border border-white/10 bg-rhyze-charcoal/75 p-5 text-left transition hover:border-rhyze-gold/40 hover:bg-rhyze-charcoal"
+    >
       <span className="grid h-10 w-10 place-items-center border border-rhyze-gold/40 bg-rhyze-gold/10 font-display text-3xl text-rhyze-gold">
         {step}
       </span>
@@ -713,7 +785,7 @@ function BookingStep({
       <p className="mt-3 text-sm font-bold leading-relaxed text-rhyze-cream/60">
         {body}
       </p>
-    </article>
+    </button>
   );
 }
 
@@ -721,24 +793,34 @@ function AdminPanel({
   title,
   items,
   id,
+  detailId,
+  itemDetailIds = {},
 }: {
   title: string;
   items: readonly string[];
   id?: string;
+  detailId: string;
+  itemDetailIds?: Record<string, string>;
 }) {
   return (
     <article
       id={id}
-      className="border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20"
+      data-studio-detail={detailId}
+      className="cursor-pointer border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20 transition hover:border-rhyze-gold/40"
     >
       <h2 className="font-display text-4xl tracking-wider">{title}</h2>
       <ul className="mt-5 grid gap-3">
         {items.map((item) => (
           <li
             key={item}
-            className="border-l-2 border-rhyze-gold bg-rhyze-black/35 px-4 py-3 text-sm font-bold text-rhyze-cream/75"
           >
-            {item}
+            <button
+              type="button"
+              data-studio-detail={itemDetailIds[item] ?? detailId}
+              className="focus-ring w-full border-l-2 border-rhyze-gold bg-rhyze-black/35 px-4 py-3 text-left text-sm font-bold text-rhyze-cream/75 transition hover:bg-rhyze-black/55"
+            >
+              {item}
+            </button>
           </li>
         ))}
       </ul>

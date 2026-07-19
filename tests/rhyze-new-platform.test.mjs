@@ -134,6 +134,37 @@ test('Studio OS sidebar links have matching dashboard destinations', () => {
   }
 });
 
+test('Studio OS dashboard cards open detail popups with source data', () => {
+  const dashboardSource = readFileSync('app/dashboard/page.tsx', 'utf8');
+  const detailLayerSource = readFileSync('components/sections/StudioOSDetailLayer.tsx', 'utf8');
+
+  assert.match(dashboardSource, /StudioOSDetailLayer/);
+  for (const detailId of [
+    'today-income',
+    'monthly-recurring',
+    'bookings-this-week',
+    'new-customers',
+    'membership-rules',
+    'class-template',
+    'customer-activity',
+    'reports',
+    'settings',
+  ]) {
+    assert.match(dashboardSource + detailLayerSource, new RegExp(detailId));
+  }
+
+  assert.match(detailLayerSource, /'use client'/);
+  assert.match(detailLayerSource, /data-studio-detail/);
+  assert.match(detailLayerSource, /Today's income breakdown/);
+  assert.match(detailLayerSource, /Rhyze Up w\/ Vanessa/);
+  assert.match(detailLayerSource, /Monthly recurring breakdown/);
+  assert.match(detailLayerSource, /New customers: 27 this month/);
+  assert.match(detailLayerSource, /Ava Martinez/);
+  assert.match(detailLayerSource, /Start date/);
+  assert.match(detailLayerSource, /Total/);
+  assert.match(detailLayerSource, /Date/);
+});
+
 test('site removes opening date copy and Studio OS logo links home', () => {
   const sourceFiles = collectSourceFiles(['app', 'components', 'lib']);
   const combinedSource = sourceFiles
