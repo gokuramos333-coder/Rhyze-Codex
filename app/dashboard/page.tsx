@@ -10,6 +10,7 @@ import {
   ownedSchedule,
   studioMetrics,
 } from '@/lib/rhyze-platform';
+import { StudioOSCalendarBoard } from '@/components/sections/StudioOSCalendarBoard';
 import { StudioOSDetailLayer } from '@/components/sections/StudioOSDetailLayer';
 
 export const metadata: Metadata = {
@@ -293,56 +294,9 @@ export default function DashboardPage() {
             <SectionHeading
               eyebrow="Schedule"
               title="CALENDAR + CLASS DETAILS"
-              action="Filter by room, instructor, or category"
+              action="Daily / Weekly / Monthly"
             />
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-              <div className="grid gap-3">
-                {ownedSchedule.slice(0, 7).map((slot) => (
-                  <button
-                    type="button"
-                    data-studio-detail="calendar"
-                    key={slot.id}
-                    className="focus-ring grid gap-3 border border-white/10 bg-rhyze-charcoal/75 p-4 text-left transition hover:border-rhyze-gold/40 hover:bg-rhyze-charcoal md:grid-cols-[6rem_1fr_auto] md:items-center"
-                  >
-                    <div className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
-                      {slot.day}
-                      <span className="block text-rhyze-cream">{slot.date}</span>
-                    </div>
-                    <div>
-                      <h3 className="font-display text-3xl tracking-wider">
-                        {slot.className}
-                      </h3>
-                      <p className="text-sm font-bold text-rhyze-cream/55">
-                        {slot.time} - {slot.duration} - {slot.instructor}
-                      </p>
-                    </div>
-                    <span className="text-sm font-black text-rhyze-gold">
-                      {slot.booked}/{slot.capacity} booked
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <aside
-                data-studio-detail="calendar"
-                className="cursor-pointer border border-white/10 bg-rhyze-charcoal/75 p-5 transition hover:border-rhyze-gold/40"
-              >
-                <h3 className="font-display text-4xl tracking-wider">
-                  CLASS DETAIL
-                </h3>
-                <dl className="mt-5 divide-y divide-white/10 text-sm">
-                  <Detail label="Room" value={nextClass.room} />
-                  <Detail label="Price" value={nextClass.price} />
-                  <Detail label="Waitlist" value={`${nextClass.waitlist} people`} />
-                  <Detail label="Reminder" value="24 hours before class" />
-                </dl>
-                <Link
-                  href={nextClass.bookingHref}
-                  className="focus-ring mt-5 block bg-rhyze-gradient px-5 py-3 text-center text-xs font-black uppercase tracking-widest text-rhyze-black"
-                >
-                  Open Booking Flow
-                </Link>
-              </aside>
-            </div>
+            <StudioOSCalendarBoard />
           </section>
 
           <section id="booking" className="scroll-mt-8 pt-8">

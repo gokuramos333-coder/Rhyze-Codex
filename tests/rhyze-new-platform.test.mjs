@@ -165,6 +165,23 @@ test('Studio OS dashboard cards open detail popups with source data', () => {
   assert.match(detailLayerSource, /Date/);
 });
 
+test('Studio OS calendar supports daily weekly and monthly views with booked totals', () => {
+  const dashboardSource = readFileSync('app/dashboard/page.tsx', 'utf8');
+  const calendarSource = readFileSync('components/sections/StudioOSCalendarBoard.tsx', 'utf8');
+
+  assert.match(dashboardSource, /StudioOSCalendarBoard/);
+  assert.match(calendarSource, /'use client'/);
+  assert.match(calendarSource, /Daily/);
+  assert.match(calendarSource, /Weekly/);
+  assert.match(calendarSource, /Monthly/);
+  assert.match(calendarSource, /useState<CalendarView>\('weekly'\)/);
+  assert.match(calendarSource, /weekDays/);
+  assert.match(calendarSource, /total \+ slot\.booked/);
+  assert.match(calendarSource, /Total booked so far/);
+  assert.match(calendarSource, /data-calendar-view/);
+  assert.match(calendarSource, /booked\}\/\{slot\.capacity\} booked/);
+});
+
 test('site removes opening date copy and Studio OS logo links home', () => {
   const sourceFiles = collectSourceFiles(['app', 'components', 'lib']);
   const combinedSource = sourceFiles
