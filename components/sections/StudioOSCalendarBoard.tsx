@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ownedSchedule, weekDays } from '@/lib/rhyze-platform';
 
@@ -27,10 +28,18 @@ export function StudioOSCalendarBoard() {
     });
   }, []);
 
+  const selectedIndex = scheduleByDay.findIndex((day) => day.shortDay === selectedDay);
   const selectedDaySchedule =
     scheduleByDay.find((day) => day.shortDay === selectedDay) ?? scheduleByDay[1];
   const totalBooked = ownedSchedule.reduce((total, slot) => total + slot.booked, 0);
   const totalCapacity = ownedSchedule.reduce((total, slot) => total + slot.capacity, 0);
+  const moveDay = (direction: -1 | 1) => {
+    const nextIndex = Math.min(
+      Math.max(selectedIndex + direction, 0),
+      scheduleByDay.length - 1,
+    );
+    setSelectedDay(scheduleByDay[nextIndex].shortDay);
+  };
 
   return (
     <div className="border border-white/10 bg-rhyze-charcoal/75 p-4 shadow-2xl shadow-black/20">
@@ -67,31 +76,50 @@ export function StudioOSCalendarBoard() {
       </div>
 
       {view === 'daily' && (
-        <div className="mt-4 grid gap-4 xl:grid-cols-[13rem_minmax(0,1fr)]">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-1">
-            {scheduleByDay.map((day) => (
-              <button
-                type="button"
-                key={day.id}
-                onClick={() => setSelectedDay(day.shortDay)}
-                className={[
-                  'focus-ring border px-3 py-3 text-left transition',
-                  selectedDay === day.shortDay
-                    ? 'border-rhyze-gold/50 bg-rhyze-gold/10'
-                    : 'border-white/10 bg-rhyze-black/35 hover:border-rhyze-coral/40',
-                ].join(' ')}
-              >
-                <span className="block text-xs font-black uppercase tracking-widest text-rhyze-gold">
-                  {day.date}
-                </span>
-                <strong className="mt-1 block text-sm">{day.day}</strong>
-                <span className="mt-1 block text-xs font-bold text-rhyze-cream/45">
-                  {day.slots.length} classes
-                </span>
-              </button>
-            ))}
+        <div className="mt-4 grid gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Previous day"
+              onClick={() => moveDay(-1)}
+              disabled={selectedIndex <= 0}
+              className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rhyze-cream text-rhyze-black transition hover:bg-rhyze-orange disabled:opacity-40"
+            >
+              <ChevronLeft className="h-6 w-6" aria-hidden />
+            </button>
+            <div className="no-scrollbar grid flex-1 grid-flow-col grid-cols-none gap-2 overflow-x-auto lg:grid-cols-7 lg:grid-flow-row">
+              {scheduleByDay.map((day) => (
+                <button
+                  type="button"
+                  key={day.id}
+                  onClick={() => setSelectedDay(day.shortDay)}
+                  className={[
+                    'focus-ring min-w-32 border px-3 py-3 text-center transition lg:min-w-0',
+                    selectedDay === day.shortDay
+                      ? 'border-rhyze-orange bg-rhyze-coral/15 text-rhyze-cream shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)]'
+                      : 'border-rhyze-gold/35 bg-rhyze-black/35 text-rhyze-cream/65 hover:border-rhyze-orange hover:bg-rhyze-coral/15',
+                  ].join(' ')}
+                >
+                  <span className="block text-xs font-black uppercase tracking-widest text-rhyze-gold">
+                    {day.date}
+                  </span>
+                  <strong className="mt-1 block text-sm">{day.day}</strong>
+                  <span className="mt-1 block text-xs font-bold text-rhyze-cream/45">
+                    {day.slots.length} classes
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label="Next day"
+              onClick={() => moveDay(1)}
+              disabled={selectedIndex >= scheduleByDay.length - 1}
+              className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rhyze-cream text-rhyze-black transition hover:bg-rhyze-orange disabled:opacity-40"
+            >
+              <ChevronRight className="h-6 w-6" aria-hidden />
+            </button>
           </div>
-
           <section className="border border-white/10 bg-rhyze-black/35 p-4">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -198,7 +226,7 @@ function ScheduleClassCard({
     <article
       data-studio-detail="calendar"
       className={[
-        'cursor-pointer border border-rhyze-gold/55 bg-rhyze-charcoal/70 shadow-[0_0_0_1px_rgba(255,199,44,0.65),0_0_22px_rgba(255,199,44,0.16)] transition hover:border-rhyze-orange hover:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)] focus-within:border-rhyze-orange focus-within:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)]',
+        'cursor-pointer border border-rhyze-gold/55 bg-rhyze-charcoal/70 shadow-[0_0_0_1px_rgba(255,199,44,0.65),0_0_22px_rgba(255,199,44,0.16)] transition hover:border-rhyze-orange hover:bg-rhyze-coral/15 hover:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)] focus-within:border-rhyze-orange focus-within:bg-rhyze-coral/15 focus-within:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)]',
         compact ? 'p-3' : 'p-4',
       ].join(' ')}
     >

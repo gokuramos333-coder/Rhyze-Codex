@@ -183,6 +183,25 @@ test('Studio OS calendar supports daily weekly and monthly views with booked tot
   assert.match(calendarSource, /shadow-\[0_0_0_1px_rgba\(255,199,44,0\.65\),0_0_22px_rgba\(255,199,44,0\.16\)\]/);
   assert.match(calendarSource, /hover:border-rhyze-orange/);
   assert.match(calendarSource, /hover:shadow-\[0_0_0_1px_rgba\(255,122,24,0\.8\),0_0_26px_rgba\(255,122,24,0\.24\)\]/);
+  assert.match(calendarSource, /hover:bg-rhyze-coral\/15/);
+  assert.match(calendarSource, /Previous day/);
+  assert.match(calendarSource, /Next day/);
+  assert.match(calendarSource, /grid-flow-col/);
+  assert.doesNotMatch(calendarSource, /xl:grid-cols-\[13rem_minmax\(0,1fr\)\]/);
+});
+
+test('customer schedule calendar supports daily weekly and monthly views', () => {
+  const calendarSource = readFileSync('components/sections/WeeklyCalendar.tsx', 'utf8');
+
+  assert.match(calendarSource, /type CalendarView = 'daily' \| 'weekly' \| 'monthly'/);
+  assert.match(calendarSource, /useState<CalendarView>/);
+  assert.match(calendarSource, /Daily/);
+  assert.match(calendarSource, /Weekly/);
+  assert.match(calendarSource, /Monthly/);
+  assert.match(calendarSource, /data-calendar-view/);
+  assert.match(calendarSource, /Total booked so far/);
+  assert.match(calendarSource, /weeklyDaySummaries/);
+  assert.match(calendarSource, /monthly/i);
 });
 
 test('site removes opening date copy and Studio OS logo links home', () => {
