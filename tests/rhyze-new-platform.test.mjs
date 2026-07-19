@@ -91,6 +91,26 @@ test('member portal and Studio OS dashboard are available as separate Rhyze #2 r
   assert.doesNotMatch(portalSource + dashboardSource, /Somble|somble|iframe/);
 });
 
+test('Studio OS uses the approved admin shell layout', () => {
+  const dashboardSource = readFileSync('app/dashboard/page.tsx', 'utf8');
+
+  assert.match(dashboardSource, /studio-os-shell/);
+  assert.match(dashboardSource, /RHYZE FITNESS/);
+  assert.match(dashboardSource, /NEXT CLASS/);
+  assert.match(dashboardSource, /TODAY AT RHYZE/);
+  assert.match(dashboardSource, /INCOME \+ GROWTH/);
+  assert.match(dashboardSource, /NEEDS ATTENTION/);
+  assert.match(dashboardSource, /ADD, EDIT \+ DELETE CLASSES/);
+  assert.match(dashboardSource, /MEMBERSHIP RULES/);
+  assert.match(dashboardSource, /Create Membership/);
+  assert.match(dashboardSource, /Preview Booking/);
+  assert.match(dashboardSource, /Admin View/);
+  assert.match(dashboardSource, /Customer View/);
+  assert.match(dashboardSource, /Book Class/);
+  assert.match(dashboardSource, /Send Reminder/);
+  assert.match(dashboardSource, /Image/);
+});
+
 test('gallery uses the approved Elfsight Instagram integration', () => {
   const instagramSource = readFileSync('components/sections/InstagramFeed.tsx', 'utf8');
 
