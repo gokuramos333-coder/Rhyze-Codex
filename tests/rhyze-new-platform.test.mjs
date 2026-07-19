@@ -6,6 +6,7 @@ import {
   ownedMemberships,
   ownedSchedule,
   studioMetrics,
+  weekDays,
 } from '../lib/rhyze-platform.ts';
 
 test('Rhyze #2 uses local platform data for schedule, memberships, portal, and dashboard', () => {
@@ -20,12 +21,27 @@ test('homepage schedule and membership teaser no longer use Somble', () => {
   const scheduleSource = readFileSync('components/sections/SchedulePreview.tsx', 'utf8');
   const pricingSource = readFileSync('components/sections/PricingTeaser.tsx', 'utf8');
 
-  assert.match(scheduleSource, /ownedSchedule/);
-  assert.match(scheduleSource, /Reserve on Rhyze/);
+  assert.match(scheduleSource, /WeeklyCalendar/);
   assert.doesNotMatch(scheduleSource, /Somble|somble|iframe/);
   assert.match(pricingSource, /ownedMemberships/);
   assert.match(pricingSource, /Manage everything inside Rhyze/);
   assert.doesNotMatch(pricingSource, /Somble|somble|target="_blank"/);
+});
+
+test('Rhyze-owned schedule renders as a branded weekly calendar', () => {
+  const calendarSource = readFileSync('components/sections/WeeklyCalendar.tsx', 'utf8');
+  const scheduleSource = readFileSync('components/sections/ScheduleFull.tsx', 'utf8');
+
+  assert.equal(weekDays.length, 7);
+  assert.ok(ownedSchedule.filter((slot) => slot.day === 'Mon').length >= 5);
+  assert.ok(ownedSchedule.every((slot) => slot.photo.startsWith('/founders/')));
+  assert.match(calendarSource, /weekDays/);
+  assert.match(calendarSource, /selectedDay/);
+  assert.match(calendarSource, /Classes Bookable/);
+  assert.match(calendarSource, /In-Person/);
+  assert.match(calendarSource, /Book/);
+  assert.match(calendarSource, /bg-rhyze-gradient/);
+  assert.match(scheduleSource, /<WeeklyCalendar/);
 });
 
 test('classes and booking stay inside the Rhyze #2 website', () => {
@@ -34,8 +50,7 @@ test('classes and booking stay inside the Rhyze #2 website', () => {
   const detailSource = readFileSync('app/classes/[slug]/page.tsx', 'utf8');
   const bookingSource = readFileSync('app/book/[slug]/page.tsx', 'utf8');
 
-  assert.match(scheduleSource, /ownedSchedule/);
-  assert.match(scheduleSource, /Book spot/);
+  assert.match(scheduleSource, /WeeklyCalendar/);
   assert.doesNotMatch(scheduleSource, /Somble|somble|iframe|full-screen/);
   assert.match(classListSource, /`\/book\/\$\{c.slug\}`/);
   assert.doesNotMatch(classListSource, /somble|Somble|target="_blank"/);

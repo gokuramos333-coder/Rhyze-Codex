@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import { ownedSchedule } from '@/lib/rhyze-platform';
+import { WeeklyCalendar } from '@/components/sections/WeeklyCalendar';
 
 export function SchedulePreview() {
   return (
@@ -28,45 +28,7 @@ export function SchedulePreview() {
           </Link>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-5">
-          {ownedSchedule.map((slot) => {
-            const fill = Math.round((slot.booked / slot.capacity) * 100);
-            return (
-              <article
-                key={slot.id}
-                className="rounded-2xl border border-white/10 bg-rhyze-black/70 p-5"
-              >
-                <p className="text-xs font-bold uppercase tracking-[0.25em] text-rhyze-gold">
-                  {slot.day} · {slot.date}
-                </p>
-                <h3 className="mt-3 font-display text-3xl tracking-wider">
-                  {slot.className}
-                </h3>
-                <p className="mt-2 text-sm text-rhyze-cream/60">
-                  {slot.time} · {slot.instructor}
-                </p>
-                <div className="mt-5">
-                  <div className="mb-2 flex justify-between text-xs uppercase tracking-widest text-rhyze-cream/50">
-                    <span>{slot.booked}/{slot.capacity}</span>
-                    <span>{slot.waitlist ? `${slot.waitlist} waitlist` : 'Open'}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-rhyze-gradient"
-                      style={{ width: `${fill}%` }}
-                    />
-                  </div>
-                </div>
-                <Link
-                  href={slot.bookingHref}
-                  className="focus-ring mt-5 inline-flex items-center gap-1 rounded-full bg-rhyze-gradient px-4 py-2 text-xs font-bold uppercase tracking-widest text-rhyze-black hover:shadow-glow"
-                >
-                  Reserve on Rhyze <ArrowRight className="h-3 w-3" aria-hidden />
-                </Link>
-              </article>
-            );
-          })}
-        </div>
+        <WeeklyCalendar compact />
       </div>
     </section>
   );
