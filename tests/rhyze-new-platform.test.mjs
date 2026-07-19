@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   customerPortal,
@@ -134,6 +134,19 @@ test('Studio OS sidebar links have matching dashboard destinations', () => {
   }
 });
 
+test('site removes opening date copy and Studio OS logo links home', () => {
+  const sourceFiles = collectSourceFiles(['app', 'components', 'lib']);
+  const combinedSource = sourceFiles
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+  const dashboardSource = readFileSync('app/dashboard/page.tsx', 'utf8');
+
+  assert.doesNotMatch(combinedSource, /Opening Summer 2026/i);
+  assert.match(dashboardSource, /href="\/"/);
+  assert.match(dashboardSource, /src="\/brand\/rhyze-logo\.png"/);
+  assert.doesNotMatch(dashboardSource, />\s*RZ\s*</);
+});
+
 test('gallery uses the approved Elfsight Instagram integration', () => {
   const instagramSource = readFileSync('components/sections/InstagramFeed.tsx', 'utf8');
 
@@ -143,3 +156,21 @@ test('gallery uses the approved Elfsight Instagram integration', () => {
   assert.match(instagramSource, /data-elfsight-app-lazy/);
   assert.doesNotMatch(instagramSource, /NEXT_PUBLIC_LIGHTWIDGET_URL|LightWidget|iframe|FallbackTiles/);
 });
+
+function collectSourceFiles(roots) {
+  const files = [];
+
+  for (const root of roots) {
+    for (const entry of readdirSync(root)) {
+      const path = `${root}/${entry}`;
+      const stat = statSync(path);
+      if (stat.isDirectory()) {
+        files.push(...collectSourceFiles([path]));
+      } else if (/\.(tsx?|jsx?|mjs)$/.test(path)) {
+        files.push(path);
+      }
+    }
+  }
+
+  return files;
+}

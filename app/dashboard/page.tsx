@@ -106,9 +106,19 @@ export default function DashboardPage() {
       <div className="grid min-h-screen xl:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="border-b border-white/10 bg-rhyze-black/95 p-4 xl:sticky xl:top-0 xl:flex xl:h-screen xl:flex-col xl:border-b-0 xl:border-r xl:p-5">
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 shrink-0 place-items-center border border-rhyze-gold/40 bg-rhyze-gradient font-display text-2xl text-rhyze-black">
-              RZ
-            </div>
+            <Link
+              href="/"
+              aria-label="Rhyze Fitness home"
+              className="focus-ring relative h-14 w-14 shrink-0 overflow-hidden rounded-md"
+            >
+              <Image
+                src="/brand/rhyze-logo.png"
+                alt=""
+                fill
+                sizes="56px"
+                className="object-contain"
+              />
+            </Link>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.28em] text-rhyze-orange">
                 RHYZE FITNESS
@@ -155,7 +165,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.34em] text-rhyze-orange">
-                  Opening summer 2026 - Lafayette, NJ
+                  Rhyze #2 New - Studio command center
                 </p>
                 <h2 className="mt-3 font-display text-6xl leading-none tracking-wider md:text-8xl">
                   IN RHYTHM WE RISE

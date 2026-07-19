@@ -51,7 +51,7 @@ export function Hero() {
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-rhyze-coral/30 bg-rhyze-coral/10 px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-rhyze-coral"
         >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rhyze-coral" />
-          Opening Summer 2026 · Lafayette, NJ
+          Dance - Yoga - Strength - Community
         </motion.p>
 
         <motion.h1
