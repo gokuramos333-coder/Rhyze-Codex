@@ -198,7 +198,7 @@ function ScheduleClassCard({
     <article
       data-studio-detail="calendar"
       className={[
-        'cursor-pointer border border-white/10 bg-rhyze-charcoal/70 transition hover:border-rhyze-gold/40',
+        'cursor-pointer border border-rhyze-gold/55 bg-rhyze-charcoal/70 shadow-[0_0_0_1px_rgba(255,199,44,0.65),0_0_22px_rgba(255,199,44,0.16)] transition hover:border-rhyze-orange hover:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)] focus-within:border-rhyze-orange focus-within:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)]',
         compact ? 'p-3' : 'p-4',
       ].join(' ')}
     >

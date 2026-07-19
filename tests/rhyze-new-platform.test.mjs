@@ -180,6 +180,9 @@ test('Studio OS calendar supports daily weekly and monthly views with booked tot
   assert.match(calendarSource, /Total booked so far/);
   assert.match(calendarSource, /data-calendar-view/);
   assert.match(calendarSource, /booked\}\/\{slot\.capacity\} booked/);
+  assert.match(calendarSource, /shadow-\[0_0_0_1px_rgba\(255,199,44,0\.65\),0_0_22px_rgba\(255,199,44,0\.16\)\]/);
+  assert.match(calendarSource, /hover:border-rhyze-orange/);
+  assert.match(calendarSource, /hover:shadow-\[0_0_0_1px_rgba\(255,122,24,0\.8\),0_0_26px_rgba\(255,122,24,0\.24\)\]/);
 });
 
 test('site removes opening date copy and Studio OS logo links home', () => {
