@@ -50,6 +50,9 @@ export function Header() {
             />
             <span className="sr-only">{site.name}</span>
           </Link>
+          <span className="hidden rounded-full border border-rhyze-gold/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-rhyze-gold xl:inline-flex">
+            Rhyze #2 New
+          </span>
 
           <nav
             aria-label="Primary"
@@ -111,7 +114,7 @@ export function Header() {
               href="/signin"
               className="focus-ring rounded-md px-3 py-2 text-sm font-medium uppercase tracking-wide text-rhyze-cream/80 hover:text-rhyze-coral"
             >
-              Sign In
+              Member Portal
             </Link>
             <Button href="/join" size="sm">
               Join Now

@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Clock, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Clock } from 'lucide-react';
 import { categoryLabel, classes, getClass } from '@/lib/classes';
-import { sombleScheduleUrl } from '@/lib/somble';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 
@@ -92,18 +91,13 @@ export default function ClassDetailPage({
         </h2>
         <p className="max-w-2xl text-rhyze-cream/80">
           Class times, instructor assignments, availability, and reservations
-          are managed live through Somble.
+          are managed inside the Rhyze #2 New booking experience.
         </p>
       </div>
 
       <div className="mt-16 flex flex-wrap gap-3">
-        <Button
-          href={sombleScheduleUrl}
-          size="lg"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Book on Somble <ExternalLink className="h-4 w-4" aria-hidden />
+        <Button href={`/book/${c.slug}`} size="lg">
+          Book This Class
         </Button>
         <Button href="/join" size="lg" variant="outline">
           New? Start $7 Trial

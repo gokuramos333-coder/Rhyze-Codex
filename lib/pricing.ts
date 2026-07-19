@@ -1,5 +1,3 @@
-import { sombleMembershipsUrl } from '@/lib/somble';
-
 export type PricingTier = {
   id: string;
   name: string;
@@ -28,7 +26,7 @@ export const tiers: PricingTier[] = [
     popular: false,
     blurb:
       'Includes 7 consecutive days of unlimited access to all standard classes. Excludes all premium specialty classes and workshops. Valid for first-time clients only.',
-    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
+    cta: { label: 'Choose Plan', href: '/join?plan=intro-offer' },
   },
   {
     id: 'full-rhythm',
@@ -39,7 +37,7 @@ export const tiers: PricingTier[] = [
     popular: true,
     blurb:
       'Includes 8 standard classes per billing cycle. 20% off merchandise. Credits do not roll over.',
-    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
+    cta: { label: 'Choose Plan', href: '/join?plan=full-rhythm' },
   },
   {
     id: 'elevate',
@@ -50,7 +48,7 @@ export const tiers: PricingTier[] = [
     popular: false,
     blurb:
       'Includes 4 standard classes per billing cycle. 10% off all Rhyze Merchandise. Credits do not roll over.',
-    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
+    cta: { label: 'Choose Plan', href: '/join?plan=elevate' },
   },
   {
     id: 'vip-access-pass',
@@ -61,6 +59,6 @@ export const tiers: PricingTier[] = [
     popular: false,
     blurb:
       'Founding Members lock in $199/month for life. Unlimited full access to all standard classes and 1 specialty class per month. 30% off all Rhyze Fitness merchandise.',
-    cta: { label: 'Join Membership', href: sombleMembershipsUrl },
+    cta: { label: 'Choose Plan', href: '/join?plan=vip-access-pass' },
   },
 ];

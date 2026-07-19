@@ -1,54 +1,7 @@
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
-import { sombleMembershipsUrl } from '@/lib/somble';
+import { ownedMemberships } from '@/lib/rhyze-platform';
 import { Button } from '@/components/ui/Button';
-
-const homeMemberships = [
-  {
-    id: 'intro-offer',
-    name: 'Intro Offer 7-Days',
-    price: '$7',
-    cadence: '/ 7 credits',
-    eyebrow: 'Class Pack',
-    popular: false,
-    blurb:
-      'Includes 7 consecutive days of unlimited access to all standard classes. Excludes all premium specialty classes and workshops. Valid for first-time clients only.',
-    cta: 'Join Membership',
-  },
-  {
-    id: 'full-rhythm',
-    name: 'Full Rhythm',
-    price: '$168',
-    cadence: '/ month',
-    eyebrow: '8 Classes / Month Membership',
-    popular: true,
-    blurb:
-      'Includes 8 standard classes per billing cycle. 20% off merchandise. Credits do not roll over.',
-    cta: 'Join Membership',
-  },
-  {
-    id: 'elevate',
-    name: 'Elevate',
-    price: '$92',
-    cadence: '/ month',
-    eyebrow: '4 Classes / Month Membership',
-    popular: false,
-    blurb:
-      'Includes 4 standard classes per billing cycle. 10% off all Rhyze Merchandise. Credits do not roll over.',
-    cta: 'Join Membership',
-  },
-  {
-    id: 'vip-access-pass',
-    name: 'The VIP Access Pass',
-    price: '$199',
-    cadence: '/ month',
-    eyebrow: 'AUGUST ONLY',
-    popular: false,
-    blurb:
-      'Founding Members lock in $199/month for life. Unlimited full access to all standard classes and 1 specialty class per month. 30% off all Rhyze Fitness merchandise.',
-    cta: 'Join Membership',
-  },
-] as const;
 
 export function PricingTeaser() {
   return (
@@ -69,23 +22,18 @@ export function PricingTeaser() {
               MEMBERSHIPS ARE OPEN
             </p>
             <p className="mt-1 text-sm text-rhyze-cream/70">
-              Choose your plan on Rhyze, then complete checkout securely on
-              Somble.
+              Manage everything inside Rhyze: membership, credits, waivers,
+              booking, and reminders.
             </p>
           </div>
-          <Button
-            href={sombleMembershipsUrl}
-            size="lg"
-            target="_blank"
-            rel="noreferrer"
-          >
-            View Memberships on Somble →
+          <Button href="/join" size="lg">
+            View Rhyze Memberships →
           </Button>
         </div>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        {homeMemberships.map((t) => (
+        {ownedMemberships.map((t) => (
           <div
             key={t.id}
             className={cn(
@@ -122,12 +70,10 @@ export function PricingTeaser() {
             </p>
             <p className="mb-6 text-sm text-rhyze-cream/70">{t.blurb}</p>
             <Link
-              href={sombleMembershipsUrl}
-              target="_blank"
-              rel="noreferrer"
+              href={t.href}
               className="focus-ring inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-widest text-rhyze-cream hover:text-rhyze-coral"
             >
-              {t.cta} →
+              Choose Plan →
             </Link>
           </div>
         ))}
@@ -135,12 +81,10 @@ export function PricingTeaser() {
 
       <div className="mt-10 text-center">
         <Link
-          href={sombleMembershipsUrl}
-          target="_blank"
-          rel="noreferrer"
+          href="/join"
           className="focus-ring inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-sm font-semibold uppercase tracking-wide hover:border-rhyze-coral hover:text-rhyze-coral"
         >
-          View Memberships on Somble →
+          View Rhyze Memberships →
         </Link>
       </div>
     </section>

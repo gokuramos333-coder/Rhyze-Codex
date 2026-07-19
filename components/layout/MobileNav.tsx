@@ -58,6 +58,9 @@ export function MobileNav({ open, onClose }: Props) {
                 <X className="h-6 w-6" />
               </button>
             </div>
+            <p className="mb-4 rounded-full border border-rhyze-gold/30 px-3 py-1 text-xs font-bold uppercase tracking-[0.25em] text-rhyze-gold">
+              Rhyze #2 New
+            </p>
             <nav className="flex flex-1 flex-col gap-1">
               {primaryNav.map((item) => (
                 <Link
@@ -74,7 +77,14 @@ export function MobileNav({ open, onClose }: Props) {
                 onClick={onClose}
                 className="focus-ring mt-2 rounded-md px-3 py-4 text-base uppercase tracking-wide text-rhyze-cream/70 hover:text-rhyze-coral"
               >
-                Sign In
+                Member Portal
+              </Link>
+              <Link
+                href="/dashboard"
+                onClick={onClose}
+                className="focus-ring rounded-md px-3 py-4 text-base uppercase tracking-wide text-rhyze-cream/70 hover:text-rhyze-coral"
+              >
+                Studio OS
               </Link>
             </nav>
             <Button href="/join" size="lg" className="w-full">

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { classes } from '../lib/classes.ts';
 
-test('class catalog matches the official recurring Somble class formats', () => {
+test('class catalog matches the official recurring Rhyze class formats', () => {
   const expected = [
     ['global-hiit-kenzie', 'Global HIIT w/ Kenzie', 'strength', 50],
     ['yoga-kenzie', 'Yoga w/ Kenzie', 'yoga', 50],
@@ -34,7 +34,7 @@ test('class catalog matches the official recurring Somble class formats', () => 
   );
 });
 
-test('class descriptions use concise one-paragraph Somble-based copy', () => {
+test('class descriptions use concise one-paragraph Rhyze copy', () => {
   const bySlug = new Map(classes.map((c) => [c.slug, c]));
 
   for (const cls of classes) {

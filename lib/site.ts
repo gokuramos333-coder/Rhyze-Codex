@@ -1,5 +1,6 @@
 export const site = {
   name: 'Rhyze Fitness',
+  versionLabel: 'Rhyze #2 New',
   tagline: 'In Rhythm We Rise',
   url: 'https://rhyzefit.com',
   description:
@@ -40,4 +41,5 @@ export const primaryNav = [
   { label: 'Shop', href: '/shop' },
   { label: 'Gallery', href: '/gallery' },
   { label: 'Contact', href: '/contact' },
+  { label: 'Studio OS', href: '/dashboard' },
 ] as const;

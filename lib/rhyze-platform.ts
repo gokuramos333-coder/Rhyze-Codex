@@ -1,0 +1,216 @@
+export const versionLabel = 'Rhyze #2 New';
+
+export const ownedSchedule = [
+  {
+    id: 'mon-rhyze-up',
+    day: 'Mon',
+    date: 'Jul 20',
+    time: '6:30 PM',
+    classSlug: 'rhyze-up-vanessa',
+    className: 'Rhyze Up w/ Vanessa',
+    instructor: 'Vanessa Ramos',
+    room: 'Main Floor',
+    duration: '50 min',
+    capacity: 24,
+    booked: 22,
+    waitlist: 4,
+    price: '$28',
+    bookingHref: '/book/rhyze-up-vanessa',
+  },
+  {
+    id: 'tue-ritmo',
+    day: 'Tue',
+    date: 'Jul 21',
+    time: '7:00 PM',
+    classSlug: 'rhyze-ritmo-melissa',
+    className: 'Rhyze Ritmo w/ Melissa',
+    instructor: 'Melissa Llanos',
+    room: 'Main Floor',
+    duration: '50 min',
+    capacity: 24,
+    booked: 18,
+    waitlist: 0,
+    price: '$28',
+    bookingHref: '/book/rhyze-ritmo-melissa',
+  },
+  {
+    id: 'wed-pilates',
+    day: 'Wed',
+    date: 'Jul 22',
+    time: '9:00 AM',
+    classSlug: 'pilates-pulse-adrianna',
+    className: 'Pilates Pulse with Adrianna',
+    instructor: 'Adrianna',
+    room: 'Studio B',
+    duration: '50 min',
+    capacity: 16,
+    booked: 12,
+    waitlist: 0,
+    price: '$26',
+    bookingHref: '/book/pilates-pulse-adrianna',
+  },
+  {
+    id: 'fri-heels',
+    day: 'Fri',
+    date: 'Jul 24',
+    time: '8:00 PM',
+    classSlug: 'hypnotic-heels-jessica',
+    className: 'Hypnotic Heels w/ Jessica',
+    instructor: 'Jessica',
+    room: 'Main Floor',
+    duration: '75 min',
+    capacity: 18,
+    booked: 18,
+    waitlist: 6,
+    price: '$38',
+    bookingHref: '/book/hypnotic-heels-jessica',
+  },
+  {
+    id: 'sat-ignite',
+    day: 'Sat',
+    date: 'Jul 25',
+    time: '10:00 AM',
+    classSlug: 'ignite-julie',
+    className: 'Ignite w/ Julie',
+    instructor: 'Julie',
+    room: 'Main Floor',
+    duration: '50 min',
+    capacity: 22,
+    booked: 15,
+    waitlist: 0,
+    price: '$28',
+    bookingHref: '/book/ignite-julie',
+  },
+] as const;
+
+export const ownedMemberships = [
+  {
+    id: 'intro-offer',
+    name: 'Intro Offer 7-Days',
+    price: '$7',
+    cadence: '/ 7 credits',
+    eyebrow: '7-day unlimited trial',
+    popular: false,
+    credits: 'Unlimited standard classes for 7 consecutive days',
+    blurb:
+      'First-timers get a full week to try dance, yoga, Pilates, strength, and HIIT before choosing a monthly rhythm.',
+    perks: ['First-timers only', 'General waiver required', 'No commitment'],
+    href: '/join?plan=intro-offer',
+  },
+  {
+    id: 'full-rhythm',
+    name: 'Full Rhythm',
+    price: '$168',
+    cadence: '/ month',
+    eyebrow: '8 classes / month',
+    popular: true,
+    credits: '8 monthly standard class credits',
+    blurb:
+      'Best for members who want Rhyze twice a week with a strong monthly routine and 20% off merchandise.',
+    perks: ['Most popular', '20% merch discount', 'Membership terms required'],
+    href: '/join?plan=full-rhythm',
+  },
+  {
+    id: 'elevate',
+    name: 'Elevate',
+    price: '$92',
+    cadence: '/ month',
+    eyebrow: '4 classes / month',
+    popular: false,
+    credits: '4 monthly standard class credits',
+    blurb:
+      'A steady once-a-week membership for building consistency across dance, yoga, Pilates, strength, and HIIT.',
+    perks: ['10% merch discount', 'Monthly credits', 'Membership terms required'],
+    href: '/join?plan=elevate',
+  },
+  {
+    id: 'vip-access-pass',
+    name: 'The VIP Access Pass',
+    price: '$199',
+    cadence: '/ month',
+    eyebrow: 'Founding unlimited',
+    popular: false,
+    credits: 'Unlimited standard classes plus 1 specialty class monthly',
+    blurb:
+      'Founding members lock in unlimited access, specialty class access, and the strongest Rhyze merch perk.',
+    perks: ['30% merch discount', '1 specialty class monthly', 'Founding member pricing'],
+    href: '/join?plan=vip-access-pass',
+  },
+] as const;
+
+export const dropInOffers = [
+  {
+    id: 'drop-in',
+    name: 'Single Class Drop-In',
+    price: '$28',
+    detail: 'One standard class, no membership needed',
+  },
+  {
+    id: 'specialty',
+    name: 'Specialty Workshop',
+    price: '$38',
+    detail: 'Heels, chair choreography, workshops, and limited events',
+  },
+] as const;
+
+export const studioMetrics = [
+  { label: "Today's income", value: '$1,842', detail: '+18% vs last Tuesday' },
+  { label: 'Monthly recurring', value: '$14,916', detail: '127 active memberships' },
+  { label: 'Bookings this week', value: '184', detail: '86% average attendance' },
+  { label: 'Waivers needed', value: '7', detail: '3 guardian signatures pending' },
+] as const;
+
+export const customerPortal = {
+  memberName: 'Maya Collins',
+  membership: 'Full Rhythm',
+  creditsLeft: 5,
+  waiverStatus: 'Signed',
+  nextClass: ownedSchedule[0],
+  attendanceHistory: [
+    { date: 'Jul 18', className: 'Rhyze Ritmo', status: 'Attended' },
+    { date: 'Jul 15', className: 'Pilates Pulse', status: 'Attended' },
+    { date: 'Jul 11', className: 'Rhyze Up', status: 'Attended' },
+    { date: 'Jul 08', className: 'Ignite', status: 'Missed' },
+  ],
+  recommendations: [
+    {
+      slug: 'rhyze-up-vanessa',
+      name: 'Rhyze Up w/ Vanessa',
+      category: 'dance',
+      duration: 50,
+      description: 'Rhythm-driven dance fitness with Vanessa',
+      href: '/book/rhyze-up-vanessa',
+    },
+    {
+      slug: 'rhyze-ritmo-melissa',
+      name: 'Rhyze Ritmo w/ Melissa',
+      category: 'dance',
+      duration: 50,
+      description: 'Latin rhythms and full-body cardio with Melissa',
+      href: '/book/rhyze-ritmo-melissa',
+    },
+    {
+      slug: 'pilates-pulse-adrianna',
+      name: 'Pilates Pulse with Adrianna',
+      category: 'yoga',
+      duration: 50,
+      description: 'Functional flow, strength, stability, and mobility',
+      href: '/book/pilates-pulse-adrianna',
+    },
+  ],
+} as const;
+
+export const adminQueues = [
+  '7 customers need waiver follow-up',
+  '3 failed membership payments need review',
+  'Hypnotic Heels has 6 people on the waitlist',
+  '12 members have not attended in 21 days',
+] as const;
+
+export const automations = [
+  'Welcome email after account creation',
+  'Booking confirmation',
+  '24-hour class reminder',
+  'Waiver reminder',
+  'Inactive member win-back',
+] as const;

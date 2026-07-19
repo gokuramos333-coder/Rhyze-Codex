@@ -2,12 +2,11 @@ import type { Metadata } from 'next';
 import { Accordion, type AccordionItem } from '@/components/ui/Accordion';
 import { Button } from '@/components/ui/Button';
 import { PricingCards } from '@/components/sections/PricingCards';
-import { sombleMembershipsUrl } from '@/lib/somble';
 
 export const metadata: Metadata = {
   title: 'Join Now',
   description:
-    'Choose your Rhyze Fitness membership, complete checkout through Somble, and get ready for your first day in studio.',
+    'Choose your Rhyze Fitness membership, create your Rhyze account, and get ready for your first day in studio.',
 };
 
 const firstDay = [
@@ -74,17 +73,11 @@ export default function JoinPage() {
                 MEMBERSHIPS ARE OPEN
               </h2>
               <p className="mx-auto mt-4 max-w-md text-sm text-rhyze-cream/70 md:text-base">
-                Plans, account creation, and checkout are handled through the
-                official Rhyze Fitness Somble page.
+                Plans, account creation, waiver reminders, booking credits, and
+                future billing all live inside the Rhyze member portal.
               </p>
-              <Button
-                href={sombleMembershipsUrl}
-                size="lg"
-                target="_blank"
-                rel="noreferrer"
-                className="mt-8"
-              >
-                View Memberships on Somble →
+              <Button href="/signin" size="lg" className="mt-8">
+                Create Rhyze Account →
               </Button>
             </div>
           </div>
@@ -99,8 +92,8 @@ export default function JoinPage() {
             </p>
           </div>
           <p className="max-w-sm text-sm text-rhyze-cream/60">
-            These options mirror the current Rhyze Fitness memberships listed
-            on Somble.
+            These options are managed in the Rhyze #2 New member portal with
+            class credits, waivers, renewals, and booking reminders.
           </p>
         </div>
         <PricingCards />

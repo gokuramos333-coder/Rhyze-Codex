@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Clock, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/cn';
-import { sombleScheduleUrl } from '@/lib/somble';
 import { categoryLabel, classes, type ClassCategory } from '@/lib/classes';
 
 type CatFilter = 'all' | ClassCategory;
@@ -78,9 +77,7 @@ export function ClassList() {
                 Class Details
               </Link>
               <Link
-                href={sombleScheduleUrl}
-                target="_blank"
-                rel="noreferrer"
+                href={`/book/${c.slug}`}
                 className="focus-ring inline-flex items-center gap-1 rounded-full bg-rhyze-gradient px-4 py-2 text-xs font-bold uppercase tracking-widest text-rhyze-black hover:shadow-glow"
               >
                 Book <ArrowRight className="h-3 w-3" aria-hidden />
