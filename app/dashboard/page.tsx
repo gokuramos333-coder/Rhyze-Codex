@@ -55,6 +55,43 @@ const waiverItems = [
   'Send waiver reminder',
 ] as const;
 
+const salesItems = [
+  'Daily revenue closes at 9 PM',
+  'Membership charges reconcile nightly',
+  'Failed cards enter owner review',
+  'Drop-ins and workshops export separately',
+] as const;
+
+const customerItems = [
+  'New customers: 27 this month',
+  '12 members have not attended in 21 days',
+  '86% average weekly attendance',
+  'VIP members receive specialty access',
+] as const;
+
+const reportItems = [
+  'Revenue by package',
+  'Attendance by instructor',
+  'Class fill rate by weekday',
+  'Customer retention and churn',
+] as const;
+
+const staffItems = [
+  'Vanessa Ramos - Rhyze Up',
+  'Melissa Llanos - Rhyze Ritmo',
+  'Adrianna - Pilates Pulse',
+  'Jessica - Hypnotic Heels',
+  'Julie - Ignite',
+] as const;
+
+const settingItems = [
+  'Studio capacity rules',
+  'Booking cancellation window',
+  'Reminder timing',
+  'Waiver requirements',
+  'Membership credit reset day',
+] as const;
+
 export default function DashboardPage() {
   const nextClass =
     ownedSchedule.find((slot) => slot.className.includes('Rhyze Up')) ??
@@ -214,6 +251,82 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </article>
+            </div>
+          </section>
+
+          <section id="calendar" className="scroll-mt-8 pt-8">
+            <SectionHeading
+              eyebrow="Schedule"
+              title="CALENDAR + CLASS DETAILS"
+              action="Filter by room, instructor, or category"
+            />
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+              <div className="grid gap-3">
+                {ownedSchedule.slice(0, 7).map((slot) => (
+                  <article
+                    key={slot.id}
+                    className="grid gap-3 border border-white/10 bg-rhyze-charcoal/75 p-4 md:grid-cols-[6rem_1fr_auto] md:items-center"
+                  >
+                    <div className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
+                      {slot.day}
+                      <span className="block text-rhyze-cream">{slot.date}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-display text-3xl tracking-wider">
+                        {slot.className}
+                      </h3>
+                      <p className="text-sm font-bold text-rhyze-cream/55">
+                        {slot.time} - {slot.duration} - {slot.instructor}
+                      </p>
+                    </div>
+                    <span className="text-sm font-black text-rhyze-gold">
+                      {slot.booked}/{slot.capacity} booked
+                    </span>
+                  </article>
+                ))}
+              </div>
+              <aside className="border border-white/10 bg-rhyze-charcoal/75 p-5">
+                <h3 className="font-display text-4xl tracking-wider">
+                  CLASS DETAIL
+                </h3>
+                <dl className="mt-5 divide-y divide-white/10 text-sm">
+                  <Detail label="Room" value={nextClass.room} />
+                  <Detail label="Price" value={nextClass.price} />
+                  <Detail label="Waitlist" value={`${nextClass.waitlist} people`} />
+                  <Detail label="Reminder" value="24 hours before class" />
+                </dl>
+                <Link
+                  href={nextClass.bookingHref}
+                  className="focus-ring mt-5 block bg-rhyze-gradient px-5 py-3 text-center text-xs font-black uppercase tracking-widest text-rhyze-black"
+                >
+                  Open Booking Flow
+                </Link>
+              </aside>
+            </div>
+          </section>
+
+          <section id="booking" className="scroll-mt-8 pt-8">
+            <SectionHeading
+              eyebrow="Customer flow"
+              title="BOOK A CLASS"
+              action="Confirmation + reminders"
+            />
+            <div className="grid gap-4 xl:grid-cols-3">
+              <BookingStep
+                step="1"
+                title="Select class"
+                body={`${nextClass.className} - ${nextClass.date} at ${nextClass.time}`}
+              />
+              <BookingStep
+                step="2"
+                title="Select access"
+                body={`${ownedMemberships[1].name} membership or ${dropInOffers[0].name}`}
+              />
+              <BookingStep
+                step="3"
+                title="Confirm"
+                body="Waiver checked, credit reserved, confirmation email queued."
+              />
             </div>
           </section>
 
@@ -415,6 +528,63 @@ export default function DashboardPage() {
             </article>
           </section>
 
+          <section id="sales" className="scroll-mt-8 pt-8">
+            <SectionHeading
+              eyebrow="Revenue"
+              title="SALES"
+              action="Owner finance queue"
+            />
+            <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+              <article className="border border-white/10 bg-rhyze-charcoal/75 p-5">
+                <h3 className="font-display text-4xl tracking-wider">
+                  REVENUE SNAPSHOT
+                </h3>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {studioMetrics.slice(0, 2).map((metric) => (
+                    <div
+                      key={metric.label}
+                      className="border border-white/10 bg-rhyze-black/35 p-4"
+                    >
+                      <p className="text-sm font-bold text-rhyze-cream/55">
+                        {metric.label}
+                      </p>
+                      <strong className="mt-2 block font-display text-4xl tracking-wider">
+                        {metric.value}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              </article>
+              <AdminPanel title="Sales Queue" items={salesItems} />
+            </div>
+          </section>
+
+          <section id="customers" className="scroll-mt-8 pt-8">
+            <SectionHeading
+              eyebrow="Member activity"
+              title="CUSTOMERS"
+              action="Attendance and retention"
+            />
+            <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+              <AdminPanel title="Customer Activity" items={customerItems} />
+              <article className="border border-white/10 bg-rhyze-charcoal/75 p-5">
+                <h3 className="font-display text-4xl tracking-wider">
+                  NEW CUSTOMER DETAIL
+                </h3>
+                <div className="mt-5 grid gap-3">
+                  {['Maya Collins - 5 credits left', 'Priya Santos - waiver signed', 'Jordan Lee - first class booked'].map((item) => (
+                    <div
+                      key={item}
+                      className="border-l-2 border-rhyze-gold bg-rhyze-black/35 px-4 py-3 text-sm font-bold text-rhyze-cream/75"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+          </section>
+
           <section
             id="waivers"
             className="grid scroll-mt-8 gap-4 py-8 xl:grid-cols-2"
@@ -423,6 +593,12 @@ export default function DashboardPage() {
             <AdminPanel title="Automations" items={automations} id="automations" />
             <AdminPanel title="Drop-ins" items={dropInOffers.map((offer) => `${offer.name} - ${offer.price}`)} />
             <AdminPanel title="Customer Queue" items={adminQueues} />
+          </section>
+
+          <section className="grid scroll-mt-8 gap-4 pb-8 xl:grid-cols-3">
+            <AdminPanel title="Reports" items={reportItems} id="reports" />
+            <AdminPanel title="Staff" items={staffItems} id="staff" />
+            <AdminPanel title="Settings" items={settingItems} id="settings" />
           </section>
         </div>
       </div>
@@ -506,6 +682,28 @@ function Detail({ label, value }: { label: string; value: string }) {
       </dt>
       <dd className="text-right font-black text-rhyze-cream">{value}</dd>
     </div>
+  );
+}
+
+function BookingStep({
+  step,
+  title,
+  body,
+}: {
+  step: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <article className="border border-white/10 bg-rhyze-charcoal/75 p-5">
+      <span className="grid h-10 w-10 place-items-center border border-rhyze-gold/40 bg-rhyze-gold/10 font-display text-3xl text-rhyze-gold">
+        {step}
+      </span>
+      <h3 className="mt-5 font-display text-4xl tracking-wider">{title}</h3>
+      <p className="mt-3 text-sm font-bold leading-relaxed text-rhyze-cream/60">
+        {body}
+      </p>
+    </article>
   );
 }
 

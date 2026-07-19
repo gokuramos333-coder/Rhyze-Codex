@@ -111,6 +111,29 @@ test('Studio OS uses the approved admin shell layout', () => {
   assert.match(dashboardSource, /Image/);
 });
 
+test('Studio OS sidebar links have matching dashboard destinations', () => {
+  const dashboardSource = readFileSync('app/dashboard/page.tsx', 'utf8');
+  const targets = [
+    'overview',
+    'calendar',
+    'booking',
+    'classes',
+    'memberships',
+    'sales',
+    'customers',
+    'waivers',
+    'automations',
+    'reports',
+    'staff',
+    'settings',
+  ];
+
+  assert.match(dashboardSource, /href=\{`#\$\{item\.toLowerCase\(\)\}`\}/);
+  for (const target of targets) {
+    assert.match(dashboardSource, new RegExp(`id="${target}"`));
+  }
+});
+
 test('gallery uses the approved Elfsight Instagram integration', () => {
   const instagramSource = readFileSync('components/sections/InstagramFeed.tsx', 'utf8');
 
