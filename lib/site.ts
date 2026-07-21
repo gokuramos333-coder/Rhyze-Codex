@@ -7,10 +7,12 @@ export const site = {
   address: {
     line1: 'The Shoppes at Lafayette',
     line2: '75 NJ-15, Lafayette Township, NJ 07848',
-    mapQuery: 'The Shoppes at Lafayette, 75 NJ-15, Lafayette Township, NJ 07848',
+    line3: 'Building J',
+    mapQuery:
+      'The Shoppes at Lafayette, 75 NJ-15, Lafayette Township, NJ 07848, Building J',
   },
-  phone: '(201) 921-7133',
-  phoneTel: '+12019217133',
+  phone: '(973) 506-8565',
+  phoneTel: '+19735068565',
   emails: {
     vanessa: 'vanessa@rhyzefit.com',
     melissa: 'melissa@rhyzefit.com',
@@ -19,10 +21,8 @@ export const site = {
     handle: '@rhyze.fitness',
     url: 'https://instagram.com/rhyze.fitness',
   },
-  hours: [
-    { days: 'Mon - Fri', hours: '7:00 AM - 8:00 PM' },
-    { days: 'Sat - Sun', hours: '8:00 AM - 2:00 PM' },
-  ],
+  hours: [{ days: 'Mon - Sun', hours: '8:00 AM - 8:00 PM' }],
+  hoursNote: 'Varies depending on the scheduled classes',
 } as const;
 
 export const primaryNav = [

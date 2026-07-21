@@ -97,6 +97,8 @@ export function Footer() {
                 {site.address.line1}
                 <br />
                 {site.address.line2}
+                <br />
+                {site.address.line3}
               </span>
             </p>
             <p className="flex items-center gap-2">
@@ -111,10 +113,11 @@ export function Footer() {
             <div className="pt-2">
               {site.hours.map((h) => (
                 <div key={h.days} className="flex justify-between gap-4">
-                  <span>{h.days}</span>
-                  <span className="text-rhyze-cream/60">{h.hours}</span>
+                  <span className="text-rhyze-gold">{h.days}</span>
+                  <span className="text-rhyze-gold">{h.hours}</span>
                 </div>
               ))}
+              <p className="mt-2 text-rhyze-orange">{site.hoursNote}</p>
             </div>
           </address>
         </div>

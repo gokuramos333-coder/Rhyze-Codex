@@ -42,6 +42,7 @@ export default function ContactPage() {
                   <div>
                     <p className="font-semibold">{site.address.line1}</p>
                     <p className="text-rhyze-cream/70">{site.address.line2}</p>
+                    <p className="text-rhyze-cream/70">{site.address.line3}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -86,12 +87,13 @@ export default function ContactPage() {
                   <div className="space-y-1">
                     {site.hours.map((h) => (
                       <p key={h.days} className="flex gap-3">
-                        <span className="w-20 text-rhyze-cream/60">
+                        <span className="w-20 text-rhyze-gold">
                           {h.days}
                         </span>
-                        <span>{h.hours}</span>
+                        <span className="text-rhyze-gold">{h.hours}</span>
                       </p>
                     ))}
+                    <p className="text-rhyze-orange">{site.hoursNote}</p>
                   </div>
                 </div>
               </div>
