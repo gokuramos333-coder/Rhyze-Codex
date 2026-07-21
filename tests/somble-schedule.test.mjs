@@ -8,14 +8,14 @@ import {
 } from '../lib/somble.ts';
 
 test('Somble URLs point to the approved Rhyze Fitness profile and class schedule', () => {
-  assert.equal(sombleProfileUrl, 'https://www.somble.com/vanessaramos');
+  assert.equal(sombleProfileUrl, 'https://www.somble.com/rhyzefitness');
   assert.equal(
     sombleScheduleUrl,
-    'https://www.somble.com/vanessaramos/classes',
+    'https://www.somble.com/rhyzefitness/classes',
   );
   assert.equal(
     sombleMembershipsUrl,
-    'https://www.somble.com/vanessaramos/memberships',
+    'https://www.somble.com/rhyzefitness/memberships',
   );
   assert.match(
     readFileSync('lib/somble.ts', 'utf8'),
