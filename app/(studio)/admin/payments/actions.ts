@@ -14,6 +14,7 @@ export async function refundPurchaseAction(formData: FormData) {
   await prisma.$transaction([
     prisma.refund.create({ data: { purchaseId, amountCents: purchase.amountCents, stripeRefundId: refund.id, reason: 'Admin refund' } }),
     prisma.purchase.update({ where: { id: purchaseId }, data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents } }),
+    prisma.referralCommission.updateMany({ where: { purchaseId }, data: { status: 'REVERSED', reversedAt: new Date() } }),
   ]);
   revalidatePath('/admin/payments');
 }

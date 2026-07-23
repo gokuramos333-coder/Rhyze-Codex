@@ -132,6 +132,13 @@ enum CredentialStatus {
   REJECTED
 }
 
+enum CommissionStatus {
+  PENDING
+  EARNED
+  REVERSED
+  PAID
+}
+
 model User {
   id            String     @id @default(cuid())
   name          String?
@@ -170,6 +177,9 @@ model User {
   referralCodes          ReferralCode[]          @relation("ReferralInstructor")
   instructorCredentials  InstructorCredential[]  @relation("CredentialInstructor")
   credentialReviews      InstructorCredential[]  @relation("CredentialReviewer")
+  referralAttribution    ReferralAttribution?    @relation("ReferredCustomer")
+  instructorCommissions  ReferralCommission[]    @relation("CommissionInstructor")
+  referralCommission     ReferralCommission?     @relation("CommissionCustomer")
 
   @@index([role, status])
   @@index([createdAt])
@@ -431,14 +441,17 @@ model Purchase {
   paidAt                  DateTime?
   failedAt                DateTime?
   refundedAmountCents     Int            @default(0)
+  discountCents           Int            @default(0)
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
-  invoice    Invoice?
-  refunds    Refund[]
-  membership Membership?
+  user               User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  invoice            Invoice?
+  refunds            Refund[]
+  membership         Membership?
+  discountRedemption DiscountRedemption?
+  referralCommission ReferralCommission?
 
   @@index([userId, status, createdAt])
   @@index([status, createdAt])
@@ -685,9 +698,53 @@ model ReferralCode {
   createdAt     DateTime  @default(now())
   deactivatedAt DateTime?
 
-  instructor User @relation("ReferralInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+  instructor   User                  @relation("ReferralInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+  attributions ReferralAttribution[]
 
   @@index([instructorId, isActive])
+}
+
+model ReferralAttribution {
+  id             String   @id @default(cuid())
+  referredUserId String   @unique
+  referralCodeId String
+  createdAt      DateTime @default(now())
+
+  referredUser User         @relation("ReferredCustomer", fields: [referredUserId], references: [id], onDelete: Restrict)
+  referralCode ReferralCode @relation(fields: [referralCodeId], references: [id], onDelete: Restrict)
+
+  @@index([referralCodeId, createdAt])
+}
+
+model DiscountRedemption {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  purchaseId     String   @unique
+  referralCodeId String
+  discountCents  Int
+  createdAt      DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  @@index([referralCodeId, createdAt])
+}
+
+model ReferralCommission {
+  id             String           @id @default(cuid())
+  instructorId   String
+  referredUserId String           @unique
+  purchaseId     String           @unique
+  amountCents    Int
+  status         CommissionStatus @default(EARNED)
+  earnedAt       DateTime         @default(now())
+  reversedAt     DateTime?
+  paidAt         DateTime?
+
+  instructor   User     @relation("CommissionInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+  referredUser User     @relation("CommissionCustomer", fields: [referredUserId], references: [id], onDelete: Restrict)
+  purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  @@index([instructorId, status, earnedAt])
 }
 
 model NotificationPreference {

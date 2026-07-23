@@ -18,6 +18,7 @@ export type AccountRepository = {
     phone: string;
     passwordHash: string;
     createInstructorApplication: boolean;
+    referralCode?: string;
   }): Promise<{ id: string; email: string }>;
 };
 
@@ -70,5 +71,6 @@ export async function createAccount(
     phone,
     passwordHash: await hashPassword(input.password),
     createInstructorApplication: instructorCode === 'PENDING',
+    referralCode: input.referralCode?.trim().toUpperCase() || undefined,
   });
 }

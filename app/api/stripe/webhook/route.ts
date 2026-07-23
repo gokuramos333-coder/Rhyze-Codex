@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { prisma } from '@/lib/db/prisma';
 import { getStripe } from '@/lib/payments/stripe';
+import { commissionCentsForProduct } from '@/lib/domain/referrals/referral-service';
 
 export async function POST(request: Request) {
   const signature = request.headers.get('stripe-signature');
@@ -39,6 +40,28 @@ export async function POST(request: Request) {
           },
           include: { product: true },
         });
+        if (purchase.discountCents > 0) {
+          const attribution = await prisma.referralAttribution.findUnique({
+            where: { referredUserId: purchase.userId },
+            include: { referralCode: true },
+          });
+          const alreadyRedeemed = await prisma.discountRedemption.findUnique({ where: { userId: purchase.userId } });
+          if (attribution && !alreadyRedeemed) {
+            await prisma.$transaction([
+              prisma.discountRedemption.create({
+                data: { userId: purchase.userId, purchaseId: purchase.id, referralCodeId: attribution.referralCodeId, discountCents: purchase.discountCents },
+              }),
+              prisma.referralCommission.create({
+                data: {
+                  instructorId: attribution.referralCode.instructorId,
+                  referredUserId: purchase.userId,
+                  purchaseId: purchase.id,
+                  amountCents: commissionCentsForProduct(purchase.product.kind),
+                },
+              }),
+            ]);
+          }
+        }
         const number = `RHY-${new Date().getFullYear()}-${purchase.id.slice(-6).toUpperCase()}`;
         await prisma.invoice.upsert({
           where: { purchaseId: purchase.id },
