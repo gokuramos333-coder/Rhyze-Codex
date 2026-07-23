@@ -27,6 +27,7 @@ export function ContactForm() {
   const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'err'>(
     'idle',
   );
+  const [statusMessage, setStatusMessage] = useState('');
   const {
     register,
     handleSubmit,
@@ -45,11 +46,18 @@ export function ContactForm() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(values),
       });
-      if (!res.ok) throw new Error();
+      const result = (await res.json()) as { message?: string };
+      if (!res.ok) throw new Error(result.message);
       setStatus('ok');
+      setStatusMessage('');
       reset();
-    } catch {
+    } catch (error) {
       setStatus('err');
+      setStatusMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : 'We could not send your message. Please try again.',
+      );
     }
   };
 
@@ -129,9 +137,7 @@ export function ContactForm() {
           </p>
         )}
         {status === 'err' && (
-          <p className="text-sm text-rhyze-coral">
-            Something broke on our end. Please try again in a moment.
-          </p>
+          <p className="text-sm text-rhyze-coral">{statusMessage}</p>
         )}
       </div>
     </form>

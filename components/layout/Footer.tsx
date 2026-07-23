@@ -14,6 +14,7 @@ export function Footer() {
   const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'err'>(
     'idle',
   );
+  const [statusMessage, setStatusMessage] = useState('');
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,10 +26,13 @@ export function Footer() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+      const result = (await res.json()) as { message?: string };
       setStatus(res.ok ? 'ok' : 'err');
+      setStatusMessage(result.message ?? '');
       if (res.ok) setEmail('');
     } catch {
       setStatus('err');
+      setStatusMessage('Newsletter signup is temporarily unavailable.');
     }
   }
 
@@ -161,12 +165,12 @@ export function Footer() {
             </Button>
             {status === 'ok' && (
               <p className="text-xs text-rhyze-gold">
-                Thanks, see you on the floor.
+                {statusMessage || 'Thanks, see you on the floor.'}
               </p>
             )}
             {status === 'err' && (
               <p className="text-xs text-rhyze-coral">
-                Something went wrong. Try again.
+                {statusMessage || 'Something went wrong. Try again.'}
               </p>
             )}
           </form>
