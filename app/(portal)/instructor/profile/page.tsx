@@ -1,6 +1,7 @@
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { uploadCredentialAction } from './actions';
+import { AgreementProfileCard } from '@/components/domain/accounts/AgreementProfileCard';
 
 export default async function InstructorProfilePage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
   const user = await requireArea('instructor');
@@ -46,6 +47,7 @@ export default async function InstructorProfilePage({ searchParams }: { searchPa
           );
         })}</div>
       </section>
+      <AgreementProfileCard userId={user.id} returnTo="/instructor/profile" />
     </>
   );
 }

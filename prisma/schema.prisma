@@ -855,6 +855,7 @@ model WaiverAcceptance {
   waiverVersionId String
   userId          String
   acceptedAt      DateTime @default(now())
+  signedDate      DateTime
   ipAddress       String?
   userAgent       String?
   mediaConsent    Boolean  @default(false)

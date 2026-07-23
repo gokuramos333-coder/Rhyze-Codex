@@ -1,7 +1,10 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { parseAgreementAcceptance } from '@/lib/domain/waivers/acceptance';
+import {
+  parseAgreementAcceptance,
+  parseSignedDate,
+} from '@/lib/domain/waivers/acceptance';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -92,11 +95,13 @@ export async function acceptWaiverAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
   const waiverVersionId = String(formData.get('waiverVersionId') || '');
   let acceptance: ReturnType<typeof parseAgreementAcceptance>;
+  let signedDate: Date;
   try {
     acceptance = parseAgreementAcceptance({
       accepted: formData.get('accepted'),
       mediaConsent: formData.get('mediaConsent'),
     });
+    signedDate = parseSignedDate(formData.get('signedDate'));
   } catch {
     redirect('/member/waiver?error=acceptance');
   }
@@ -132,6 +137,7 @@ export async function acceptWaiverAction(formData: FormData): Promise<void> {
         ipAddress,
         userAgent,
         mediaConsent: acceptance.mediaConsent,
+        signedDate,
       },
     }),
     prisma.auditLog.create({
@@ -147,5 +153,12 @@ export async function acceptWaiverAction(formData: FormData): Promise<void> {
   ]);
 
   revalidatePath('/member/waiver');
-  redirect('/member/waiver?saved=1');
+  revalidatePath('/member/profile');
+  revalidatePath('/instructor/profile');
+  const redirectTo = String(formData.get('redirectTo') || '');
+  redirect(
+    redirectTo === '/member/profile' || redirectTo === '/instructor/profile'
+      ? `${redirectTo}?saved=agreement`
+      : '/member/waiver?saved=1',
+  );
 }

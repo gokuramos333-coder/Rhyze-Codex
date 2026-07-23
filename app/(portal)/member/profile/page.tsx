@@ -8,6 +8,7 @@ import {
   updateNotificationPreferencesAction,
   updateProfileAction,
 } from '../actions';
+import { AgreementProfileCard } from '@/components/domain/accounts/AgreementProfileCard';
 
 export default async function MemberProfilePage({
   searchParams,
@@ -121,6 +122,8 @@ export default async function MemberProfilePage({
           Save profile
         </button>
       </form>
+
+      <AgreementProfileCard userId={user.id} returnTo="/member/profile" />
 
       <form
         action={updateNotificationPreferencesAction}

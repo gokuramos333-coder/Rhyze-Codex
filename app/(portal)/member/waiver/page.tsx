@@ -96,6 +96,16 @@ export default async function MemberWaiverPage({
                   Rhyze may use photos or videos in which I appear for studio marketing. Declining does not affect booking.
                 </span>
               </label>
+              <label className="mt-4 grid max-w-xs gap-2 text-xs font-black uppercase tracking-widest">
+                Signing date
+                <input
+                  required
+                  type="date"
+                  name="signedDate"
+                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  className="min-h-11 border border-rhyze-black/20 bg-white px-3 text-sm font-normal"
+                />
+              </label>
               {searchParams.error && (
                 <p className="mt-3 text-sm font-bold text-rhyze-coral">
                   Review the current waiver and confirm your acceptance.
