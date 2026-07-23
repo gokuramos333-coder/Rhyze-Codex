@@ -275,4 +275,14 @@ export const classes: RhyzeClass[] = [
   },
 ];
 
-export const getClass = (slug: string) => classes.find((c) => c.slug === slug);
+const classSlugAliases: Record<string, string> = {
+  'global-hiit-mackenzie': 'global-hiit-kenzie',
+  'yoga-vinyasa-mackenzie': 'yoga-kenzie',
+  'soul-line-dancing-rachel': 'soul-line-and-groove-rachel',
+};
+
+export const getClass = (slug: string) => {
+  const canonicalSlug = classSlugAliases[slug] ?? slug;
+
+  return classes.find((c) => c.slug === canonicalSlug);
+};
