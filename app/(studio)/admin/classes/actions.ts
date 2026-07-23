@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { hasScheduleConflict } from '@/lib/domain/schedule/conflict-service';
+import { expandWeeklyRecurrence } from '@/lib/domain/schedule/recurrence-service';
 
 const slugify = (value: string) =>
   value
@@ -87,6 +88,18 @@ export async function archiveClassTemplateAction(
   revalidatePath('/schedule');
 }
 
+export async function duplicateClassTemplateAction(formData: FormData): Promise<void> {
+  await requireArea('admin');
+  const id = String(formData.get('id') || '');
+  const source = await prisma.classTemplate.findUnique({ where: { id } });
+  if (!source) return;
+  const { id: _id, createdAt: _created, updatedAt: _updated, archivedAt: _archived, ...data } = source;
+  await prisma.classTemplate.create({
+    data: { ...data, name: `${source.name} Copy`, slug: `${source.slug}-copy-${Date.now().toString(36)}`, isActive: true },
+  });
+  revalidatePath('/admin/classes');
+}
+
 export async function createOccurrenceAction(
   formData: FormData,
 ): Promise<void> {
@@ -148,4 +161,37 @@ export async function createOccurrenceAction(
   revalidatePath('/admin/schedule');
   revalidatePath('/schedule');
   redirect('/admin/schedule?saved=1');
+}
+
+export async function createRecurringOccurrencesAction(formData: FormData): Promise<void> {
+  const actor = await requireArea('admin');
+  const templateId = String(formData.get('templateId') || '');
+  const instructorId = String(formData.get('instructorId') || '') || null;
+  const roomId = String(formData.get('roomId') || '') || null;
+  const startLocal = String(formData.get('startAt') || '');
+  const count = Math.min(52, Math.max(2, Number(formData.get('count') || 4)));
+  const timezone = 'America/New_York';
+  const template = await prisma.classTemplate.findUnique({ where: { id: templateId } });
+  if (!template) redirect('/admin/schedule?error=invalid');
+  const starts = expandWeeklyRecurrence({ startLocal, timezone, intervalWeeks: 1, count });
+  const ends = starts.map((startAt) => new Date(startAt.getTime() + template.durationMinutes * 60_000));
+  const conflicts = await prisma.classOccurrence.findMany({
+    where: { status: 'SCHEDULED', OR: [...(instructorId ? [{ instructorId }] : []), ...(roomId ? [{ roomId }] : [])] },
+    select: { startAt: true, endAt: true },
+  });
+  if (starts.some((startAt, index) => conflicts.some((item) => hasScheduleConflict(item, { startAt, endAt: ends[index] })))) {
+    redirect('/admin/schedule?error=conflict');
+  }
+  const series = await prisma.classSeries.create({
+    data: { templateId, instructorId, roomId, timezone, recurrenceRule: `FREQ=WEEKLY;COUNT=${count}`, startsAt: starts[0] },
+  });
+  await prisma.$transaction([
+    ...starts.map((startAt, index) => prisma.classOccurrence.create({
+      data: { templateId, seriesId: series.id, instructorId, roomId, startAt, endAt: ends[index], timezone, capacity: template.defaultCapacity, priceCents: template.dropInPriceCents },
+    })),
+    prisma.auditLog.create({ data: { actorId: actor.id, action: `class-series.created:${count}`, entityType: 'ClassSeries', entityId: series.id } }),
+  ]);
+  revalidatePath('/admin/schedule');
+  revalidatePath('/schedule');
+  redirect('/admin/schedule?saved=series');
 }

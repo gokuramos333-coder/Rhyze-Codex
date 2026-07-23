@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db/prisma';
-import { createOccurrenceAction } from '../classes/actions';
+import { createOccurrenceAction, createRecurringOccurrencesAction } from '../classes/actions';
 
 export default async function AdminSchedulePage({
   searchParams,
@@ -47,12 +47,20 @@ export default async function AdminSchedulePage({
           Add class occurrence
         </button>
       </form>
+      <form action={createRecurringOccurrencesAction} className="mt-5 grid gap-4 border-t-4 border-rhyze-coral bg-white p-6 md:grid-cols-2">
+        <div className="md:col-span-2"><h2 className="font-display text-3xl tracking-wider">RECURRING SERIES</h2><p className="text-sm text-rhyze-black/55">Create the same class weekly while preserving Lafayette local time through daylight saving changes.</p></div>
+        <Select name="templateId" label="Class" options={templates.map((item) => [item.id, item.name])} />
+        <Select name="instructorId" label="Instructor" options={instructors.map((item) => [item.id, item.name || item.email])} />
+        <Select name="roomId" label="Room" options={rooms.map((item) => [item.id, item.name])} />
+        <label className="grid gap-2"><span className="text-xs font-black uppercase tracking-widest">First class</span><input type="datetime-local" name="startAt" required className="min-h-12 border px-3"/></label>
+        <label className="grid gap-2"><span className="text-xs font-black uppercase tracking-widest">Number of weeks</span><input type="number" name="count" defaultValue="6" min="2" max="52" className="min-h-12 border px-3"/></label>
+        <button className="min-h-12 bg-rhyze-black px-5 text-xs font-black uppercase tracking-widest text-white md:col-span-2">Create weekly series</button>
+      </form>
 
       <div className="mt-8 grid gap-3">
         {occurrences.map((occurrence) => (
-          <Link
+          <div
             key={occurrence.id}
-            href={`/schedule/${occurrence.id}`}
             className="grid gap-3 border-l-4 border-rhyze-orange bg-white p-5 md:grid-cols-[10rem_1fr_auto] md:items-center"
           >
             <strong>{occurrence.startAt.toLocaleString('en-US', { timeZone: occurrence.timezone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong>
@@ -60,8 +68,12 @@ export default async function AdminSchedulePage({
               <strong className="block font-display text-2xl tracking-wider">{occurrence.template.name}</strong>
               <span className="text-sm text-rhyze-black/50">{occurrence.instructor?.name || 'TBA'} · {occurrence.room?.name || 'TBA'}</span>
             </span>
-            <span className="text-xs font-black uppercase tracking-widest">{occurrence.status}</span>
-          </Link>
+            <span className="flex flex-wrap gap-3 text-xs font-black uppercase tracking-widest">
+              <Link href={`/admin/schedule/${occurrence.id}`} className="text-rhyze-coral">Manage</Link>
+              <Link href={`/admin/schedule/${occurrence.id}/roster`}>Roster</Link>
+              <Link href={`/schedule/${occurrence.id}`}>Public view</Link>
+            </span>
+          </div>
         ))}
       </div>
     </>

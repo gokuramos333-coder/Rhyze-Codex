@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function InstructorHomePage() {
   return (
     <>
@@ -8,9 +10,10 @@ export default function InstructorHomePage() {
         LEAD THE FLOOR
       </h1>
       <p className="mt-4 max-w-2xl text-rhyze-black/60">
-        Your protected instructor account is ready. Assigned classes, rosters,
-        attendance, and teaching notes arrive in Phases 2, 3, and 6.
+        See every assigned class, open its live roster, and record check-ins,
+        attendance, late cancellations, and no-shows.
       </p>
+      <Link href="/instructor/schedule" className="mt-8 inline-block bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase tracking-widest">Open my schedule</Link>
     </>
   );
 }

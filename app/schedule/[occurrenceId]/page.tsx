@@ -15,6 +15,7 @@ export default async function ClassOccurrencePage({
       template: { include: { category: true } },
       instructor: { include: { instructorProfile: true } },
       room: { include: { location: true } },
+      _count: { select: { bookings: { where: { status: 'CONFIRMED' } }, waitlistEntries: { where: { status: 'WAITING' } } } },
     },
   });
   if (!occurrence) notFound();
@@ -51,7 +52,7 @@ export default async function ClassOccurrencePage({
             label="Location"
             value={`${occurrence.room?.name || 'TBA'} · ${occurrence.room?.location.name || 'Rhyze Fitness'}`}
           />
-          <Detail label="Capacity" value={`${occurrence.capacity} spots`} />
+          <Detail label="Availability" value={`${Math.max(0, occurrence.capacity - occurrence._count.bookings)} spots remaining${occurrence._count.waitlistEntries ? ` · ${occurrence._count.waitlistEntries} waiting` : ''}`} />
         </dl>
         <Link
           href={`/member/bookings/new?occurrence=${occurrence.id}`}

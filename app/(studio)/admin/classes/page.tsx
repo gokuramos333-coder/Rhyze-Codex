@@ -2,7 +2,9 @@ import { prisma } from '@/lib/db/prisma';
 import {
   archiveClassTemplateAction,
   createClassTemplateAction,
+  duplicateClassTemplateAction,
 } from './actions';
+import Link from 'next/link';
 
 export default async function AdminClassesPage({
   searchParams,
@@ -66,16 +68,21 @@ export default async function AdminClassesPage({
                 {' '}${((template.dropInPriceCents || 0) / 100).toFixed(0)}
               </p>
             </div>
-            {template.isActive ? (
-              <form action={archiveClassTemplateAction}>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/admin/classes/${template.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Edit</Link>
+              <form action={duplicateClassTemplateAction}>
+                <input type="hidden" name="id" value={template.id} />
+                <button className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Duplicate</button>
+              </form>
+              {template.isActive ? (
+                <form action={archiveClassTemplateAction}>
                 <input type="hidden" name="id" value={template.id} />
                 <button className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">
                   Archive
                 </button>
-              </form>
-            ) : (
-              <span className="text-xs font-black uppercase tracking-widest text-rhyze-black/35">Archived</span>
-            )}
+                </form>
+              ) : <span className="self-center text-xs font-black uppercase tracking-widest text-rhyze-black/35">Archived</span>}
+            </div>
           </article>
         ))}
       </div>
