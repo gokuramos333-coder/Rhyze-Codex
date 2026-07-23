@@ -8,11 +8,11 @@ import { FoundersStrip } from '@/components/sections/FoundersStrip';
 import { LocationBlock } from '@/components/sections/LocationBlock';
 import { FinalCTA } from '@/components/sections/FinalCTA';
 
-// The pt-44 spacer in layout.tsx makes room for the fixed header. We negate
-// it here so the hero truly fills the viewport on the home page.
+// The layout spacer makes room for the fixed header. We negate it here so the
+// hero truly fills the viewport on the home page.
 export default function HomePage() {
   return (
-    <main className="-mt-44">
+    <main className="-mt-24 md:-mt-32 lg:-mt-44">
       <Hero />
       <WelcomeCopy />
       <ThreePillars />

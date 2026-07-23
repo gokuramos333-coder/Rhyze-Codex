@@ -34,7 +34,7 @@ export function Header() {
             : 'bg-transparent',
         )}
       >
-        <div className="mx-auto flex h-44 max-w-7xl items-center justify-between gap-6 px-6">
+        <div className="mx-auto flex h-24 max-w-7xl items-center justify-between gap-4 px-6 md:h-32 lg:h-44 lg:gap-6">
           <Link
             href="/"
             aria-label={`${site.name}, Home`}
@@ -46,7 +46,7 @@ export function Header() {
               width={168}
               height={168}
               priority
-              className="h-40 w-auto"
+              className="h-24 w-auto md:h-28 lg:h-40"
             />
             <span className="sr-only">{site.name}</span>
           </Link>

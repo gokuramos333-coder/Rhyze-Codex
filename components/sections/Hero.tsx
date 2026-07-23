@@ -45,8 +45,8 @@ export function Hero() {
         className="absolute right-0 top-0 h-full w-px bg-gradient-to-b from-transparent via-rhyze-coral/40 to-transparent"
       />
 
-      <div className="relative mx-auto w-full max-w-7xl px-6">
-        <h1 className="max-w-5xl font-display text-[clamp(3.75rem,11vw,10rem)] leading-[0.9] tracking-wider text-rhyze-cream">
+      <div className="relative mx-auto w-full max-w-7xl px-6 pt-8 md:pt-0">
+        <h1 className="max-w-5xl font-display text-[clamp(3.25rem,13vw,4.5rem)] leading-[0.9] tracking-wider text-rhyze-cream md:text-[clamp(3.75rem,11vw,10rem)]">
           IN <span className="rhyze-gradient-text">RHYTHM</span>
           <span className="text-rhyze-gold">,</span>
           <br />
