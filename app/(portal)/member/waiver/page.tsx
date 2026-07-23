@@ -92,8 +92,8 @@ export default async function MemberWaiverPage({
                   className="mt-1 h-4 w-4 accent-rhyze-coral"
                 />
                 <span className="text-sm">
-                  <strong className="block">Optional media permission</strong>
-                  Rhyze may use photos or videos in which I appear for studio marketing. Declining does not affect booking.
+                  <strong className="block">Optional media consent</strong>
+                  I give Rhyze Fitness permission to photograph or record me and use my image or likeness for its website, social media, advertising, and promotional materials. I understand that I will not be paid and may withdraw permission for future use by contacting Rhyze Fitness. Leaving this option unchecked will not affect my membership, booking, or class participation.
                 </span>
               </label>
               <label className="mt-4 grid max-w-xs gap-2 text-xs font-black uppercase tracking-widest">

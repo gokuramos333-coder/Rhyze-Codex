@@ -20,5 +20,11 @@ describe('studio policies', () => {
     expect(agreementSnapshot).toContain('restore the class credit');
     expect(agreementSnapshot).toContain('unsafe to travel');
     expect(agreementSnapshot).toContain('statutory cancellation rights');
+    expect(agreementSnapshot).toContain(
+      'withdraw permission for future use by contacting Rhyze Fitness',
+    );
+    expect(agreementSnapshot).toContain(
+      'will not affect membership, booking, or class participation',
+    );
   });
 });

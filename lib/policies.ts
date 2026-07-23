@@ -110,7 +110,7 @@ export const policySections: PolicySection[] = [
   {
     id: 'media',
     title: 'Photography and Media',
-    body: 'Photography and video permission is optional. A member may decline media consent without losing booking access and should tell the team if they prefer not to appear in studio content.',
+    body: 'Optional media consent: I give Rhyze Fitness permission to photograph or record me and use my image or likeness for its website, social media, advertising, and promotional materials. I understand that I will not be paid and may withdraw permission for future use by contacting Rhyze Fitness. Leaving this option unchecked will not affect membership, booking, or class participation.',
   },
 ];
 

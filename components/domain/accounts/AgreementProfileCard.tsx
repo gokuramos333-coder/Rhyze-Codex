@@ -102,7 +102,10 @@ export async function AgreementProfileCard({
             </label>
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" name="mediaConsent" className="mt-1 h-4 w-4 accent-rhyze-coral"/>
-              Optional: I consent to studio photography and video.
+              <span>
+                <strong className="block">Optional media consent</strong>
+                I give Rhyze Fitness permission to photograph or record me and use my image or likeness for its website, social media, advertising, and promotional materials. I understand that I will not be paid and may withdraw permission for future use by contacting Rhyze Fitness. Leaving this option unchecked will not affect my membership, booking, or class participation.
+              </span>
             </label>
             <button className="min-h-12 max-w-sm bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-[0.2em]">
               Agree and digitally sign
