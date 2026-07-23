@@ -11,9 +11,9 @@ export function SignUpForm({ defaultReferral = '' }: { defaultReferral?: string 
 
   return (
     <form action={signUpAction} className="mt-8 grid gap-5">
-      <AuthField label="Full name" name="name" autoComplete="name" />
-      <AuthField label="Email address" name="email" type="email" autoComplete="email" />
-      <AuthField label="Phone number" name="phone" type="tel" autoComplete="tel" />
+      <AuthField label="Full name" name="name" autoComplete="name" showRequiredIndicator />
+      <AuthField label="Email address" name="email" type="email" autoComplete="email" showRequiredIndicator />
+      <AuthField label="Phone number" name="phone" type="tel" autoComplete="tel" showRequiredIndicator />
       <PasswordField
         label="Password"
         name="password"
@@ -30,15 +30,18 @@ export function SignUpForm({ defaultReferral = '' }: { defaultReferral?: string 
         Use at least 9 characters with an uppercase letter, number, and symbol.
       </p>
       <label className="grid gap-2">
-        <span className="text-xs font-black uppercase tracking-[0.22em] text-rhyze-black/65">Referral code (optional)</span>
+        <span className="text-xs font-black uppercase tracking-[0.22em] text-rhyze-black/65">
+          Referral code <span className="text-[9px] tracking-[0.14em] text-rhyze-black/40">(Optional)</span>
+        </span>
         <input name="referralCode" defaultValue={defaultReferral} autoComplete="off" className="focus-ring min-h-14 border border-rhyze-black/20 bg-white px-4 text-base outline-none focus:border-rhyze-coral"/>
       </label>
-      <AuthField
-        label="RHYZE INSTRUCTOR? ENTER CODE HERE (Optional)"
-        name="instructorCode"
-        autoComplete="off"
-        required={false}
-      />
+      <label className="grid gap-2">
+        <span className="text-xs font-black uppercase tracking-[0.22em] text-rhyze-black/65">
+          RHYZE INSTRUCTOR? ENTER CODE HERE{' '}
+          <span className="text-[9px] tracking-[0.14em] text-rhyze-black/40">(Optional)</span>
+        </span>
+        <input name="instructorCode" autoComplete="off" className="focus-ring min-h-14 border border-rhyze-black/20 bg-white px-4 text-base outline-none focus:border-rhyze-coral"/>
+      </label>
       <button className="min-h-14 bg-rhyze-gradient px-6 text-sm font-black uppercase tracking-[0.2em] text-rhyze-black">
         Create My Rhyze
       </button>
@@ -59,7 +62,9 @@ function PasswordField({
 }) {
   return (
     <label className="grid gap-2">
-      <span className="text-xs font-black uppercase tracking-[0.22em] text-rhyze-black/65">{label}</span>
+      <span className="text-xs font-black uppercase tracking-[0.22em] text-rhyze-black/65">
+        {label}<span className="ml-1 text-rhyze-coral" aria-hidden="true">*</span>
+      </span>
       <span className="relative">
         <input
           required

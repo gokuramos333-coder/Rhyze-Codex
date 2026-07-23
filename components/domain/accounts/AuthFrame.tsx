@@ -78,17 +78,22 @@ export function AuthField({
   type = 'text',
   autoComplete,
   required = true,
+  showRequiredIndicator = false,
 }: {
   label: string;
   name: string;
   type?: string;
   autoComplete?: string;
   required?: boolean;
+  showRequiredIndicator?: boolean;
 }) {
   return (
     <label className="grid gap-2">
       <span className="text-xs font-black uppercase tracking-[0.22em] text-rhyze-black/65">
         {label}
+        {required && showRequiredIndicator && (
+          <span className="ml-1 text-rhyze-coral" aria-hidden="true">*</span>
+        )}
       </span>
       <input
         required={required}
