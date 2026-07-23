@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/Button';
 
 export function Hero() {
   return (
-    <section className="grain relative flex min-h-[92vh] items-center overflow-hidden bg-rhyze-black">
+    <section
+      className="grain relative flex min-h-[92vh] items-center overflow-hidden bg-rhyze-black"
+      style={{ position: 'relative', overflow: 'hidden' }}
+    >
       {/* Background photo */}
       <Image
         src="/founders/main-intro.jpg"
@@ -45,13 +48,17 @@ export function Hero() {
       <div className="relative mx-auto w-full max-w-7xl px-6">
         <h1 className="max-w-5xl font-display text-[clamp(3.75rem,11vw,10rem)] leading-[0.9] tracking-wider text-rhyze-cream">
           IN <span className="rhyze-gradient-text">RHYTHM</span>
+          <span className="text-rhyze-gold">,</span>
           <br />
           WE RISE
         </h1>
 
         <p className="mt-8 max-w-xl text-lg text-rhyze-cream/75 md:text-xl">
-          Elevate your energy. Rhyze together. Boutique dance, yoga, and HIIT
-          for the Sussex County community.
+          Elevate your mind, energize your body, and evolve your soul. We are a
+          boutique movement studio offering dance, yoga, and strength classes for
+          all levels, designed for self-expression, confidence, and the love of
+          sweat. Every class is powered by rhythm, passion, and community. Let’s
+          Rhyze together.
         </p>
 
         <div className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
@@ -60,7 +67,7 @@ export function Hero() {
               Start Your $7 Trial <ArrowRight className="h-4 w-4" />
             </Button>
             <p className="mt-2 text-xs text-rhyze-cream/60">
-              First 7 days · Unlimited classes
+              First 7 days · Unlimited classes · Starts August 3
             </p>
           </div>
           <Link

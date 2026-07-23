@@ -58,7 +58,7 @@ export default function ClassesPage({ searchParams }: ClassesPageProps) {
 
       <ScheduleFull />
 
-      <section id="dance" className="mb-20 scroll-mt-28">
+      <section id="dance" className="mb-20 mt-6 scroll-mt-28">
         <ClassList initialCategory={initialCategory} />
       </section>
 

@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
-export const alt = 'Rhyze Fitness, In Rhythm We Rise';
+export const alt = 'Rhyze Fitness, In Rhythm, We Rise';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -46,7 +46,7 @@ export default async function OGImage() {
             letterSpacing: '0.02em',
           }}
         >
-          <span>IN RHYTHM</span>
+          <span>IN RHYTHM,</span>
           <span
             style={{
               background: 'linear-gradient(90deg,#F05A3C,#F7931E,#FFC72C)',

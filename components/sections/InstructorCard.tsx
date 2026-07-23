@@ -37,8 +37,12 @@ export function InstructorCard({ instructor: i, reverse }: Props) {
         )}
         <h2 className="font-display text-5xl leading-none tracking-wider md:text-7xl">
           {i.firstName.toUpperCase()}
-          <br />
-          {i.lastName.toUpperCase()}
+          {i.lastName && (
+            <>
+              <br />
+              {i.lastName.toUpperCase()}
+            </>
+          )}
         </h2>
 
         {i.quote && (

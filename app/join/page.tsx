@@ -77,6 +77,10 @@ export default function JoinPage() {
                 Plans, account creation, and checkout are handled through the
                 official Rhyze Fitness Somble page.
               </p>
+              <p className="mx-auto mt-3 max-w-md text-sm font-semibold text-rhyze-gold md:text-base">
+                All memberships and the 7-day trial begin August 3, 2026, when
+                Rhyze officially opens.
+              </p>
               <Button
                 href={sombleMembershipsUrl}
                 size="lg"

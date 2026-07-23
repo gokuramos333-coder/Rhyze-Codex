@@ -20,12 +20,12 @@ export const categoryLabel: Record<ClassCategory, string> = {
 export const classes: RhyzeClass[] = [
   {
     slug: 'global-hiit-kenzie',
-    name: 'Global HIIT w/ Kenzie',
+    name: 'Global HIIT with Mackenzie',
     category: 'strength',
     duration: 50,
     tagline: 'World hits, HIIT conditioning, and light-weight strength',
     description:
-      'Global HIIT with Kenzie is about listening to hits from around the world while getting fit, challenging your brain and body with heart-rate-raising intervals, light weights, bodyweight exercises, and a music-driven cooldown.',
+      'Listening to hits from around the world while getting fit, Global HIIT challenges both brain and body. This HIIT workout brings the heart rate up while music keeps students moving, with light weights, bodyweight exercises, and a guided cooldown.',
     whatToExpect: [
       'HIIT intervals powered by global music',
       'Light weights mixed with bodyweight exercises',
@@ -35,12 +35,12 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'yoga-kenzie',
-    name: 'Yoga w/ Kenzie',
+    name: 'Yoga / Vinyasa with Mackenzie',
     category: 'yoga',
     duration: 50,
     tagline: 'Vinyasa yoga linking movement, breath, strength, and flexibility',
     description:
-      'Yoga with Kenzie links dynamic physical poses with steady conscious breaths to build strength, flexibility, and endurance. Each Vinyasa sequence is creative, physically engaging, and welcoming for students with any amount of yoga experience.',
+      'This yoga class links dynamic physical poses with steady conscious breaths to build strength, flexibility, and endurance. Vinyasa offers endless variety, with a creative and physically engaging sequence that welcomes all levels of experience.',
     whatToExpect: [
       'Dynamic Vinyasa movement linked with breath',
       'Strength, flexibility, and endurance work',
@@ -49,8 +49,23 @@ export const classes: RhyzeClass[] = [
     whatToBring: ['Yoga mat', 'Comfortable layers', 'Water bottle'],
   },
   {
+    slug: 'pound-mackenzie',
+    name: 'POUND with Mackenzie',
+    category: 'strength',
+    duration: 50,
+    tagline: 'Cardio Pilates, isometric movement, plyometrics, and Ripstix',
+    description:
+      'POUND combines cardio, Pilates, isometric movements, and plyometrics with constant simulated drumming set to loud, high-energy music. Each strike of the Ripstix releases primal energy while mixing sound and movement, allowing students to truly become the music.',
+    whatToExpect: [
+      'Cardio Pilates powered by simulated drumming',
+      'Isometric movement, plyometrics, and full-body conditioning',
+      'High-energy music with Ripstix rhythm work',
+    ],
+    whatToBring: ['Supportive sneakers', 'Comfortable workout clothes', 'Water bottle'],
+  },
+  {
     slug: 'core-360-carla-rio',
-    name: 'Core 360 w/ Carla Rio',
+    name: 'Core 360 with Carla Rio',
     category: 'strength',
     duration: 50,
     tagline: 'Functional core strength, posture, and balance from every angle',
@@ -65,7 +80,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'dance-fit-jessica',
-    name: 'Dance Fit w/ Jessica',
+    name: 'Dance Fit with Jessica',
     category: 'dance',
     duration: 50,
     tagline: 'High-energy dance cardio with strength and toning',
@@ -80,7 +95,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'grind-and-grow-carla-reo',
-    name: 'Grind & Grow w/ Carla Reo',
+    name: 'Grind & Grow with Carla Reo',
     category: 'strength',
     duration: 50,
     tagline: 'Full-body strength with dumbbells, kettlebells, bands, and more',
@@ -110,7 +125,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'hypnotic-heels-jessica',
-    name: 'Hypnotic Heels w/ Jessica',
+    name: 'Hypnotic Heels with Jessica',
     category: 'dance',
     duration: 75,
     tagline: 'A specialty heels class for confidence, technique, and flow',
@@ -125,7 +140,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'ignite-julie',
-    name: 'Ignite w/ Julie',
+    name: 'Ignite with Julie',
     category: 'strength',
     duration: 50,
     tagline: 'Dynamic full-body conditioning with Julie',
@@ -155,7 +170,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'real-riddim-dance-workout-vanessa',
-    name: 'Real Riddim Dance Workout w/ Vanessa',
+    name: 'Real Riddim Dance Workout with Vanessa',
     category: 'dance',
     duration: 50,
     tagline: 'Caribbean-style follow-along dance fitness',
@@ -170,7 +185,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'rhyze-ritmo-melissa',
-    name: 'Rhyze Ritmo w/ Melissa',
+    name: 'Rhyze Ritmo with Melissa',
     category: 'dance',
     duration: 50,
     tagline: 'Latin rhythms and full-body cardio with Melissa',
@@ -185,7 +200,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'rhyze-up-vanessa',
-    name: 'Rhyze Up w/ Vanessa',
+    name: 'Rhyze Up with Vanessa',
     category: 'dance',
     duration: 50,
     tagline: 'Rhythm-driven dance fitness with Vanessa',
@@ -215,12 +230,12 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'soul-line-and-groove-rachel',
-    name: 'Soul Line & Groove w/ Rachel',
+    name: 'Soul Line-Dancing with Rachel',
     category: 'dance',
     duration: 50,
     tagline: 'Soulful line-dancing, collective movement, and pure joy',
     description:
-      'Soul Line & Groove with Rachel is a soulful line-dancing class built around connection, rhythm, and joy. Learn smooth, synchronized patterns step by step to soul, neo-soul, old-school R&B, and country while getting a fun cardio workout in a community-first vibe.',
+      "Soul Line-Dancing is all about connection, rhythm, and pure joy. Rachel guides students through smooth, synchronized patterns set to the best in soul, neo-soul, old-school R&B, and country, welcoming everyone from first-timers to seasoned sliders.",
     whatToExpect: [
       'Step-by-step soul line-dancing routines',
       'Soul, neo-soul, old-school R&B, and country music',
@@ -230,7 +245,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'tcj-hip-hop-happy-hour-tricia',
-    name: 'TCJ Hip-Hop Happy Hour w/ Tricia',
+    name: 'TCJ Hip-Hop Happy Hour with Tricia',
     category: 'dance',
     duration: 75,
     tagline: 'Beginner-friendly hip-hop choreography that feels like a night out',
@@ -245,7 +260,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'yoga-flow-adrianna',
-    name: 'Yoga Flow w/ Adrianna',
+    name: 'Yoga Flow with Adrianna',
     category: 'yoga',
     duration: 50,
     tagline: 'Vinyasa flow and functional movement for modern bodies',

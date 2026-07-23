@@ -7,10 +7,12 @@ import { instructors } from '../lib/instructors.ts';
 const expected = [
   ['vanessa-ramos', 'Vanessa', 'Ramos'],
   ['melissa-llanos', 'Melissa', 'Llanos'],
+  ['tricia-johnsen', 'Tricia', 'Johnsen'],
   ['adrianna-jones', 'Adrianna', 'Jones'],
   ['julie-reese', 'Julie', 'Reese'],
   ['jessica-blundetto', 'Jessica', 'Blundetto'],
-  ['tricia-johnsen', 'Tricia', 'Johnsen'],
+  ['rachel', 'Rachel', ''],
+  ['mackenzie-heffernan', 'Mackenzie', 'Heffernan'],
   ['carla-hotrock', 'Carla', 'Hotrock'],
 ];
 
@@ -30,10 +32,10 @@ test('new instructor headings match the approved copy', () => {
     instructors.map((instructor) => [instructor.slug, instructor]),
   );
 
-  assert.equal(bySlug['adrianna-jones'].role, 'RYT 500 (YOGA)');
+  assert.equal(bySlug['adrianna-jones'].role, 'RYT 500 (YOGA) / PILATES');
   assert.equal(
     bySlug['adrianna-jones'].descriptor,
-    'VINYASA FLOW & FUNCTIONAL MOVEMENT',
+    'VINYASA FLOW, PILATES & FUNCTIONAL MOVEMENT',
   );
   assert.equal(
     bySlug['julie-reese'].role,

@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { Music, Heart, Flame } from 'lucide-react';
 
@@ -8,6 +9,7 @@ const pillars = [
     sub: 'Find your rhythm',
     body: 'Signature dance-cardio, Latin ritmos, and choreography-based sweat sessions.',
     href: '/classes?category=dance#list',
+    image: '/home/pillar-dance.jpeg',
     tint: 'from-rhyze-coral/30',
   },
   {
@@ -16,6 +18,7 @@ const pillars = [
     sub: 'Find your center',
     body: 'Flow-based yoga, restorative holds, and Pilates-informed core burners.',
     href: '/classes?category=yoga#list',
+    image: '/home/pillar-yoga.jpeg',
     tint: 'from-rhyze-orange/30',
   },
   {
@@ -24,6 +27,7 @@ const pillars = [
     sub: 'Find your power',
     body: 'Circuit strength, heavy lifting, and gritty, high-octane HIIT.',
     href: '/classes?category=strength#list',
+    image: '/home/pillar-strength.jpeg',
     tint: 'from-rhyze-gold/30',
   },
 ];
@@ -32,12 +36,25 @@ export function ThreePillars() {
   return (
     <section className="mx-auto max-w-7xl px-6 py-24">
       <div className="grid gap-6 md:grid-cols-3">
-        {pillars.map(({ Icon, title, sub, body, href, tint }) => (
+        {pillars.map(({ Icon, title, sub, body, href, image, tint }) => (
           <Link
             key={title}
             href={href}
             className="focus-ring group relative overflow-hidden rounded-3xl border border-white/10 bg-rhyze-charcoal p-8 transition hover:-translate-y-1 hover:border-rhyze-coral/50 hover:shadow-glow"
+            style={{ position: 'relative', overflow: 'hidden' }}
           >
+            <Image
+              src={image}
+              alt=""
+              fill
+              sizes="(min-width: 768px) 33vw, 100vw"
+              aria-hidden
+              className="absolute inset-0 object-cover opacity-25 transition duration-500 group-hover:scale-105 group-hover:opacity-35"
+            />
+            <div
+              aria-hidden
+              className="absolute inset-0 bg-rhyze-black/70"
+            />
             <div
               className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tint} to-transparent opacity-60 transition group-hover:opacity-100`}
             />

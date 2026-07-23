@@ -12,7 +12,7 @@ const homeMemberships = [
     eyebrow: 'Class Pack',
     popular: false,
     blurb:
-      'Includes 7 consecutive days of unlimited access to all standard classes. Excludes all premium specialty classes and workshops. Valid for first-time clients only.',
+      'Starts August 3 when Rhyze officially opens. Includes 7 consecutive days of unlimited access to all standard classes. Excludes all premium specialty classes and workshops. Valid for first-time clients only.',
     cta: 'Join Membership',
   },
   {
@@ -23,7 +23,7 @@ const homeMemberships = [
     eyebrow: '8 Classes / Month Membership',
     popular: true,
     blurb:
-      'Includes 8 standard classes per billing cycle. 20% off merchandise. Credits do not roll over.',
+      'Starts August 3 when Rhyze officially opens. Includes 8 standard classes per billing cycle. 20% off merchandise. Credits do not roll over.',
     cta: 'Join Membership',
   },
   {
@@ -34,7 +34,7 @@ const homeMemberships = [
     eyebrow: '4 Classes / Month Membership',
     popular: false,
     blurb:
-      'Includes 4 standard classes per billing cycle. 10% off all Rhyze Merchandise. Credits do not roll over.',
+      'Starts August 3 when Rhyze officially opens. Includes 4 standard classes per billing cycle. 10% off all Rhyze Merchandise. Credits do not roll over.',
     cta: 'Join Membership',
   },
   {
@@ -45,7 +45,7 @@ const homeMemberships = [
     eyebrow: 'AUGUST ONLY',
     popular: false,
     blurb:
-      'Founding Members lock in $199/month for life. Unlimited full access to all standard classes and 1 specialty class per month. 30% off all Rhyze Fitness merchandise.',
+      'Starts August 3 when Rhyze officially opens. Founding Members lock in $199/month for life. Unlimited full access to all standard classes and 1 specialty class per month. 30% off all Rhyze Fitness merchandise.',
     cta: 'Join Membership',
   },
 ] as const;
@@ -71,6 +71,9 @@ export function PricingTeaser() {
             <p className="mt-1 text-sm text-rhyze-cream/70">
               Choose your plan on Rhyze, then complete checkout securely on
               Somble.
+            </p>
+            <p className="mt-2 text-sm font-semibold text-rhyze-gold">
+              All memberships and the 7-day trial begin August 3, 2026.
             </p>
           </div>
           <Button

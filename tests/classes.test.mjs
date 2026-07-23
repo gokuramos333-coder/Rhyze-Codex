@@ -5,22 +5,23 @@ import { classes } from '../lib/classes.ts';
 
 test('class catalog matches the official recurring Somble class formats', () => {
   const expected = [
-    ['global-hiit-kenzie', 'Global HIIT w/ Kenzie', 'strength', 50],
-    ['yoga-kenzie', 'Yoga w/ Kenzie', 'yoga', 50],
-    ['core-360-carla-rio', 'Core 360 w/ Carla Rio', 'strength', 50],
-    ['dance-fit-jessica', 'Dance Fit w/ Jessica', 'dance', 50],
-    ['grind-and-grow-carla-reo', 'Grind & Grow w/ Carla Reo', 'strength', 50],
+    ['global-hiit-kenzie', 'Global HIIT with Mackenzie', 'strength', 50],
+    ['yoga-kenzie', 'Yoga / Vinyasa with Mackenzie', 'yoga', 50],
+    ['pound-mackenzie', 'POUND with Mackenzie', 'strength', 50],
+    ['core-360-carla-rio', 'Core 360 with Carla Rio', 'strength', 50],
+    ['dance-fit-jessica', 'Dance Fit with Jessica', 'dance', 50],
+    ['grind-and-grow-carla-reo', 'Grind & Grow with Carla Reo', 'strength', 50],
     ['heels-101-walk-with-me-jessica', 'Heels 101 "Walk with Me" with Jessica', 'dance', 50],
-    ['hypnotic-heels-jessica', 'Hypnotic Heels w/ Jessica', 'dance', 75],
-    ['ignite-julie', 'Ignite w/ Julie', 'strength', 50],
+    ['hypnotic-heels-jessica', 'Hypnotic Heels with Jessica', 'dance', 75],
+    ['ignite-julie', 'Ignite with Julie', 'strength', 50],
     ['pilates-pulse-adrianna', 'Pilates Pulse with Adrianna', 'yoga', 50],
-    ['real-riddim-dance-workout-vanessa', 'Real Riddim Dance Workout w/ Vanessa', 'dance', 50],
-    ['rhyze-ritmo-melissa', 'Rhyze Ritmo w/ Melissa', 'dance', 50],
-    ['rhyze-up-vanessa', 'Rhyze Up w/ Vanessa', 'dance', 50],
+    ['real-riddim-dance-workout-vanessa', 'Real Riddim Dance Workout with Vanessa', 'dance', 50],
+    ['rhyze-ritmo-melissa', 'Rhyze Ritmo with Melissa', 'dance', 50],
+    ['rhyze-up-vanessa', 'Rhyze Up with Vanessa', 'dance', 50],
     ['seat-seduction-vanessa', 'Seat Seduction With Vanessa', 'dance', 75],
-    ['soul-line-and-groove-rachel', 'Soul Line & Groove w/ Rachel', 'dance', 50],
-    ['tcj-hip-hop-happy-hour-tricia', 'TCJ Hip-Hop Happy Hour w/ Tricia', 'dance', 75],
-    ['yoga-flow-adrianna', 'Yoga Flow w/ Adrianna', 'yoga', 50],
+    ['soul-line-and-groove-rachel', 'Soul Line-Dancing with Rachel', 'dance', 50],
+    ['tcj-hip-hop-happy-hour-tricia', 'TCJ Hip-Hop Happy Hour with Tricia', 'dance', 75],
+    ['yoga-flow-adrianna', 'Yoga Flow with Adrianna', 'yoga', 50],
   ];
 
   assert.deepEqual(

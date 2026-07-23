@@ -17,7 +17,7 @@ export function FinalCTA() {
           </h2>
           <p className="mx-auto mb-10 max-w-2xl text-lg text-rhyze-black/80 md:text-xl">
             Seven days. Unlimited classes. Seven dollars. No catch, just the
-            floor.
+            floor. Starts August 3, 2026.
           </p>
           <Button
             href="/join"

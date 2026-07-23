@@ -1,9 +1,8 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Instagram, Phone, MapPin } from 'lucide-react';
+import { Phone, MapPin } from 'lucide-react';
 import { site, primaryNav } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 
@@ -32,38 +31,7 @@ export function Footer() {
 
   return (
     <footer className="relative border-t border-white/5 bg-rhyze-charcoal/60">
-      <div className="mx-auto grid max-w-7xl gap-12 px-6 py-16 md:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <Image
-            src="/brand/rhyze-logo.png"
-            alt={`${site.name} logo`}
-            width={112}
-            height={112}
-            className="h-28 w-auto"
-          />
-          <p className="mt-4 max-w-xs text-sm text-rhyze-cream/70">
-            {site.description}
-          </p>
-          <div className="mt-6 flex gap-3">
-            <a
-              href={site.instagram.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Instagram"
-              className="focus-ring rounded-full border border-white/10 p-2 transition hover:border-rhyze-coral hover:text-rhyze-coral"
-            >
-              <Instagram className="h-5 w-5" />
-            </a>
-            <a
-              href={`tel:${site.phoneTel}`}
-              aria-label="Phone"
-              className="focus-ring rounded-full border border-white/10 p-2 transition hover:border-rhyze-coral hover:text-rhyze-coral"
-            >
-              <Phone className="h-5 w-5" />
-            </a>
-          </div>
-        </div>
-
+      <div className="mx-auto grid max-w-7xl gap-12 px-6 py-16 md:grid-cols-3">
         <div>
           <h3 className="mb-4 text-lg tracking-widest">EXPLORE</h3>
           <ul className="space-y-2 text-sm">

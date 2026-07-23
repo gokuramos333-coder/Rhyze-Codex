@@ -1,9 +1,9 @@
 export const site = {
   name: 'Rhyze Fitness',
-  tagline: 'In Rhythm We Rise',
-  url: 'https://rhyzefit.com',
+  tagline: 'In Rhythm, We Rise',
+  url: 'https://www.rhyzefitness.com',
   description:
-    'A boutique dance, yoga, and HIIT studio opening in Lafayette, NJ. Elevate your energy. Rhyze together.',
+    'Elevate your mind, energize your body, and evolve your soul. Rhyze Fitness is a boutique movement studio offering dance, yoga, and strength classes for all levels.',
   address: {
     line1: 'The Shoppes at Lafayette',
     line2: '75 NJ-15, Lafayette Township, NJ 07848',
@@ -36,6 +36,7 @@ export const primaryNav = [
       { label: 'Class List', href: '/classes#list' },
     ],
   },
+  { label: 'Events', href: '/#events' },
   { label: 'Instructors', href: '/instructors' },
   { label: 'Shop', href: '/shop' },
   { label: 'Gallery', href: '/gallery' },
