@@ -7,7 +7,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
 import { useCart, cartTotal } from '@/lib/cart';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
 
 export function CartDrawer() {
   const items = useCart((s) => s.items);
@@ -16,7 +15,6 @@ export function CartDrawer() {
   const remove = useCart((s) => s.remove);
   const setQty = useCart((s) => s.setQty);
 
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -158,9 +156,10 @@ export function CartDrawer() {
                     </span>
                   </div>
                   <Button
+                    href="/checkout"
                     className="w-full"
                     size="lg"
-                    onClick={() => setCheckoutOpen(true)}
+                    onClick={close}
                   >
                     Checkout →
                   </Button>
@@ -173,35 +172,6 @@ export function CartDrawer() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <Modal
-        open={checkoutOpen}
-        onClose={() => setCheckoutOpen(false)}
-        title="CHECKOUT"
-      >
-        <p className="text-rhyze-cream/80">
-          Checkout integration coming soon. We&apos;re wiring up secure
-          payments before the studio doors open.
-        </p>
-        {/* TODO: Integrate Shopify or Stripe for real checkout */}
-        <p className="mt-4 text-sm text-rhyze-cream/60">
-          Want to reserve gear early?{' '}
-          <a
-            href="/contact"
-            className="text-rhyze-coral hover:underline"
-          >
-            Reach out via our contact page
-          </a>
-          .
-        </p>
-        <Button
-          onClick={() => setCheckoutOpen(false)}
-          className="mt-6 w-full"
-          variant="outline"
-        >
-          Close
-        </Button>
-      </Modal>
     </>
   );
 }
