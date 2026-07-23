@@ -12,7 +12,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
   const occurrenceId = String(formData.get('occurrenceId') || '');
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
     const occurrence = await tx.classOccurrence.findUnique({
       where: { id: occurrenceId },
     });

@@ -60,7 +60,7 @@ export async function transferBookingAction(formData: FormData) {
     }
   }
   const outcome = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${destinationId}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${destinationId}))`;
     const destination = await tx.classOccurrence.findFirst({ where: { id: destinationId, status: 'SCHEDULED' } });
     if (!destination || destination.startAt > new Date(booking.occurrence.startAt.getTime() + 14 * 24 * 60 * 60_000) || destination.startAt < new Date()) return false;
     const occupied = await tx.booking.count({ where: { occurrenceId: destinationId, status: 'CONFIRMED' } });
