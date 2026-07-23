@@ -26,6 +26,18 @@ export const signUpSchema = z
     path: ['passwordConfirmation'],
   });
 
+export function signUpInputFromFormData(formData: FormData) {
+  return {
+    name: formData.get('name'),
+    email: formData.get('email'),
+    phone: formData.get('phone'),
+    password: formData.get('password'),
+    passwordConfirmation: formData.get('passwordConfirmation'),
+    referralCode: formData.get('referralCode'),
+    instructorCode: formData.get('instructorCode'),
+  };
+}
+
 export const forgotPasswordSchema = z.object({
   email: emailSchema,
 });

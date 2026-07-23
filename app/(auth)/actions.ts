@@ -19,6 +19,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   signInSchema,
+  signUpInputFromFormData,
   signUpSchema,
 } from '@/lib/validation/auth';
 import { prisma } from '@/lib/db/prisma';
@@ -51,12 +52,7 @@ export async function signInAction(formData: FormData): Promise<void> {
 }
 
 export async function signUpAction(formData: FormData): Promise<void> {
-  const parsed = signUpSchema.safeParse({
-    name: formData.get('name'),
-    email: formData.get('email'),
-    password: formData.get('password'),
-    passwordConfirmation: formData.get('passwordConfirmation'),
-  });
+  const parsed = signUpSchema.safeParse(signUpInputFromFormData(formData));
 
   if (!parsed.success) {
     redirect('/sign-up?error=invalid');

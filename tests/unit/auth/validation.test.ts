@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  signUpInputFromFormData,
   signInSchema,
   signUpSchema,
 } from '@/lib/validation/auth';
@@ -65,5 +66,26 @@ describe('account validation', () => {
       passwordConfirmation: 'Rhyze26!A',
     });
     expect(result.success).toBe(false);
+  });
+
+  it('maps every signup form field into server validation input', () => {
+    const formData = new FormData();
+    formData.set('name', 'Gui Instructor');
+    formData.set('email', 'gui@example.com');
+    formData.set('phone', '9084569351');
+    formData.set('password', 'Guitesting777!');
+    formData.set('passwordConfirmation', 'Guitesting777!');
+    formData.set('referralCode', 'TRICIARZ26');
+    formData.set('instructorCode', 'RZTRIBE2026');
+
+    expect(signUpInputFromFormData(formData)).toEqual({
+      name: 'Gui Instructor',
+      email: 'gui@example.com',
+      phone: '9084569351',
+      password: 'Guitesting777!',
+      passwordConfirmation: 'Guitesting777!',
+      referralCode: 'TRICIARZ26',
+      instructorCode: 'RZTRIBE2026',
+    });
   });
 });
