@@ -1,90 +1,14 @@
 import type { Metadata } from 'next';
+import {
+  AGREEMENT_EFFECTIVE_LABEL,
+  policySections,
+} from '@/lib/policies';
 
 export const metadata: Metadata = {
   title: 'Studio Policies',
   description:
     'Waiver, cancellation, refund, late booking, age, and health policies for Rhyze Fitness.',
 };
-
-type PolicySection = {
-  id: string;
-  title: string;
-  subtitle?: string;
-  body?: string | null;
-  list?: string[];
-};
-
-const sections: PolicySection[] = [
-  {
-    id: 'waiver',
-    title: 'Waiver',
-    subtitle: 'Assumption of Risk · Release of Liability · Media Release',
-    body: 'I understand that participating in dance, yoga, Pilates, and strength training at Rhyze Fitness involves physical exertion and carries an inherent risk of injury. I voluntarily assume all risks associated with my participation. I hereby release Rhyze Fitness, its owners (Vanessa Ramos & Melissa Llanos), and its instructors from any and all liability for personal injury, property damage, or loss sustained while on the premises or participating in any studio activities. By entering the studio, I acknowledge that Rhyze Fitness may take photos or videos for social media / marketing. (If you prefer to opt out, please let our team know.)',
-  },
-  {
-    id: 'cancellation',
-    title: 'Cancellation for Classes',
-    subtitle: 'Transfers, late cancels, and no-shows',
-    body: null,
-    list: [
-      'If you cannot attend a scheduled class, contact us through the website messaging chat to request a transfer to another class within 2 weeks of the original class date.',
-      'Cancellations made more than 6 hours before class start time are eligible for transfer without a fee.',
-      'Cancellations made within 6 hours of class start time are eligible for transfer with a $10 transfer fee.',
-      'Cancellations made 2 hours or less before class start time are not eligible for transfer and will be marked as a late cancel or no-show.',
-      'The official cancellation window is 6 hours before class start time. Transfer requests received after this window may not be honored.',
-      'Transfer fees are waived for VIP Access membership holders only.',
-    ],
-  },
-  {
-    id: 'refunds',
-    title: 'Refunds',
-    body: null,
-    list: [
-      'All classes and events are non-refundable, no exceptions.',
-      'Special events, collab classes, and workshops are non-transferable unless otherwise stated.',
-    ],
-  },
-  {
-    id: 'late-booking',
-    title: 'Late Booking',
-    body: null,
-    list: [
-      'Online booking closes 30 minutes before class start time.',
-      'Drop-ins are permitted if space is available.',
-      'Please check the homepage for class availability and status before heading to the studio.',
-      'Cancellation notice must be received at least 6 hours before class in order to transfer.',
-    ],
-  },
-  {
-    id: 'private-groups',
-    title: 'Private Group Parties',
-    body: null,
-    list: [
-      'A $100 deposit is required when scheduling private groups.',
-      'The deposit goes toward the final balance due the day of the session, before the session begins.',
-      'Sessions cancelled less than 72 hours before the appointment incur a cancellation fee equal to the $100 deposit.',
-      'If clients cancel 72 or more hours before the event, the deposit may be used as a credit.',
-    ],
-  },
-  {
-    id: 'age',
-    title: 'Age Requirements',
-    body: null,
-    list: [
-      'All Rhyzers must be 12 years or older',
-      'Anyone under 18 requires a parent or guardian to sign the waiver in person',
-    ],
-  },
-  {
-    id: 'health',
-    title: 'Health & Safety',
-    body: null,
-    list: [
-      'Please stay home if you’re feeling unwell',
-      'Inform your instructor of any injuries or pregnancy before class so modifications can be offered',
-    ],
-  },
-];
 
 export default function PoliciesPage() {
   return (
@@ -104,7 +28,7 @@ export default function PoliciesPage() {
           aria-label="Policy sections"
           className="mt-10 flex flex-wrap gap-2"
         >
-          {sections.map((s) => (
+          {policySections.map((s) => (
             <a
               key={s.id}
               href={`#${s.id}`}
@@ -117,7 +41,7 @@ export default function PoliciesPage() {
       </section>
 
       <section className="mx-auto mt-14 max-w-4xl space-y-10 px-6">
-        {sections.map((s) => (
+        {policySections.map((s) => (
           <article
             key={s.id}
             id={s.id}
@@ -152,7 +76,7 @@ export default function PoliciesPage() {
 
       <section className="mx-auto mt-16 max-w-4xl px-6 text-center text-sm text-rhyze-cream/60">
         <p>
-          Policies last updated July 2026. Questions?{' '}
+          Policies last updated {AGREEMENT_EFFECTIVE_LABEL}. Questions?{' '}
           <a href="/contact" className="text-rhyze-coral hover:underline">
             Get in touch
           </a>

@@ -1,6 +1,7 @@
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { acceptWaiverAction } from '../actions';
+import { PrintAgreementButton } from '@/components/member/print-agreement-button';
 
 export default async function MemberWaiverPage({
   searchParams,
@@ -81,7 +82,18 @@ export default async function MemberWaiverPage({
                   className="mt-1 h-4 w-4 accent-rhyze-coral"
                 />
                 <span className="text-sm font-bold">
-                  I have read and agree to this waiver.
+                  I have read and agree to the complete studio waiver and policies shown above.
+                </span>
+              </label>
+              <label className="mt-4 flex items-start gap-3 border border-rhyze-orange/30 bg-orange-50 p-4">
+                <input
+                  type="checkbox"
+                  name="mediaConsent"
+                  className="mt-1 h-4 w-4 accent-rhyze-coral"
+                />
+                <span className="text-sm">
+                  <strong className="block">Optional media permission</strong>
+                  Rhyze may use photos or videos in which I appear for studio marketing. Declining does not affect booking.
                 </span>
               </label>
               {searchParams.error && (
@@ -90,8 +102,9 @@ export default async function MemberWaiverPage({
                 </p>
               )}
               <button className="mt-5 min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-[0.2em]">
-                Sign waiver
+                Accept and digitally sign
               </button>
+              <PrintAgreementButton />
             </form>
           )}
         </article>

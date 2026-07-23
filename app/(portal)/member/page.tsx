@@ -18,7 +18,7 @@ export default async function MemberHomePage() {
       <h1 className="mt-3 font-display text-6xl tracking-wider md:text-8xl">WELCOME, {(user.name || 'Rhyzer').split(' ')[0].toUpperCase()}</h1>
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
         <Link href="/member/bookings" className="border-t-4 border-rhyze-orange bg-white p-5"><p className="text-xs font-black uppercase tracking-widest">Upcoming</p><p className="mt-3 font-display text-5xl">{upcoming.length}</p></Link>
-        <Link href="/member/membership" className="border-t-4 border-rhyze-gold bg-white p-5"><p className="text-xs font-black uppercase tracking-widest">Credits</p><p className="mt-3 font-display text-5xl">{balance}</p></Link>
+        <Link href="/member/membership" className="border-t-4 border-rhyze-gold bg-white p-5"><p className="text-xs font-black uppercase tracking-widest">Available Credits</p><p className="mt-3 font-display text-5xl">{balance}</p></Link>
         <Link href="/member/bookings" className="border-t-4 border-rhyze-coral bg-white p-5"><p className="text-xs font-black uppercase tracking-widest">Classes attended</p><p className="mt-3 font-display text-5xl">{pastCount}</p></Link>
       </div>
       {!waiverReady && <Link href="/member/waiver" className="mt-6 block border-l-4 border-rhyze-coral bg-white p-4 font-bold text-rhyze-coral">Your waiver needs a signature before booking →</Link>}

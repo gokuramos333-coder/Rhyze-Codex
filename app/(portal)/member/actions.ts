@@ -1,6 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { parseAgreementAcceptance } from '@/lib/domain/waivers/acceptance';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -90,9 +91,17 @@ export async function updateNotificationPreferencesAction(
 export async function acceptWaiverAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
   const waiverVersionId = String(formData.get('waiverVersionId') || '');
-  const accepted = formData.get('accepted') === 'on';
+  let acceptance: ReturnType<typeof parseAgreementAcceptance>;
+  try {
+    acceptance = parseAgreementAcceptance({
+      accepted: formData.get('accepted'),
+      mediaConsent: formData.get('mediaConsent'),
+    });
+  } catch {
+    redirect('/member/waiver?error=acceptance');
+  }
 
-  if (!waiverVersionId || !accepted) {
+  if (!waiverVersionId) {
     redirect('/member/waiver?error=acceptance');
   }
 
@@ -122,6 +131,7 @@ export async function acceptWaiverAction(formData: FormData): Promise<void> {
         userId: user.id,
         ipAddress,
         userAgent,
+        mediaConsent: acceptance.mediaConsent,
       },
     }),
     prisma.auditLog.create({

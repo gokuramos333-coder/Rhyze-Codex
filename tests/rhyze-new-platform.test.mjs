@@ -263,16 +263,24 @@ test('join page and pricing cards route through Rhyze-owned memberships', () => 
 });
 
 test('policies use the approved cancellation policy and no late-entry column', () => {
-  const policiesSource = readFileSync('app/policies/page.tsx', 'utf8');
+  const policiesSource = [
+    readFileSync('app/policies/page.tsx', 'utf8'),
+    readFileSync('lib/policies.ts', 'utf8'),
+  ].join('\n');
 
   assert.match(policiesSource, /Cancellation for Classes/);
   assert.match(policiesSource, /6 hours before class start time/);
   assert.match(policiesSource, /\$10 transfer fee/);
-  assert.match(policiesSource, /All classes and events are non-refundable/);
+  assert.match(policiesSource, /non-refundable except where required by law/);
   assert.match(policiesSource, /Online booking closes 30 minutes before/);
   assert.match(policiesSource, /Private Group Parties/);
   assert.doesNotMatch(policiesSource, /Arrival & Late Entry/);
   assert.doesNotMatch(policiesSource, /No entry once the music starts/);
+});
+
+test('member dashboard labels the usable balance as available credits', () => {
+  const memberSource = readFileSync('app/(portal)/member/page.tsx', 'utf8');
+  assert.match(memberSource, /Available Credits/);
 });
 
 test('footer matches the four-column branded bottom layout', () => {
