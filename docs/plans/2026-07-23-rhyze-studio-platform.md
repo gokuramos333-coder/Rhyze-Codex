@@ -877,3 +877,7 @@ Somble should remain the operational source until replacement flows pass accepta
 - Consistency: class templates/occurrences precede booking; booking/credits precede payments; domain events precede notifications; real data precedes dashboards/reports.
 - Scope: each phase has its own models, routes/actions, UI, tests, commands, risks, commits, and exit gate.
 - Safety: no implementation is authorized by this plan; Phase 1 begins only after explicit approval and the Phase 0 checkpoint.
+
+## July 23 Instructor Platform Extension
+
+The approved instructor onboarding, credential, referral, commission, transfer, and class-communication extension is specified in `docs/superpowers/specs/2026-07-23-instructor-onboarding-referrals-transfers-design.md` and implemented through `docs/superpowers/plans/2026-07-23-instructor-onboarding-referrals-transfers.md`.
