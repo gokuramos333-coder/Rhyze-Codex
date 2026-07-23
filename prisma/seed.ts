@@ -157,7 +157,7 @@ async function main() {
     throw new Error(validation.errors.join(' '));
   }
 
-  await prisma.user.upsert({
+  const owner = await prisma.user.upsert({
     where: { email },
     update: { role: Role.OWNER, status: 'ACTIVE' },
     create: {
@@ -168,6 +168,24 @@ async function main() {
       memberProfile: { create: {} },
     },
   });
+  const existingCredits = await prisma.creditAccount.findFirst({
+    where: { userId: owner.id, label: 'Local Preview Credits' },
+  });
+  if (!existingCredits) {
+    await prisma.creditAccount.create({
+      data: {
+        userId: owner.id,
+        label: 'Local Preview Credits',
+        entries: {
+          create: {
+            type: 'GRANT',
+            quantity: 10,
+            reason: 'Local development preview',
+          },
+        },
+      },
+    });
+  }
 }
 
 main()

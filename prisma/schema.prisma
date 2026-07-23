@@ -35,6 +35,38 @@ enum OccurrenceStatus {
   COMPLETED
 }
 
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  LATE_CANCELLED
+  ATTENDED
+  NO_SHOW
+}
+
+enum WaitlistStatus {
+  WAITING
+  PROMOTED
+  LEFT
+  EXPIRED
+}
+
+enum AttendanceStatus {
+  CHECKED_IN
+  ATTENDED
+  NO_SHOW
+  LATE_CANCELLED
+}
+
+enum CreditEntryType {
+  GRANT
+  RESERVE
+  CONSUME
+  RELEASE
+  RESTORE
+  EXPIRE
+  ADJUSTMENT
+}
+
 model User {
   id            String     @id @default(cuid())
   name          String?
@@ -59,6 +91,11 @@ model User {
   auditLogs              AuditLog[]              @relation("AuditActor")
   classOccurrences       ClassOccurrence[]       @relation("OccurrenceInstructor")
   classSeries            ClassSeries[]           @relation("SeriesInstructor")
+  bookings               Booking[]
+  waitlistEntries        WaitlistEntry[]
+  attendanceRecords      AttendanceRecord[]      @relation("AttendanceMember")
+  attendanceMarked       AttendanceRecord[]      @relation("AttendanceMarker")
+  creditAccounts         CreditAccount[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -177,16 +214,110 @@ model ClassOccurrence {
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
-  template   ClassTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  series     ClassSeries?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  instructor User?         @relation("OccurrenceInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
-  room       Room?         @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  template          ClassTemplate      @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  series            ClassSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  instructor        User?              @relation("OccurrenceInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  room              Room?              @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  bookings          Booking[]
+  waitlistEntries   WaitlistEntry[]
+  attendanceRecords AttendanceRecord[]
 
   @@index([startAt, status])
   @@index([instructorId, startAt, endAt])
   @@index([roomId, startAt, endAt])
   @@index([templateId, startAt])
   @@index([seriesId, startAt])
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  occurrenceId   String
+  userId         String
+  status         BookingStatus @default(CONFIRMED)
+  source         String        @default("MEMBER")
+  bookedAt       DateTime      @default(now())
+  cancelledAt    DateTime?
+  policySnapshot Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  occurrence ClassOccurrence   @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  attendance AttendanceRecord?
+
+  @@unique([occurrenceId, userId])
+  @@index([userId, status, bookedAt])
+  @@index([occurrenceId, status])
+}
+
+model WaitlistEntry {
+  id           String         @id @default(cuid())
+  occurrenceId String
+  userId       String
+  status       WaitlistStatus @default(WAITING)
+  joinedAt     DateTime       @default(now())
+  promotedAt   DateTime?
+  leftAt       DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  occurrence ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([occurrenceId, userId])
+  @@index([occurrenceId, status, joinedAt])
+}
+
+model AttendanceRecord {
+  id           String           @id @default(cuid())
+  occurrenceId String
+  bookingId    String?          @unique
+  userId       String
+  status       AttendanceStatus
+  checkedInAt  DateTime?
+  markedById   String?
+  note         String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  occurrence ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  booking    Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  user       User            @relation("AttendanceMember", fields: [userId], references: [id], onDelete: Restrict)
+  markedBy   User?           @relation("AttendanceMarker", fields: [markedById], references: [id], onDelete: SetNull)
+
+  @@unique([occurrenceId, userId])
+  @@index([occurrenceId, status])
+}
+
+model CreditAccount {
+  id          String    @id @default(cuid())
+  userId      String
+  label       String
+  isUnlimited Boolean   @default(false)
+  validFrom   DateTime  @default(now())
+  validUntil  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user    User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  entries CreditLedgerEntry[]
+
+  @@index([userId, validUntil])
+}
+
+model CreditLedgerEntry {
+  id              String          @id @default(cuid())
+  creditAccountId String
+  bookingId       String?
+  type            CreditEntryType
+  quantity        Int
+  reason          String?
+  createdAt       DateTime        @default(now())
+
+  creditAccount CreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+
+  @@index([creditAccountId, createdAt])
+  @@index([bookingId])
 }
 
 model Account {
