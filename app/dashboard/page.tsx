@@ -196,7 +196,7 @@ export default function DashboardPage() {
                 <ToolbarLink active href="/dashboard">
                   Admin View
                 </ToolbarLink>
-                <ToolbarLink href="/signin">Customer View</ToolbarLink>
+                <ToolbarLink href="/sign-in">Customer View</ToolbarLink>
                 <ToolbarLink href="/classes#schedule">Book Class</ToolbarLink>
                 <ToolbarLink tone="primary" href="#automations">
                   Send Reminder

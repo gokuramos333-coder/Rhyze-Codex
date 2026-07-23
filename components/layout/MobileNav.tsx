@@ -73,7 +73,7 @@ export function MobileNav({ open, onClose }: Props) {
                 </Link>
               ))}
               <Link
-                href="/signin"
+                href="/sign-in"
                 onClick={onClose}
                 className="focus-ring mt-2 rounded-md px-3 py-4 text-base uppercase tracking-wide text-rhyze-cream/70 hover:text-rhyze-coral"
               >

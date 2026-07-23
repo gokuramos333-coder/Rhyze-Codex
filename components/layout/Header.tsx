@@ -114,7 +114,7 @@ export function Header() {
           <div className="hidden items-center gap-3 lg:flex">
             <CartButton />
             <Link
-              href="/signin"
+              href="/sign-in"
               className="focus-ring rounded-md px-3 py-2 text-sm font-medium uppercase tracking-wide text-rhyze-cream/80 hover:text-rhyze-coral"
             >
               Member Portal

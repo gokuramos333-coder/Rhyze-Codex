@@ -324,7 +324,7 @@ test('home floor uses the custom direction photo with the same Google destinatio
   assert.doesNotMatch(locationSource, /output=embed/);
 });
 
-test('member portal and Studio OS dashboard are available as separate Rhyze #2 routes', () => {
+test('legacy member portal redirects into the Rhyze #3 account flow', () => {
   const siteSource = readFileSync('lib/site.ts', 'utf8');
   const headerSource = readFileSync('components/layout/Header.tsx', 'utf8');
   const mobileSource = readFileSync('components/layout/MobileNav.tsx', 'utf8');
@@ -335,8 +335,9 @@ test('member portal and Studio OS dashboard are available as separate Rhyze #2 r
   assert.match(siteSource, /href: '\/dashboard'/);
   assert.match(headerSource, /Rhyze #2 New/);
   assert.match(mobileSource, /Studio OS/);
-  assert.match(portalSource, /customerPortal/);
-  assert.match(portalSource, /Attendance History/);
+  assert.match(portalSource, /redirect\('\/sign-in'\)/);
+  assert.match(headerSource, /href="\/sign-in"/);
+  assert.match(mobileSource, /href="\/sign-in"/);
   assert.match(dashboardSource, /Class Manager/);
   assert.match(dashboardSource, /Waivers/);
   assert.match(dashboardSource, /Automations/);

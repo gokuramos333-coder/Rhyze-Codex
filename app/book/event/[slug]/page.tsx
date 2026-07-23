@@ -105,7 +105,7 @@ export default function EventBookingPage({
             </div>
           </div>
 
-          <Button href="/signin" size="lg" className="mt-6 w-full">
+          <Button href="/sign-in" size="lg" className="mt-6 w-full">
             Confirm Event Booking
             <CheckCircle2 className="h-5 w-5" aria-hidden />
           </Button>
