@@ -17,7 +17,7 @@ export function PortalShell({
   children: ReactNode;
 }) {
   return (
-    <main className="relative z-[60] -mt-44 min-h-screen bg-[#eee9dd] text-rhyze-black">
+    <main className="relative z-[60] min-h-screen bg-[#eee9dd] text-rhyze-black">
       <div className="grid min-h-screen lg:grid-cols-[17rem_minmax(0,1fr)]">
         <aside className="border-b border-white/10 bg-rhyze-black p-5 text-rhyze-cream lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
           <Link href="/" className="focus-ring flex items-center gap-3">

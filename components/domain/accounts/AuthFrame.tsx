@@ -16,7 +16,7 @@ export function AuthFrame({
   footer: ReactNode;
 }) {
   return (
-    <main className="relative z-[60] -mt-44 min-h-screen overflow-hidden bg-rhyze-cream text-rhyze-black">
+    <main className="relative z-[60] min-h-screen overflow-hidden bg-rhyze-cream text-rhyze-black">
       <div className="grid min-h-screen lg:grid-cols-[minmax(20rem,0.78fr)_minmax(34rem,1.22fr)]">
         <section className="relative flex min-h-72 flex-col justify-between overflow-hidden bg-rhyze-black p-7 text-rhyze-cream md:p-12 lg:min-h-screen">
           <div className="absolute inset-y-0 right-10 w-px bg-gradient-to-b from-transparent via-rhyze-coral to-transparent opacity-70" />

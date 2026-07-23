@@ -2,9 +2,7 @@ import type { Metadata } from 'next';
 import { Bebas_Neue, Inter } from 'next/font/google';
 import './globals.css';
 import { site } from '@/lib/site';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
-import { CartDrawer } from '@/components/sections/CartDrawer';
+import { SiteChrome } from '@/components/layout/SiteChrome';
 
 const bebas = Bebas_Neue({
   subsets: ['latin'],
@@ -55,12 +53,7 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <Header />
-        <div id="content" className="pt-44">
-          {children}
-        </div>
-        <Footer />
-        <CartDrawer />
+        <SiteChrome>{children}</SiteChrome>
       </body>
     </html>
   );

@@ -10,7 +10,7 @@ const errorMessages: Record<string, string> = {
 export default function SignInPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; reset?: string };
 }) {
   const error = searchParams.error
     ? errorMessages[searchParams.error]
@@ -37,6 +37,11 @@ export default function SignInPage({
       {error && (
         <p className="mt-5 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-4 text-sm font-bold">
           {error}
+        </p>
+      )}
+      {searchParams.reset && (
+        <p className="mt-5 border-l-4 border-emerald-600 bg-emerald-50 p-4 text-sm font-bold">
+          Password updated. Sign in with your new password.
         </p>
       )}
       <form action={signInAction} className="mt-8 grid gap-5">

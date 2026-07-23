@@ -9,7 +9,17 @@ import {
   InvalidPasswordError,
 } from '@/lib/domain/accounts/account-service';
 import { prismaAccountRepository } from '@/lib/domain/accounts/prisma-account-repository';
-import { signInSchema, signUpSchema } from '@/lib/validation/auth';
+import {
+  requestPasswordReset,
+  resetPassword,
+} from '@/lib/domain/accounts/password-reset-service';
+import { prismaPasswordResetRepository } from '@/lib/domain/accounts/prisma-password-reset-repository';
+import {
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  signInSchema,
+  signUpSchema,
+} from '@/lib/validation/auth';
 
 export async function signInAction(formData: FormData): Promise<void> {
   const parsed = signInSchema.safeParse({
@@ -67,4 +77,47 @@ export async function signUpAction(formData: FormData): Promise<void> {
 
 export async function signOutAction(): Promise<void> {
   await signOut({ redirectTo: '/' });
+}
+
+export async function forgotPasswordAction(formData: FormData): Promise<void> {
+  const parsed = forgotPasswordSchema.safeParse({
+    email: formData.get('email'),
+  });
+  if (!parsed.success) redirect('/forgot-password?error=invalid');
+
+  const token = await requestPasswordReset(
+    parsed.data.email,
+    prismaPasswordResetRepository,
+  );
+
+  if (process.env.NODE_ENV !== 'production' && token) {
+    redirect(`/reset-password/${token}`);
+  }
+
+  redirect('/forgot-password?sent=1');
+}
+
+export async function resetPasswordAction(formData: FormData): Promise<void> {
+  const parsed = resetPasswordSchema.safeParse({
+    token: formData.get('token'),
+    password: formData.get('password'),
+    passwordConfirmation: formData.get('passwordConfirmation'),
+  });
+  if (!parsed.success) {
+    redirect(
+      `/reset-password/${String(formData.get('token') || '')}?error=password`,
+    );
+  }
+
+  try {
+    await resetPassword(
+      parsed.data.token,
+      parsed.data.password,
+      prismaPasswordResetRepository,
+    );
+  } catch {
+    redirect(`/reset-password/${parsed.data.token}?error=token`);
+  }
+
+  redirect('/sign-in?reset=1');
 }

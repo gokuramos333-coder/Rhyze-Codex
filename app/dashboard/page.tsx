@@ -117,7 +117,7 @@ export default function DashboardPage() {
     ownedSchedule[0];
 
   return (
-    <main className="studio-os-shell relative z-[60] -mt-44 min-h-screen bg-rhyze-black text-rhyze-cream">
+    <main className="studio-os-shell relative z-[60] min-h-screen bg-rhyze-black text-rhyze-cream">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(240,90,60,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,199,44,0.1),transparent_24%)]" />
       <div className="grid min-h-screen xl:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="border-b border-white/10 bg-rhyze-black/95 p-4 xl:sticky xl:top-0 xl:flex xl:h-screen xl:flex-col xl:border-b-0 xl:border-r xl:p-5">
