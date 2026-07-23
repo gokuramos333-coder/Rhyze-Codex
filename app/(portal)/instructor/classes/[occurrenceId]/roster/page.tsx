@@ -27,7 +27,7 @@ export default async function InstructorRosterPage({ params }: { params: { occur
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class roster</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
       <p className="mt-3 text-rhyze-black/55">{occurrence.startAt.toLocaleString()} · {occurrence.room?.name || 'Room TBA'} · {occurrence.bookings.length}/{occurrence.capacity}</p>
-      <Roster occurrenceId={occurrence.id} bookings={occurrence.bookings} />
+      <Roster occurrenceId={occurrence.id} bookings={occurrence.bookings} canTransfer />
     </>
   );
 }

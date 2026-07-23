@@ -1,4 +1,5 @@
 import { markAttendanceAction, restoreCreditAction } from '@/app/(portal)/instructor/classes/[occurrenceId]/roster/actions';
+import Link from 'next/link';
 
 type RosterBooking = {
   id: string;
@@ -11,10 +12,12 @@ export function Roster({
   occurrenceId,
   bookings,
   canRestore = false,
+  canTransfer = false,
 }: {
   occurrenceId: string;
   bookings: RosterBooking[];
   canRestore?: boolean;
+  canTransfer?: boolean;
 }) {
   return (
     <div className="mt-8 grid gap-3">
@@ -42,6 +45,7 @@ export function Roster({
                 <button className="bg-rhyze-black px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white">Restore credit</button>
               </form>
             )}
+            {canTransfer && booking.status === 'CONFIRMED' && <Link href={`/instructor/classes/${occurrenceId}/transfers?booking=${booking.id}`} className="border border-rhyze-coral px-3 py-2 text-[10px] font-black uppercase tracking-wider text-rhyze-coral">Transfer</Link>}
           </div>
         </article>
       ))}

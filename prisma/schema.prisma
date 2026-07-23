@@ -139,18 +139,25 @@ enum CommissionStatus {
   PAID
 }
 
+enum TransferStatus {
+  COMPLETED
+  PAYMENT_FAILED
+  BLOCKED
+}
+
 model User {
-  id            String     @id @default(cuid())
-  name          String?
-  email         String     @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String?
-  role          Role       @default(MEMBER)
-  status        UserStatus @default(ACTIVE)
-  lastLoginAt   DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id               String     @id @default(cuid())
+  name             String?
+  email            String     @unique
+  emailVerified    DateTime?
+  image            String?
+  passwordHash     String?
+  role             Role       @default(MEMBER)
+  status           UserStatus @default(ACTIVE)
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  stripeCustomerId String?    @unique
 
   accounts               Account[]
   sessions               Session[]
@@ -332,6 +339,24 @@ model Booking {
   @@unique([occurrenceId, userId])
   @@index([userId, status, bookedAt])
   @@index([occurrenceId, status])
+}
+
+model BookingTransfer {
+  id                    String         @id @default(cuid())
+  bookingId             String
+  memberId              String
+  instructorId          String
+  fromOccurrenceId      String
+  toOccurrenceId        String?
+  status                TransferStatus
+  feeCents              Int            @default(0)
+  stripePaymentIntentId String?        @unique
+  reason                String?
+  createdAt             DateTime       @default(now())
+
+  @@index([bookingId, createdAt])
+  @@index([instructorId, createdAt])
+  @@index([memberId, createdAt])
 }
 
 model WaitlistEntry {

@@ -33,6 +33,8 @@ export async function startCheckoutAction(formData: FormData) {
     : null;
   const checkout = await stripe.checkout.sessions.create({
     mode: product.billingInterval === 'ONE_TIME' ? 'payment' : 'subscription',
+    customer_creation: product.billingInterval === 'ONE_TIME' ? 'always' : undefined,
+    payment_intent_data: product.billingInterval === 'ONE_TIME' ? { setup_future_usage: 'off_session' } : undefined,
     line_items: [{ price: product.stripePriceId!, quantity: 1 }],
     customer_email: user.email,
     client_reference_id: purchase.id,

@@ -40,6 +40,9 @@ export async function POST(request: Request) {
           },
           include: { product: true },
         });
+        if (typeof session.customer === 'string') {
+          await prisma.user.update({ where: { id: purchase.userId }, data: { stripeCustomerId: session.customer } });
+        }
         if (purchase.discountCents > 0) {
           const attribution = await prisma.referralAttribution.findUnique({
             where: { referredUserId: purchase.userId },
