@@ -32,6 +32,9 @@ This change improves instructor credential uploads, keeps authenticated users si
 - Each email identifies the applicant by name and email and links to `/admin/instructors`.
 - Emails are background-queued; signup does not wait for delivery.
 - The applicant remains a Member until an admin approves the application.
+- Approval requires one action only: either Vanessa or Melissa can approve the application.
+- The first approval changes the application from `PENDING` to `APPROVED`; any later approval attempt is a safe no-op.
+- No second approval or consensus step is required.
 - A deterministic deduplication key prevents duplicate approval emails for the same application and recipient.
 - Normal member signups do not generate approval emails.
 
