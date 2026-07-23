@@ -129,11 +129,16 @@ export function JoinForm() {
       </label>
       <FieldError message={errors.waiver?.message} />
 
-      <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full"
+        disabled={isSubmitting}
+      >
         {isSubmitting ? 'Submitting…' : 'Claim My $7 Week →'}
       </Button>
       <p className="text-center text-[11px] uppercase tracking-widest text-rhyze-cream/50">
-        Unlimited classes · Cancel anytime · First 7 days
+        Activates with first booked class · Auto-expires after 7 days
       </p>
     </form>
   );

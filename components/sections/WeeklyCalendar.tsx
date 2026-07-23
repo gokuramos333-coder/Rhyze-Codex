@@ -19,10 +19,33 @@ const viewOptions: { id: CalendarView; label: string }[] = [
   { id: 'monthly', label: 'Monthly' },
 ];
 
+const calendarYear = 2026;
+const monthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function formatClassCount(count: number) {
+  return `${count} ${count === 1 ? 'class' : 'classes'}`;
+}
+
 export function WeeklyCalendar({ compact = false }: Props) {
   const [view, setView] = useState<CalendarView>('daily');
   const [selectedDay, setSelectedDay] = useState('Mon');
-  const selectedIndex = weekDays.findIndex((day) => day.shortDay === selectedDay);
+  const selectedIndex = weekDays.findIndex(
+    (day) => day.shortDay === selectedDay,
+  );
   const activeDay = weekDays[selectedIndex] ?? weekDays[1];
   const weeklyDaySummaries = useMemo(() => {
     return weekDays.map((day) => {
@@ -38,25 +61,45 @@ export function WeeklyCalendar({ compact = false }: Props) {
     () => ownedSchedule.filter((slot) => slot.day === activeDay.shortDay),
     [activeDay.shortDay],
   );
-  const totalBooked = ownedSchedule.reduce((total, slot) => total + slot.booked, 0);
-  const totalCapacity = ownedSchedule.reduce((total, slot) => total + slot.capacity, 0);
+  const monthlyCalendarDays = useMemo(() => {
+    const [monthName] = activeDay.date.split(' ');
+    const monthIndex = monthNames.indexOf(monthName);
+    const daysInMonth = new Date(calendarYear, monthIndex + 1, 0).getDate();
+    const firstWeekday = new Date(calendarYear, monthIndex, 1).getDay();
 
+    return [
+      ...Array.from({ length: firstWeekday }, (_, index) => ({
+        key: `blank-${index}`,
+        dayNumber: null,
+        summary: null,
+      })),
+      ...Array.from({ length: daysInMonth }, (_, index) => {
+        const dayNumber = index + 1;
+        const date = `${monthName} ${dayNumber}`;
+        const summary =
+          weeklyDaySummaries.find((day) => day.date === date) ?? null;
+
+        return {
+          key: date,
+          dayNumber,
+          summary,
+        };
+      }),
+    ];
+  }, [activeDay.date, weeklyDaySummaries]);
+  const [monthName] = activeDay.date.split(' ');
+  const monthLabel = `${monthName} ${calendarYear}`;
   const moveDay = (direction: -1 | 1) => {
-    const nextIndex = Math.min(Math.max(selectedIndex + direction, 0), weekDays.length - 1);
+    const nextIndex = Math.min(
+      Math.max(selectedIndex + direction, 0),
+      weekDays.length - 1,
+    );
     setSelectedDay(weekDays[nextIndex].shortDay);
   };
 
   return (
     <div className="rounded-[1.75rem] border border-white/10 bg-rhyze-black/80 p-4 shadow-2xl shadow-black/30 md:p-6">
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-rhyze-gold">
-            Total booked so far
-          </p>
-          <strong className="mt-2 block font-display text-4xl leading-none tracking-wider md:text-5xl">
-            {totalBooked}/{totalCapacity}
-          </strong>
-        </div>
+      <div className="mb-6 flex justify-end">
         <div className="grid grid-cols-3 gap-2 rounded-full border border-white/10 bg-rhyze-charcoal/70 p-1">
           {viewOptions.map((option) => (
             <button
@@ -90,10 +133,12 @@ export function WeeklyCalendar({ compact = false }: Props) {
               <ChevronLeft className="h-6 w-6" aria-hidden />
             </button>
 
-            <div className="no-scrollbar grid flex-1 grid-flow-col grid-cols-none gap-2 overflow-x-auto md:grid-cols-7 md:grid-flow-row">
+            <div className="no-scrollbar grid flex-1 grid-flow-col grid-cols-none gap-2 overflow-x-auto md:grid-flow-row md:grid-cols-7">
               {weekDays.map((day) => {
                 const isActive = day.shortDay === activeDay.shortDay;
-                const hasClasses = ownedSchedule.some((slot) => slot.day === day.shortDay);
+                const hasClasses = ownedSchedule.some(
+                  (slot) => slot.day === day.shortDay,
+                );
                 return (
                   <button
                     type="button"
@@ -109,7 +154,10 @@ export function WeeklyCalendar({ compact = false }: Props) {
                     <span className="block text-xs font-bold uppercase tracking-[0.2em]">
                       {day.date}
                       {hasClasses && (
-                        <span className="ml-1 text-rhyze-gold" aria-label="classes available">
+                        <span
+                          className="ml-1 text-rhyze-gold"
+                          aria-label="classes available"
+                        >
                           •
                         </span>
                       )}
@@ -154,7 +202,9 @@ export function WeeklyCalendar({ compact = false }: Props) {
             )}
           >
             {daySlots.length > 0 ? (
-              daySlots.map((slot) => <CustomerScheduleCard key={slot.id} slot={slot} />)
+              daySlots.map((slot) => (
+                <CustomerScheduleCard key={slot.id} slot={slot} />
+              ))
             ) : (
               <div className="rounded-xl bg-rhyze-black p-8 text-center">
                 <h4 className="font-display text-3xl tracking-wider">
@@ -170,59 +220,145 @@ export function WeeklyCalendar({ compact = false }: Props) {
       )}
 
       {view === 'weekly' && (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-          {weeklyDaySummaries.map((day) => (
-            <section
-              key={day.id}
-              className="min-h-64 rounded-xl border border-rhyze-gold/30 bg-rhyze-charcoal/75 p-3 shadow-[0_0_0_1px_rgba(255,199,44,0.35)]"
-            >
-              <div className="mb-3 border-b border-white/10 pb-3">
-                <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
-                  {day.date}
-                </p>
-                <h3 className="font-display text-3xl tracking-wider">{day.day}</h3>
-                <span className="mt-1 block text-xs font-bold text-rhyze-cream/50">
-                  {day.booked}/{day.capacity || 0} booked
-                </span>
-              </div>
-              <div className="grid gap-2">
-                {day.slots.map((slot) => (
-                  <CustomerScheduleCard key={slot.id} slot={slot} compact />
-                ))}
-                {day.slots.length === 0 && (
-                  <p className="rounded-lg border border-dashed border-white/10 p-3 text-xs font-bold text-rhyze-cream/35">
-                    No classes
-                  </p>
-                )}
-              </div>
-            </section>
-          ))}
+        <div>
+          <div className="mb-5 flex flex-col gap-2 px-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.25em] text-rhyze-gold">
+                Weekly agenda
+              </p>
+              <h3 className="mt-2 font-display text-3xl tracking-wider md:text-5xl">
+                {weekDays[0].date} - {weekDays[6].date}
+              </h3>
+            </div>
+            <p className="text-sm text-rhyze-cream/55">
+              {formatClassCount(ownedSchedule.length)}
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {weeklyDaySummaries.map((day) => (
+              <section
+                key={day.id}
+                className="rounded-xl border border-rhyze-gold/35 bg-rhyze-charcoal/75 p-3 shadow-[0_0_0_1px_rgba(255,199,44,0.35)] transition hover:border-rhyze-orange hover:bg-rhyze-coral/10 md:p-4"
+              >
+                <div className="mb-3 flex flex-col gap-2 border-b border-white/10 pb-3 md:flex-row md:items-center md:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDay(day.shortDay);
+                      setView('daily');
+                    }}
+                    className="focus-ring text-left"
+                  >
+                    <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
+                      {day.date}
+                    </p>
+                    <h3 className="font-display text-3xl tracking-wider">
+                      {day.day}
+                    </h3>
+                  </button>
+                  <span className="text-xs font-black uppercase tracking-widest text-rhyze-cream/55">
+                    {formatClassCount(day.slots.length)} · {day.booked}/
+                    {day.capacity || 0} booked
+                  </span>
+                </div>
+                <div className="grid gap-2">
+                  {day.slots.map((slot) => (
+                    <CustomerScheduleCard
+                      key={slot.id}
+                      slot={slot}
+                      compact={compact}
+                    />
+                  ))}
+                  {day.slots.length === 0 && (
+                    <p className="rounded-lg border border-dashed border-white/10 bg-rhyze-black/40 p-4 text-sm font-bold text-rhyze-cream/40">
+                      No Classes Bookable
+                    </p>
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
       )}
 
       {view === 'monthly' && (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-          {weeklyDaySummaries.map((day) => (
-            <button
-              type="button"
-              key={day.id}
-              onClick={() => {
-                setSelectedDay(day.shortDay);
-                setView('daily');
-              }}
-              className="focus-ring rounded-xl border border-rhyze-gold/35 bg-rhyze-charcoal/75 p-4 text-left transition hover:border-rhyze-orange hover:bg-rhyze-coral/15"
-            >
-              <span className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
-                {day.date}
-              </span>
-              <h3 className="mt-2 font-display text-4xl tracking-wider">{day.day}</h3>
-              <div className="mt-4 grid gap-2 text-sm font-bold text-rhyze-cream/65">
-                <span>{day.slots.length} classes</span>
-                <span>{day.booked}/{day.capacity || 0} booked</span>
-                <span>{day.waitlist} waitlist</span>
-              </div>
-            </button>
-          ))}
+        <div>
+          <div className="mb-5 flex flex-col gap-2 px-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.25em] text-rhyze-gold">
+                Monthly calendar
+              </p>
+              <h3 className="mt-2 font-display text-3xl tracking-wider md:text-5xl">
+                {monthLabel}
+              </h3>
+            </div>
+            <p className="text-sm text-rhyze-cream/55">
+              Select a highlighted date to open the daily booking view.
+            </p>
+          </div>
+
+          <div
+            aria-label="Monthly calendar"
+            className="rounded-xl border border-rhyze-gold/30 bg-rhyze-charcoal/75 p-3 shadow-[0_0_0_1px_rgba(255,199,44,0.35)] md:p-4"
+          >
+            <div className="mb-2 grid grid-cols-7 gap-2 text-center text-[0.65rem] font-black uppercase tracking-widest text-rhyze-gold">
+              {weekdayLabels.map((weekday) => (
+                <span key={weekday}>{weekday}</span>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {monthlyCalendarDays.map((day) => {
+                const hasSchedule = Boolean(day.summary);
+                const hasClasses = Boolean(day.summary?.slots.length);
+
+                if (!day.dayNumber) {
+                  return (
+                    <span key={day.key} aria-hidden className="min-h-20" />
+                  );
+                }
+
+                return (
+                  <button
+                    type="button"
+                    key={day.key}
+                    disabled={!hasSchedule}
+                    onClick={() => {
+                      if (!day.summary) return;
+                      setSelectedDay(day.summary.shortDay);
+                      setView('daily');
+                    }}
+                    className={cn(
+                      'focus-ring min-h-20 rounded-lg border p-2 text-left transition md:min-h-28 md:p-3',
+                      hasSchedule
+                        ? 'border-rhyze-gold/35 bg-rhyze-black shadow-[0_0_0_1px_rgba(255,199,44,0.35)] hover:border-rhyze-orange hover:bg-rhyze-coral/15'
+                        : 'border-white/5 bg-rhyze-black/30 text-rhyze-cream/25',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'font-black',
+                        hasSchedule ? 'text-rhyze-cream' : '',
+                      )}
+                    >
+                      {day.dayNumber}
+                    </span>
+                    {hasSchedule && (
+                      <div className="mt-3 space-y-1 text-[0.65rem] font-black uppercase tracking-wider text-rhyze-cream/60 md:text-xs">
+                        <p className={hasClasses ? 'text-rhyze-gold' : ''}>
+                          {formatClassCount(day.summary?.slots.length ?? 0)}
+                        </p>
+                        <p>
+                          {day.summary?.booked ?? 0}/
+                          {day.summary?.capacity ?? 0} booked
+                        </p>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -265,7 +401,12 @@ function CustomerScheduleCard({
           />
         </div>
         <div className="min-w-0">
-          <h4 className={cn('font-black tracking-normal', compact ? 'text-sm' : 'truncate text-base md:text-lg')}>
+          <h4
+            className={cn(
+              'font-display font-black leading-tight tracking-normal text-rhyze-cream',
+              compact ? 'text-sm' : 'truncate text-lg md:text-xl',
+            )}
+          >
             {slot.className}
           </h4>
           <p className="mt-1 text-sm font-semibold text-rhyze-cream/70">

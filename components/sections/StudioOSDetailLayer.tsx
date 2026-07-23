@@ -33,19 +33,51 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'By source',
         rows: [
-          { label: 'Rhyze Up w/ Vanessa', value: '$616', meta: '22 bookings x $28' },
-          { label: 'Pilates Pulse with Adrianna', value: '$312', meta: '12 bookings x $26' },
-          { label: 'Single Class Drop-In', value: '$476', meta: '17 checkout clicks' },
-          { label: 'Membership upgrades', value: '$368', meta: '2 Full Rhythm upgrades' },
-          { label: 'Merchandise add-ons', value: '$70', meta: 'Tanks and grip socks' },
+          {
+            label: 'Rhyze Up with Vanessa',
+            value: '$616',
+            meta: '22 bookings x $28',
+          },
+          {
+            label: 'Pilates Pulse with Adrianna',
+            value: '$312',
+            meta: '12 bookings x $26',
+          },
+          {
+            label: 'Single Class Drop-In',
+            value: '$476',
+            meta: '17 checkout clicks',
+          },
+          {
+            label: 'Membership upgrades',
+            value: '$368',
+            meta: '2 Ritual upgrades',
+          },
+          {
+            label: 'Merchandise add-ons',
+            value: '$70',
+            meta: 'Tanks and grip socks',
+          },
         ],
       },
       {
         title: 'Transaction log',
         rows: [
-          { label: 'Date', value: 'Aug 3, 2026', meta: '10:04 AM - Pilates Pulse booked' },
-          { label: 'Date', value: 'Aug 3, 2026', meta: '11:18 AM - Drop-in checkout' },
-          { label: 'Date', value: 'Aug 3, 2026', meta: '6:42 PM - Rhyze Up member credit' },
+          {
+            label: 'Date',
+            value: 'Aug 3, 2026',
+            meta: '10:04 AM - Pilates Pulse booked',
+          },
+          {
+            label: 'Date',
+            value: 'Aug 3, 2026',
+            meta: '11:18 AM - Drop-in checkout',
+          },
+          {
+            label: 'Date',
+            value: 'Aug 3, 2026',
+            meta: '6:42 PM - Rhyze Up member credit',
+          },
         ],
       },
     ],
@@ -60,10 +92,18 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Package mix',
         rows: [
-          { label: 'Full Rhythm', value: '$8,064', meta: '48 members x $168' },
+          { label: 'Ritual', value: '$8,064', meta: '48 members x $168' },
           { label: 'Elevate', value: '$3,772', meta: '41 members x $92' },
-          { label: 'VIP Access Pass', value: '$2,985', meta: '15 members x $199' },
-          { label: 'Intro Offer conversion', value: '$95', meta: 'Trial upgrades pending' },
+          {
+            label: 'VIP Access Pass',
+            value: '$2,985',
+            meta: '15 members x $199',
+          },
+          {
+            label: 'Intro Offer conversion',
+            value: '$95',
+            meta: 'Trial upgrades pending',
+          },
         ],
       },
       {
@@ -87,10 +127,26 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Top classes',
         rows: [
-          { label: 'Rhyze Up w/ Vanessa', value: '22/24', meta: '4 waitlist' },
-          { label: 'Hypnotic Heels w/ Jessica', value: '18/18', meta: '6 waitlist' },
-          { label: 'TCJ Hip-Hop Happy Hour w/ Tricia', value: '17/20', meta: '3 open' },
-          { label: 'Pilates Pulse with Adrianna', value: '12/16', meta: '4 open' },
+          {
+            label: 'Rhyze Up with Vanessa',
+            value: '22/24',
+            meta: '4 waitlist',
+          },
+          {
+            label: 'Hypnotic Heels with Jessica',
+            value: '18/18',
+            meta: '6 waitlist',
+          },
+          {
+            label: 'TCJ Hip-Hop Happy Hour with Tricia',
+            value: '17/20',
+            meta: '3 open',
+          },
+          {
+            label: 'Pilates Pulse with Adrianna',
+            value: '12/16',
+            meta: '4 open',
+          },
         ],
       },
     ],
@@ -105,7 +161,11 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Owner queue',
         rows: [
-          { label: 'Guardian signatures', value: '3', meta: 'Under-18 accounts' },
+          {
+            label: 'Guardian signatures',
+            value: '3',
+            meta: 'Under-18 accounts',
+          },
           { label: 'General studio waiver', value: '2', meta: 'New customers' },
           { label: 'Membership terms', value: '2', meta: 'Package upgrades' },
         ],
@@ -122,9 +182,17 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'By category',
         rows: [
-          { label: 'Dance', value: '91%', meta: 'Highest check-in consistency' },
+          {
+            label: 'Dance',
+            value: '91%',
+            meta: 'Highest check-in consistency',
+          },
           { label: 'Yoga & Pilates', value: '83%', meta: 'Morning classes' },
-          { label: 'Strength & HIIT', value: '79%', meta: 'Weather impact this week' },
+          {
+            label: 'Strength & HIIT',
+            value: '79%',
+            meta: 'Weather impact this week',
+          },
         ],
       },
     ],
@@ -139,7 +207,11 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Member status',
         rows: [
-          { label: 'Monthly members', value: '104', meta: 'Full Rhythm, Elevate, VIP' },
+          {
+            label: 'Monthly members',
+            value: '104',
+            meta: 'Ritual, Elevate, VIP',
+          },
           { label: 'Intro trial', value: '23', meta: '7-day trial window' },
           { label: 'Class pack', value: '15', meta: 'Drop-in bundles' },
         ],
@@ -156,9 +228,21 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Projection drivers',
         rows: [
-          { label: 'Membership renewals', value: '$14,916', meta: 'Known recurring' },
-          { label: 'Drop-ins and packs', value: '$6,440', meta: 'Based on weekly average' },
-          { label: 'Workshops', value: '$2,280', meta: 'Heels and specialty classes' },
+          {
+            label: 'Membership renewals',
+            value: '$14,916',
+            meta: 'Known recurring',
+          },
+          {
+            label: 'Drop-ins and packs',
+            value: '$6,440',
+            meta: 'Based on weekly average',
+          },
+          {
+            label: 'Workshops',
+            value: '$2,280',
+            meta: 'Heels and specialty classes',
+          },
           { label: 'Merchandise', value: '$1,285', meta: 'Studio add-ons' },
         ],
       },
@@ -173,10 +257,22 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Queue items',
         rows: [
-          { label: 'Missing waivers', value: '7 customers', meta: 'Send reminder' },
-          { label: 'Waitlist openings', value: '4 spots', meta: 'Notify next in line' },
+          {
+            label: 'Missing waivers',
+            value: '7 customers',
+            meta: 'Send reminder',
+          },
+          {
+            label: 'Waitlist openings',
+            value: '4 spots',
+            meta: 'Notify next in line',
+          },
           { label: 'Failed payments', value: '3 cards', meta: 'Retry or call' },
-          { label: 'Inactive members', value: '12 members', meta: 'Win-back sequence' },
+          {
+            label: 'Inactive members',
+            value: '12 members',
+            meta: 'Win-back sequence',
+          },
         ],
       },
     ],
@@ -190,9 +286,21 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Next actions',
         rows: [
-          { label: 'Rhyze Up w/ Vanessa', value: '22/24', meta: 'Confirm room setup' },
-          { label: 'Hypnotic Heels w/ Jessica', value: 'Full', meta: 'Release waitlist spot' },
-          { label: 'Pilates Pulse with Adrianna', value: '12/16', meta: 'Promote on Instagram' },
+          {
+            label: 'Rhyze Up with Vanessa',
+            value: '22/24',
+            meta: 'Confirm room setup',
+          },
+          {
+            label: 'Hypnotic Heels with Jessica',
+            value: 'Full',
+            meta: 'Release waitlist spot',
+          },
+          {
+            label: 'Pilates Pulse with Adrianna',
+            value: '12/16',
+            meta: 'Promote on Instagram',
+          },
         ],
       },
     ],
@@ -206,9 +314,21 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Flow steps',
         rows: [
-          { label: 'Select class', value: 'Calendar or class page', meta: 'Tracks source click' },
-          { label: 'Select access', value: 'Credit, package, or drop-in', meta: 'Checks balance' },
-          { label: 'Confirm', value: 'Email + reminder queued', meta: 'Adds attendance record' },
+          {
+            label: 'Select class',
+            value: 'Calendar or class page',
+            meta: 'Tracks source click',
+          },
+          {
+            label: 'Select access',
+            value: 'Credit, package, or drop-in',
+            meta: 'Checks balance',
+          },
+          {
+            label: 'Confirm',
+            value: 'Email + reminder queued',
+            meta: 'Adds attendance record',
+          },
         ],
       },
     ],
@@ -222,10 +342,18 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Template data',
         rows: [
-          { label: 'Photo', value: 'Instructor image', meta: 'Used on classes and schedule' },
-          { label: 'Price', value: '$26 - $38', meta: 'Standard or specialty' },
+          {
+            label: 'Photo',
+            value: 'Instructor image',
+            meta: 'Used on classes and schedule',
+          },
+          { label: 'Price', value: '$26 - $30', meta: 'Standard or specialty' },
           { label: 'Capacity', value: '16 - 24', meta: 'Room-based limit' },
-          { label: 'Customer action', value: 'Book / Join waitlist', meta: 'Based on fill' },
+          {
+            label: 'Customer action',
+            value: 'Book / Join waitlist',
+            meta: 'Based on fill',
+          },
         ],
       },
     ],
@@ -240,8 +368,16 @@ const detailCatalog: Record<string, DetailRecord> = {
         title: 'Required fields',
         rows: [
           { label: 'Class name', value: 'Required', meta: 'Shown on schedule' },
-          { label: 'Instructor photo', value: 'Required', meta: 'Used on cards' },
-          { label: 'Price and capacity', value: 'Required', meta: 'Controls checkout and waitlist' },
+          {
+            label: 'Instructor photo',
+            value: 'Required',
+            meta: 'Used on cards',
+          },
+          {
+            label: 'Price and capacity',
+            value: 'Required',
+            meta: 'Controls checkout and waitlist',
+          },
         ],
       },
     ],
@@ -255,10 +391,26 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Editable package fields',
         rows: [
-          { label: 'Intro Offer 7-Days', value: '$7', meta: 'Unlimited trial' },
-          { label: 'Elevate', value: '$92', meta: '4 classes / month' },
-          { label: 'Full Rhythm', value: '$168', meta: '8 classes / month' },
-          { label: 'VIP Access Pass', value: '$199', meta: 'Unlimited founding member' },
+          {
+            label: 'Intro Offer 7-Days',
+            value: '$7',
+            meta: 'Activates with first booked class; expires after 7 days',
+          },
+          {
+            label: 'Elevate',
+            value: '$92',
+            meta: '4 classes / month + unique 10% merch promo code',
+          },
+          {
+            label: 'Ritual',
+            value: '$168',
+            meta: '8 classes / month + unique 15% merch promo code',
+          },
+          {
+            label: 'VIP Access Pass',
+            value: '$199',
+            meta: 'Unlimited founding member + unique 20% merch promo code',
+          },
         ],
       },
     ],
@@ -272,9 +424,70 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Current rules',
         rows: [
-          { label: 'Credits reset', value: 'Monthly', meta: 'By package rules' },
-          { label: 'Waiver required', value: 'Before first booking', meta: 'Blocks checkout' },
-          { label: 'Renewal reminder', value: '5 days before billing', meta: 'Automated email' },
+          {
+            label: 'Credits reset',
+            value: 'Monthly',
+            meta: 'By package rules',
+          },
+          {
+            label: 'Waiver required',
+            value: 'Before first booking',
+            meta: 'Blocks checkout',
+          },
+          {
+            label: 'Renewal reminder',
+            value: '5 days before billing',
+            meta: 'Automated email',
+          },
+        ],
+      },
+    ],
+  },
+  'event-template': {
+    eyebrow: 'Events',
+    title: 'Event template detail',
+    summary:
+      'Event templates store date, photo, instructor, price, capacity, VIP eligibility, waitlist state, and the customer booking action.',
+    sections: [
+      {
+        title: 'Upcoming events',
+        rows: [
+          {
+            label: 'TCJ Hip-Hop Happy Hour with Tricia',
+            value: 'Aug 3 - $30',
+            meta: '17/20 booked - VIP eligible monthly choice',
+          },
+          {
+            label: 'Hypnotic Heels with Jessica',
+            value: 'Aug 10 - $30',
+            meta: '18/18 booked - 6 waitlist',
+          },
+          {
+            label: 'Seat Seduction With Vanessa',
+            value: 'Aug 21 - $30',
+            meta: '12/18 booked - specialty pricing',
+          },
+        ],
+      },
+    ],
+  },
+  'add-event': {
+    eyebrow: 'Event manager',
+    title: 'Add event action',
+    summary:
+      'Adding an event would publish the customer event card, event detail page, booking flow, capacity, and admin reporting.',
+    sections: [
+      {
+        title: 'Required fields',
+        rows: [
+          { label: 'Event name', value: 'Required', meta: 'Shown on cards' },
+          { label: 'Date and time', value: 'Required', meta: 'Calendar order' },
+          { label: 'Photo', value: 'Required', meta: 'Same-size event card' },
+          {
+            label: 'VIP eligibility',
+            value: 'Selectable',
+            meta: 'Controls monthly included event access',
+          },
         ],
       },
     ],
@@ -288,9 +501,17 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Sales operations',
         rows: [
-          { label: 'Daily close', value: '9 PM', meta: 'Owner report generated' },
+          {
+            label: 'Daily close',
+            value: '9 PM',
+            meta: 'Owner report generated',
+          },
           { label: 'Failed cards', value: '3', meta: 'Queued for follow-up' },
-          { label: 'Exports', value: 'Memberships and drop-ins', meta: 'Separated for accounting' },
+          {
+            label: 'Exports',
+            value: 'Memberships and drop-ins',
+            meta: 'Separated for accounting',
+          },
         ],
       },
     ],
@@ -305,18 +526,46 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Recent members',
         rows: [
-          { label: 'Ava Martinez', value: 'Start date: Aug 1, 2026', meta: 'Intro Offer - Rhyze Up booked' },
-          { label: 'Priya Santos', value: 'Start date: Aug 2, 2026', meta: 'Full Rhythm - waiver signed' },
-          { label: 'Jordan Lee', value: 'Start date: Aug 2, 2026', meta: 'Drop-in - Pilates Pulse' },
-          { label: 'Camila Reyes', value: 'Start date: Aug 3, 2026', meta: 'Elevate - 2 classes booked' },
-          { label: 'Nina Patel', value: 'Start date: Aug 3, 2026', meta: 'VIP Access Pass - active' },
+          {
+            label: 'Ava Martinez',
+            value: 'Start date: Aug 1, 2026',
+            meta: 'Intro Offer - Rhyze Up booked',
+          },
+          {
+            label: 'Priya Santos',
+            value: 'Start date: Aug 2, 2026',
+            meta: 'Ritual - waiver signed',
+          },
+          {
+            label: 'Jordan Lee',
+            value: 'Start date: Aug 2, 2026',
+            meta: 'Drop-in - Pilates Pulse',
+          },
+          {
+            label: 'Camila Reyes',
+            value: 'Start date: Aug 3, 2026',
+            meta: 'Elevate - 2 classes booked',
+          },
+          {
+            label: 'Nina Patel',
+            value: 'Start date: Aug 3, 2026',
+            meta: 'VIP Access Pass - active',
+          },
         ],
       },
       {
         title: 'Activity rollup',
         rows: [
-          { label: 'Attended first class', value: '18', meta: '67% activation' },
-          { label: 'Booked but not attended yet', value: '7', meta: 'Reminder pending' },
+          {
+            label: 'Attended first class',
+            value: '18',
+            meta: '67% activation',
+          },
+          {
+            label: 'Booked but not attended yet',
+            value: '7',
+            meta: 'Reminder pending',
+          },
           { label: 'Needs waiver', value: '2', meta: 'Blocked from check-in' },
         ],
       },
@@ -332,11 +581,116 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Member starts',
         rows: [
-          { label: 'Ava Martinez', value: 'Start date: Aug 1, 2026', meta: 'Intro Offer - Rhyze Up booked' },
-          { label: 'Priya Santos', value: 'Start date: Aug 2, 2026', meta: 'Full Rhythm - waiver signed' },
-          { label: 'Jordan Lee', value: 'Start date: Aug 2, 2026', meta: 'Drop-in - Pilates Pulse' },
-          { label: 'Camila Reyes', value: 'Start date: Aug 3, 2026', meta: 'Elevate - 2 classes booked' },
-          { label: 'Nina Patel', value: 'Start date: Aug 3, 2026', meta: 'VIP Access Pass - active' },
+          {
+            label: 'Ava Martinez',
+            value: 'Start date: Aug 1, 2026',
+            meta: 'Intro Offer - Rhyze Up booked',
+          },
+          {
+            label: 'Priya Santos',
+            value: 'Start date: Aug 2, 2026',
+            meta: 'Ritual - waiver signed',
+          },
+          {
+            label: 'Jordan Lee',
+            value: 'Start date: Aug 2, 2026',
+            meta: 'Drop-in - Pilates Pulse',
+          },
+          {
+            label: 'Camila Reyes',
+            value: 'Start date: Aug 3, 2026',
+            meta: 'Elevate - 2 classes booked',
+          },
+          {
+            label: 'Nina Patel',
+            value: 'Start date: Aug 3, 2026',
+            meta: 'VIP Access Pass - active',
+          },
+        ],
+      },
+    ],
+  },
+  'all-signups': {
+    eyebrow: 'Contacts',
+    title: 'All signups',
+    summary:
+      'This list combines every contact who signs up, buys a class, buys a membership, books an event, or only joins the email update list.',
+    total: '5 shown',
+    sections: [
+      {
+        title: 'Lead sources',
+        rows: [
+          {
+            label: 'Membership purchases',
+            value: '2',
+            meta: 'Ritual and VIP Access Pass',
+          },
+          {
+            label: 'Class or event buyers',
+            value: '2',
+            meta: 'Drop-in and intro offer records',
+          },
+          {
+            label: 'Newsletter-only leads',
+            value: '1',
+            meta: 'No class purchase yet',
+          },
+        ],
+      },
+    ],
+  },
+  'signup-record': {
+    eyebrow: 'Customer record',
+    title: 'Signup detail',
+    summary:
+      'A signup record stores name, email, phone, home address, source, purchase, start date, waiver state, and attendance activity.',
+    sections: [
+      {
+        title: 'Example records',
+        rows: [
+          {
+            label: 'Ava Martinez',
+            value: 'Intro Offer 7-Days',
+            meta: 'ava.martinez@example.com - (973) 555-0112 - Aug 1, 2026',
+          },
+          {
+            label: 'Priya Santos',
+            value: 'Ritual membership',
+            meta: 'priya.santos@example.com - waiver signed',
+          },
+          {
+            label: 'Camila Reyes',
+            value: 'Email updates only',
+            meta: 'Newsletter lead with no purchase yet',
+          },
+        ],
+      },
+    ],
+  },
+  'email-blast': {
+    eyebrow: 'Messaging',
+    title: 'Email blast',
+    summary:
+      'Email blasts can target all signups or filtered groups like newsletter leads, active members, event buyers, or inactive customers.',
+    sections: [
+      {
+        title: 'Send options',
+        rows: [
+          {
+            label: 'All contacts',
+            value: '5 prototype records',
+            meta: 'Members, buyers, and newsletter leads',
+          },
+          {
+            label: 'Inactive customers',
+            value: '12 member segment',
+            meta: 'Attendance-based filter',
+          },
+          {
+            label: 'Opening announcement',
+            value: 'August 3, 2026',
+            meta: 'Class launch reminder',
+          },
         ],
       },
     ],
@@ -350,9 +704,21 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Waiver status',
         rows: [
-          { label: 'General studio waiver', value: '2 pending', meta: 'New customer queue' },
-          { label: 'Membership terms', value: '2 pending', meta: 'Upgrade queue' },
-          { label: 'Guardian signature', value: '3 pending', meta: 'Under-18 accounts' },
+          {
+            label: 'General studio waiver',
+            value: '2 pending',
+            meta: 'New customer queue',
+          },
+          {
+            label: 'Membership terms',
+            value: '2 pending',
+            meta: 'Upgrade queue',
+          },
+          {
+            label: 'Guardian signature',
+            value: '3 pending',
+            meta: 'Under-18 accounts',
+          },
         ],
       },
     ],
@@ -367,9 +733,21 @@ const detailCatalog: Record<string, DetailRecord> = {
         title: 'Message triggers',
         rows: [
           { label: 'Welcome email', value: 'After signup', meta: 'Immediate' },
-          { label: 'Booking confirmation', value: 'After reserve', meta: 'Email + SMS-ready' },
-          { label: 'Class reminder', value: '24 hours before', meta: 'Avoid no-shows' },
-          { label: 'Win-back', value: '21 inactive days', meta: 'Owner-approved sequence' },
+          {
+            label: 'Booking confirmation',
+            value: 'After reserve',
+            meta: 'Email + SMS-ready',
+          },
+          {
+            label: 'Class reminder',
+            value: '24 hours before',
+            meta: 'Avoid no-shows',
+          },
+          {
+            label: 'Win-back',
+            value: '21 inactive days',
+            meta: 'Owner-approved sequence',
+          },
         ],
       },
     ],
@@ -383,9 +761,21 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Available reports',
         rows: [
-          { label: 'Revenue by package', value: 'Monthly', meta: 'Membership and drop-in split' },
-          { label: 'Attendance by instructor', value: 'Weekly', meta: 'Booked vs attended' },
-          { label: 'Retention and churn', value: 'Monthly', meta: 'Inactive customer tracking' },
+          {
+            label: 'Revenue by package',
+            value: 'Monthly',
+            meta: 'Membership and drop-in split',
+          },
+          {
+            label: 'Attendance by instructor',
+            value: 'Weekly',
+            meta: 'Booked vs attended',
+          },
+          {
+            label: 'Retention and churn',
+            value: 'Monthly',
+            meta: 'Inactive customer tracking',
+          },
         ],
       },
     ],
@@ -402,7 +792,11 @@ const detailCatalog: Record<string, DetailRecord> = {
           { label: 'Vanessa Ramos', value: 'Rhyze Up', meta: '22 booked' },
           { label: 'Melissa Llanos', value: 'Rhyze Ritmo', meta: '18 booked' },
           { label: 'Adrianna', value: 'Pilates Pulse', meta: '12 booked' },
-          { label: 'Jessica', value: 'Hypnotic Heels', meta: '18 booked + 6 waitlist' },
+          {
+            label: 'Jessica',
+            value: 'Hypnotic Heels',
+            meta: '18 booked + 6 waitlist',
+          },
         ],
       },
     ],
@@ -416,10 +810,26 @@ const detailCatalog: Record<string, DetailRecord> = {
       {
         title: 'Current settings',
         rows: [
-          { label: 'Cancellation window', value: '8 hours', meta: 'Late-cancel rules' },
-          { label: 'Reminder timing', value: '24 hours', meta: 'Class reminder automation' },
-          { label: 'Credit reset day', value: 'Monthly renewal date', meta: 'By package' },
-          { label: 'Capacity rules', value: 'Room-based', meta: 'Controls waitlist' },
+          {
+            label: 'Cancellation window',
+            value: '6 hours',
+            meta: 'Late-cancel rules',
+          },
+          {
+            label: 'Reminder timing',
+            value: '24 hours',
+            meta: 'Class reminder automation',
+          },
+          {
+            label: 'Credit reset day',
+            value: 'Monthly renewal date',
+            meta: 'By package',
+          },
+          {
+            label: 'Capacity rules',
+            value: 'Room-based',
+            meta: 'Controls waitlist',
+          },
         ],
       },
     ],
@@ -519,7 +929,10 @@ export function StudioOSDetailLayer() {
 
         <div className="mt-7 grid gap-5">
           {activeDetail.sections.map((section) => (
-            <section key={section.title} className="border border-white/10 bg-rhyze-black/35 p-4">
+            <section
+              key={section.title}
+              className="border border-white/10 bg-rhyze-black/35 p-4"
+            >
               <h3 className="font-display text-3xl tracking-wider">
                 {section.title}
               </h3>

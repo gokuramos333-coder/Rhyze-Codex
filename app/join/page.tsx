@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Accordion, type AccordionItem } from '@/components/ui/Accordion';
 import { Button } from '@/components/ui/Button';
 import { PricingCards } from '@/components/sections/PricingCards';
+import { openingBillingNote } from '@/lib/pricing';
 
 export const metadata: Metadata = {
   title: 'Join Now',
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 const firstDay = [
-  'Arrive 15 minutes early to meet your instructor',
+  'Come a few minutes early to meet your instructor',
   'Wear clothes you can move and sweat in',
   'Bring a water bottle and a hand towel',
   'Grip socks recommended for yoga or Pilates',
@@ -29,7 +30,7 @@ const faq: AccordionItem[] = [
   },
   {
     q: 'How early should I arrive for my first class?',
-    a: 'Please arrive at least 15 minutes before class. We need time to show you the studio, answer questions, and make sure you feel at home.',
+    a: 'Come a few minutes early if you can. We will show you the studio, answer questions, and help you feel at home.',
   },
   {
     q: 'What if I have an injury or I’m pregnant?',
@@ -95,6 +96,9 @@ export default function JoinPage() {
             These options are managed in the Rhyze #2 New member portal with
             class credits, waivers, renewals, and booking reminders.
           </p>
+        </div>
+        <div className="mb-6 rounded-2xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-5 text-sm font-bold leading-relaxed text-rhyze-cream/80">
+          {openingBillingNote}
         </div>
         <PricingCards />
       </section>

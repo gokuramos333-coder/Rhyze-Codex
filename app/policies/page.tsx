@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Studio Policies',
   description:
-    'Waiver, cancellation, arrival, age, and health policies for Rhyze Fitness.',
+    'Waiver, cancellation, refund, late booking, age, and health policies for Rhyze Fitness.',
 };
 
 type PolicySection = {
@@ -23,21 +23,47 @@ const sections: PolicySection[] = [
   },
   {
     id: 'cancellation',
-    title: 'Cancellation Policy',
-    subtitle: 'The “Rhyze” Time',
+    title: 'Cancellation for Classes',
+    subtitle: 'Transfers, late cancels, and no-shows',
     body: null,
     list: [
-      'Early cancel, at least 8 hours before class to keep your credit',
-      'Late cancel / no show, lost credit (pack holders) or $15 fee (unlimited)',
+      'If you cannot attend a scheduled class, contact us through the website messaging chat to request a transfer to another class within 2 weeks of the original class date.',
+      'Cancellations made more than 6 hours before class start time are eligible for transfer without a fee.',
+      'Cancellations made within 6 hours of class start time are eligible for transfer with a $10 transfer fee.',
+      'Cancellations made 2 hours or less before class start time are not eligible for transfer and will be marked as a late cancel or no-show.',
+      'The official cancellation window is 6 hours before class start time. Transfer requests received after this window may not be honored.',
+      'Transfer fees are waived for VIP Access membership holders only.',
     ],
   },
   {
-    id: 'arrival',
-    title: 'Arrival & Late Entry',
+    id: 'refunds',
+    title: 'Refunds',
     body: null,
     list: [
-      'First-timers: please arrive 15 minutes early to get oriented',
-      'No entry once the music starts (approximately 5 minutes after the scheduled start time)',
+      'All classes and events are non-refundable, no exceptions.',
+      'Special events, collab classes, and workshops are non-transferable unless otherwise stated.',
+    ],
+  },
+  {
+    id: 'late-booking',
+    title: 'Late Booking',
+    body: null,
+    list: [
+      'Online booking closes 30 minutes before class start time.',
+      'Drop-ins are permitted if space is available.',
+      'Please check the homepage for class availability and status before heading to the studio.',
+      'Cancellation notice must be received at least 6 hours before class in order to transfer.',
+    ],
+  },
+  {
+    id: 'private-groups',
+    title: 'Private Group Parties',
+    body: null,
+    list: [
+      'A $100 deposit is required when scheduling private groups.',
+      'The deposit goes toward the final balance due the day of the session, before the session begins.',
+      'Sessions cancelled less than 72 hours before the appointment incur a cancellation fee equal to the $100 deposit.',
+      'If clients cancel 72 or more hours before the event, the deposit may be used as a credit.',
     ],
   },
   {
@@ -126,11 +152,8 @@ export default function PoliciesPage() {
 
       <section className="mx-auto mt-16 max-w-4xl px-6 text-center text-sm text-rhyze-cream/60">
         <p>
-          Policies last updated April 2026. Questions?{' '}
-          <a
-            href="/contact"
-            className="text-rhyze-coral hover:underline"
-          >
+          Policies last updated July 2026. Questions?{' '}
+          <a href="/contact" className="text-rhyze-coral hover:underline">
             Get in touch
           </a>
           .

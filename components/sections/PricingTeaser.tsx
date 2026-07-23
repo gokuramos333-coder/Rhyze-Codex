@@ -68,7 +68,15 @@ export function PricingTeaser() {
             <p className="mb-3 text-xs uppercase tracking-widest text-rhyze-gold">
               {t.eyebrow}
             </p>
-            <p className="mb-6 text-sm text-rhyze-cream/70">{t.blurb}</p>
+            <p className="sr-only">{t.blurb}</p>
+            <ul className="mb-6 space-y-2 text-sm text-rhyze-cream/75">
+              {t.details.map((detail) => (
+                <li key={detail} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rhyze-gold" />
+                  <span>{detail}</span>
+                </li>
+              ))}
+            </ul>
             <Link
               href={t.href}
               className="focus-ring inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-widest text-rhyze-cream hover:text-rhyze-coral"

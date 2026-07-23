@@ -38,16 +38,19 @@ export function Header() {
           <Link
             href="/"
             aria-label={`${site.name}, Home`}
-            className="focus-ring flex items-center gap-3 rounded-md"
+            className="focus-ring flex shrink-0 items-center gap-3 rounded-md"
           >
-            <Image
-              src="/brand/rhyze-logo.png"
-              alt=""
-              width={168}
-              height={168}
-              priority
-              className="h-40 w-auto"
-            />
+            <span className="relative block h-20 w-28 shrink-0 md:h-24 md:w-36">
+              <Image
+                src="/brand/rhyze-logo-header.png"
+                alt=""
+                fill
+                priority
+                unoptimized
+                sizes="(min-width: 768px) 144px, 112px"
+                className="object-contain"
+              />
+            </span>
             <span className="sr-only">{site.name}</span>
           </Link>
           <span className="hidden rounded-full border border-rhyze-gold/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-rhyze-gold xl:inline-flex">
@@ -77,7 +80,7 @@ export function Header() {
                       {item.label}
                       <ChevronDown className="h-3.5 w-3.5" aria-hidden />
                     </Link>
-                    <div className="invisible absolute left-1/2 top-full mt-1 w-48 -translate-x-1/2 rounded-lg border border-white/10 bg-rhyze-charcoal p-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                    <div className="invisible absolute left-1/2 top-full mt-1 w-48 -translate-x-1/2 rounded-lg border border-white/10 bg-rhyze-charcoal p-2 opacity-0 shadow-lg transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
                       {item.children.map((child) => (
                         <Link
                           key={child.href}

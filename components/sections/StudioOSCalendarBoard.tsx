@@ -28,11 +28,12 @@ export function StudioOSCalendarBoard() {
     });
   }, []);
 
-  const selectedIndex = scheduleByDay.findIndex((day) => day.shortDay === selectedDay);
+  const selectedIndex = scheduleByDay.findIndex(
+    (day) => day.shortDay === selectedDay,
+  );
   const selectedDaySchedule =
-    scheduleByDay.find((day) => day.shortDay === selectedDay) ?? scheduleByDay[1];
-  const totalBooked = ownedSchedule.reduce((total, slot) => total + slot.booked, 0);
-  const totalCapacity = ownedSchedule.reduce((total, slot) => total + slot.capacity, 0);
+    scheduleByDay.find((day) => day.shortDay === selectedDay) ??
+    scheduleByDay[1];
   const moveDay = (direction: -1 | 1) => {
     const nextIndex = Math.min(
       Math.max(selectedIndex + direction, 0),
@@ -43,18 +44,7 @@ export function StudioOSCalendarBoard() {
 
   return (
     <div className="border border-white/10 bg-rhyze-charcoal/75 p-4 shadow-2xl shadow-black/20">
-      <div className="flex flex-col gap-4 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-rhyze-orange">
-            Total booked so far
-          </p>
-          <strong className="mt-2 block font-display text-5xl leading-none tracking-wider">
-            {totalBooked}/{totalCapacity}
-          </strong>
-          <span className="mt-2 block text-xs font-bold text-rhyze-cream/50">
-            Across this Rhyze schedule board
-          </span>
-        </div>
+      <div className="flex justify-end border-b border-white/10 pb-4">
         <div className="grid grid-cols-3 gap-2 border border-white/10 bg-rhyze-black/45 p-1">
           {viewOptions.map((option) => (
             <button
@@ -87,7 +77,7 @@ export function StudioOSCalendarBoard() {
             >
               <ChevronLeft className="h-6 w-6" aria-hidden />
             </button>
-            <div className="no-scrollbar grid flex-1 grid-flow-col grid-cols-none gap-2 overflow-x-auto lg:grid-cols-7 lg:grid-flow-row">
+            <div className="no-scrollbar grid flex-1 grid-flow-col grid-cols-none gap-2 overflow-x-auto lg:grid-flow-row lg:grid-cols-7">
               {scheduleByDay.map((day) => (
                 <button
                   type="button"
@@ -131,7 +121,8 @@ export function StudioOSCalendarBoard() {
                 </h3>
               </div>
               <span className="text-sm font-black text-rhyze-gold">
-                {selectedDaySchedule.booked}/{selectedDaySchedule.capacity} booked
+                {selectedDaySchedule.booked}/{selectedDaySchedule.capacity}{' '}
+                booked
               </span>
             </div>
             <div className="grid gap-3">
@@ -164,7 +155,9 @@ export function StudioOSCalendarBoard() {
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
                   {day.date}
                 </p>
-                <h3 className="font-display text-3xl tracking-wider">{day.day}</h3>
+                <h3 className="font-display text-3xl tracking-wider">
+                  {day.day}
+                </h3>
                 <span className="mt-1 block text-xs font-bold text-rhyze-cream/45">
                   {day.booked}/{day.capacity || 0} booked
                 </span>
@@ -199,11 +192,18 @@ export function StudioOSCalendarBoard() {
               <span className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
                 {day.date}
               </span>
-              <h3 className="mt-2 font-display text-4xl tracking-wider">{day.day}</h3>
+              <h3 className="mt-2 font-display text-4xl tracking-wider">
+                {day.day}
+              </h3>
               <div className="mt-4 grid gap-2 text-sm font-bold text-rhyze-cream/65">
                 <span>{day.slots.length} classes</span>
-                <span>{day.booked}/{day.capacity || 0} booked</span>
-                <span>{day.slots.reduce((total, slot) => total + slot.waitlist, 0)} waitlist</span>
+                <span>
+                  {day.booked}/{day.capacity || 0} booked
+                </span>
+                <span>
+                  {day.slots.reduce((total, slot) => total + slot.waitlist, 0)}{' '}
+                  waitlist
+                </span>
               </div>
             </button>
           ))}
@@ -226,11 +226,17 @@ function ScheduleClassCard({
     <article
       data-studio-detail="calendar"
       className={[
-        'cursor-pointer border border-rhyze-gold/55 bg-rhyze-charcoal/70 shadow-[0_0_0_1px_rgba(255,199,44,0.65),0_0_22px_rgba(255,199,44,0.16)] transition hover:border-rhyze-orange hover:bg-rhyze-coral/15 hover:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)] focus-within:border-rhyze-orange focus-within:bg-rhyze-coral/15 focus-within:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)]',
+        'cursor-pointer border border-rhyze-gold/55 bg-rhyze-charcoal/70 shadow-[0_0_0_1px_rgba(255,199,44,0.65),0_0_22px_rgba(255,199,44,0.16)] transition focus-within:border-rhyze-orange focus-within:bg-rhyze-coral/15 focus-within:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)] hover:border-rhyze-orange hover:bg-rhyze-coral/15 hover:shadow-[0_0_0_1px_rgba(255,122,24,0.8),0_0_26px_rgba(255,122,24,0.24)]',
         compact ? 'p-3' : 'p-4',
       ].join(' ')}
     >
-      <div className={compact ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-[3.5rem_1fr_auto] sm:items-center'}>
+      <div
+        className={
+          compact
+            ? 'grid gap-3'
+            : 'grid gap-3 sm:grid-cols-[3.5rem_1fr_auto] sm:items-center'
+        }
+      >
         <div className="relative h-14 w-14 overflow-hidden rounded-full border border-white/20 bg-rhyze-black">
           <Image
             src={slot.photo}
@@ -244,7 +250,13 @@ function ScheduleClassCard({
           <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
             {slot.time}
           </p>
-          <h4 className={compact ? 'mt-1 text-sm font-black' : 'mt-1 font-display text-3xl tracking-wider'}>
+          <h4
+            className={
+              compact
+                ? 'mt-1 font-display text-sm font-black leading-tight tracking-normal'
+                : 'mt-1 font-display text-xl font-black leading-tight tracking-normal text-rhyze-cream'
+            }
+          >
             {slot.className}
           </h4>
           <p className="mt-1 text-xs font-bold text-rhyze-cream/50">

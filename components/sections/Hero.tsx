@@ -24,10 +24,7 @@ export function Hero() {
         aria-hidden
         className="absolute inset-0 bg-gradient-to-r from-rhyze-black/90 via-rhyze-black/70 to-rhyze-black/40"
       />
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-rhyze-black/40"
-      />
+      <div aria-hidden className="absolute inset-0 bg-rhyze-black/40" />
       {/* Ambient sunrise glow */}
       <div
         aria-hidden
@@ -60,7 +57,7 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.2 }}
           className="max-w-5xl font-display text-[clamp(3.75rem,11vw,10rem)] leading-[0.9] tracking-wider text-rhyze-cream"
         >
-          IN <span className="rhyze-gradient-text">RHYTHM</span>
+          IN <span className="rhyze-gradient-text">RHYTHM,</span>
           <br />
           WE RISE
         </motion.h1>
@@ -71,8 +68,11 @@ export function Hero() {
           transition={{ duration: 0.7, delay: 0.45 }}
           className="mt-8 max-w-xl text-lg text-rhyze-cream/75 md:text-xl"
         >
-          Elevate your energy. Rhyze together. Boutique dance, yoga, and HIIT
-          for the Sussex County community.
+          Elevate your mind, energize your body, and evolve your soul. We are a
+          boutique movement studio offering dance, yoga, and strength classes
+          for all levels, designed for self-expression, confidence, and the love
+          of sweat. Every class is powered by rhythm, passion, and community.
+          Let&apos;s Rhyze together.
         </motion.p>
 
         <motion.div
@@ -86,7 +86,7 @@ export function Hero() {
               Start Your $7 Trial <ArrowRight className="h-4 w-4" />
             </Button>
             <p className="mt-2 text-xs text-rhyze-cream/60">
-              First 7 days · Unlimited classes
+              Activates with first booked class · Expires after 7 days
             </p>
           </div>
           <Link

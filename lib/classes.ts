@@ -19,28 +19,32 @@ export const categoryLabel: Record<ClassCategory, string> = {
 
 export const classes: RhyzeClass[] = [
   {
-    slug: 'global-hiit-kenzie',
-    name: 'Global HIIT w/ Kenzie',
+    slug: 'global-hiit-mackenzie',
+    name: 'Global HIIT with Mackenzie',
     category: 'strength',
     duration: 50,
     tagline: 'World hits, HIIT conditioning, and light-weight strength',
     description:
-      'Global HIIT with Kenzie is about listening to hits from around the world while getting fit, challenging your brain and body with heart-rate-raising intervals, light weights, bodyweight exercises, and a music-driven cooldown.',
+      'Global HIIT with Mackenzie keeps you moving to hits from around the world while challenging both brain and body. Expect heart-rate-raising intervals, music-led energy, light weights, bodyweight exercises, and a guided cooldown.',
     whatToExpect: [
       'HIIT intervals powered by global music',
       'Light weights mixed with bodyweight exercises',
       'A cardio challenge with a guided cooldown',
     ],
-    whatToBring: ['Supportive sneakers', 'Comfortable workout clothes', 'Water bottle'],
+    whatToBring: [
+      'Supportive sneakers',
+      'Comfortable workout clothes',
+      'Water bottle',
+    ],
   },
   {
-    slug: 'yoga-kenzie',
-    name: 'Yoga w/ Kenzie',
+    slug: 'yoga-vinyasa-mackenzie',
+    name: 'Yoga / Vinyasa with Mackenzie',
     category: 'yoga',
     duration: 50,
     tagline: 'Vinyasa yoga linking movement, breath, strength, and flexibility',
     description:
-      'Yoga with Kenzie links dynamic physical poses with steady conscious breaths to build strength, flexibility, and endurance. Each Vinyasa sequence is creative, physically engaging, and welcoming for students with any amount of yoga experience.',
+      'Yoga / Vinyasa with Mackenzie links dynamic physical poses with steady conscious breaths to build strength, flexibility, and endurance. Every class offers a unique, creative sequence that keeps the practice engaging and welcoming for all levels.',
     whatToExpect: [
       'Dynamic Vinyasa movement linked with breath',
       'Strength, flexibility, and endurance work',
@@ -50,7 +54,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'core-360-carla-rio',
-    name: 'Core 360 w/ Carla Rio',
+    name: 'Core 360 with Carla Rio',
     category: 'strength',
     duration: 50,
     tagline: 'Functional core strength, posture, and balance from every angle',
@@ -61,11 +65,34 @@ export const classes: RhyzeClass[] = [
       'Posture, balance, pelvic floor, lower back, and deep abdominal focus',
       'Precise coaching for safe, intentional core engagement',
     ],
-    whatToBring: ['Comfortable athletic wear', 'Water bottle', 'Sneakers or grip socks'],
+    whatToBring: [
+      'Comfortable athletic wear',
+      'Water bottle',
+      'Sneakers or grip socks',
+    ],
+  },
+  {
+    slug: 'pound-mackenzie',
+    name: 'POUND with Mackenzie',
+    category: 'strength',
+    duration: 50,
+    tagline: 'Cardio Pilates, isometric strength, plyometrics, and Ripstix',
+    description:
+      'POUND with Mackenzie combines cardio, Pilates, isometric movement, plyometrics, and constant simulated drumming set to loud, high-energy music. Each strike of the Ripstix releases stress, builds rhythm, and lets you truly become the music.',
+    whatToExpect: [
+      'Cardio Pilates with constant simulated drumming',
+      'Isometric movement, plyometrics, rhythm, and sweat',
+      'A music-driven workout using Ripstix',
+    ],
+    whatToBring: [
+      'Supportive sneakers',
+      'Comfortable workout clothes',
+      'Water bottle',
+    ],
   },
   {
     slug: 'dance-fit-jessica',
-    name: 'Dance Fit w/ Jessica',
+    name: 'Dance Fit with Jessica',
     category: 'dance',
     duration: 50,
     tagline: 'High-energy dance cardio with strength and toning',
@@ -76,11 +103,15 @@ export const classes: RhyzeClass[] = [
       'A welcoming, judgment-free dance party atmosphere',
       'A confidence-building full-body sweat',
     ],
-    whatToBring: ['Comfortable athletic wear', 'Supportive sneakers', 'Water bottle'],
+    whatToBring: [
+      'Comfortable athletic wear',
+      'Supportive sneakers',
+      'Water bottle',
+    ],
   },
   {
     slug: 'grind-and-grow-carla-reo',
-    name: 'Grind & Grow w/ Carla Reo',
+    name: 'Grind & Grow with Carla Reo',
     category: 'strength',
     duration: 50,
     tagline: 'Full-body strength with dumbbells, kettlebells, bands, and more',
@@ -91,7 +122,11 @@ export const classes: RhyzeClass[] = [
       'Lean muscle, bone density, joint health, and metabolism focus',
       'Supportive coaching for beginners through seasoned lifters',
     ],
-    whatToBring: ['Supportive athletic sneakers', 'Comfortable workout clothes', 'Water bottle'],
+    whatToBring: [
+      'Supportive athletic sneakers',
+      'Comfortable workout clothes',
+      'Water bottle',
+    ],
   },
   {
     slug: 'heels-101-walk-with-me-jessica',
@@ -106,11 +141,15 @@ export const classes: RhyzeClass[] = [
       'Beginner-friendly pacing with confidence-building support',
       'A focused class for learning how to move safely in heels',
     ],
-    whatToBring: ['Supportive heels', 'Comfortable clothes you can move in', 'Water bottle'],
+    whatToBring: [
+      'Supportive heels',
+      'Comfortable clothes you can move in',
+      'Water bottle',
+    ],
   },
   {
     slug: 'hypnotic-heels-jessica',
-    name: 'Hypnotic Heels w/ Jessica',
+    name: 'Hypnotic Heels with Jessica',
     category: 'dance',
     duration: 75,
     tagline: 'A specialty heels class for confidence, technique, and flow',
@@ -121,11 +160,15 @@ export const classes: RhyzeClass[] = [
       'Posture, balance, strutting, and choreographed routine work',
       'Optional group and solo video runs',
     ],
-    whatToBring: ['Sturdy heels with ankle support', 'Knee pads', 'Water bottle'],
+    whatToBring: [
+      'Sturdy heels with ankle support',
+      'Knee pads',
+      'Water bottle',
+    ],
   },
   {
     slug: 'ignite-julie',
-    name: 'Ignite w/ Julie',
+    name: 'Ignite with Julie',
     category: 'strength',
     duration: 50,
     tagline: 'Dynamic full-body conditioning with Julie',
@@ -136,7 +179,11 @@ export const classes: RhyzeClass[] = [
       'Strength, core stability, balance, and conditioning in one class',
       'Coaching with progressions and modifications',
     ],
-    whatToBring: ['Comfortable supportive athletic wear', 'Sneakers', 'Water bottle'],
+    whatToBring: [
+      'Comfortable supportive athletic wear',
+      'Sneakers',
+      'Water bottle',
+    ],
   },
   {
     slug: 'pilates-pulse-adrianna',
@@ -151,11 +198,15 @@ export const classes: RhyzeClass[] = [
       'Mobility, alignment, joint health, and balance training',
       'A mindful challenge designed for modern bodies',
     ],
-    whatToBring: ['Comfortable athletic wear', 'Water bottle', 'Grip socks or bare feet'],
+    whatToBring: [
+      'Comfortable athletic wear',
+      'Water bottle',
+      'Grip socks or bare feet',
+    ],
   },
   {
     slug: 'real-riddim-dance-workout-vanessa',
-    name: 'Real Riddim Dance Workout w/ Vanessa',
+    name: 'Real Riddim Dance Workout with Vanessa',
     category: 'dance',
     duration: 50,
     tagline: 'Caribbean-style follow-along dance fitness',
@@ -166,11 +217,15 @@ export const classes: RhyzeClass[] = [
       'Reggae, Dancehall, Afrobeats, and Dembow soundtrack',
       'Lower-body, hip mobility, and core-focused movement',
     ],
-    whatToBring: ['Comfortable athletic wear or dancewear', 'Supportive sneakers', 'Water bottle'],
+    whatToBring: [
+      'Comfortable athletic wear or dancewear',
+      'Supportive sneakers',
+      'Water bottle',
+    ],
   },
   {
     slug: 'rhyze-ritmo-melissa',
-    name: 'Rhyze Ritmo w/ Melissa',
+    name: 'Rhyze Ritmo with Melissa',
     category: 'dance',
     duration: 50,
     tagline: 'Latin rhythms and full-body cardio with Melissa',
@@ -181,11 +236,15 @@ export const classes: RhyzeClass[] = [
       'Salsa, Brazilian Funk, Merengue, Reggaeton, Samba, Cumbia, and Afro beats',
       'A high-energy cardio party for the whole room',
     ],
-    whatToBring: ['Comfortable athletic wear', 'Supportive sneakers', 'Plenty of water'],
+    whatToBring: [
+      'Comfortable athletic wear',
+      'Supportive sneakers',
+      'Plenty of water',
+    ],
   },
   {
     slug: 'rhyze-up-vanessa',
-    name: 'Rhyze Up w/ Vanessa',
+    name: 'Rhyze Up with Vanessa',
     category: 'dance',
     duration: 50,
     tagline: 'Rhythm-driven dance fitness with Vanessa',
@@ -196,7 +255,11 @@ export const classes: RhyzeClass[] = [
       'Electronic, Latin, and global-inspired music',
       'High-intensity peaks balanced with hypnotic flow',
     ],
-    whatToBring: ['Comfortable athletic wear', 'Supportive sneakers', 'Water bottle'],
+    whatToBring: [
+      'Comfortable athletic wear',
+      'Supportive sneakers',
+      'Water bottle',
+    ],
   },
   {
     slug: 'seat-seduction-vanessa',
@@ -211,29 +274,38 @@ export const classes: RhyzeClass[] = [
       'A Friday night vibe focused on confidence and expression',
       'Step-by-step movement with room to let go',
     ],
-    whatToBring: ['Comfortable clothes you can move in', 'Supportive shoes', 'Water bottle'],
+    whatToBring: [
+      'Comfortable clothes you can move in',
+      'Supportive shoes',
+      'Water bottle',
+    ],
   },
   {
-    slug: 'soul-line-and-groove-rachel',
-    name: 'Soul Line & Groove w/ Rachel',
+    slug: 'soul-line-dancing-rachel',
+    name: 'Soul Line-Dancing with Rachel',
     category: 'dance',
     duration: 50,
     tagline: 'Soulful line-dancing, collective movement, and pure joy',
     description:
-      'Soul Line & Groove with Rachel is a soulful line-dancing class built around connection, rhythm, and joy. Learn smooth, synchronized patterns step by step to soul, neo-soul, old-school R&B, and country while getting a fun cardio workout in a community-first vibe.',
+      "Soul Line-Dancing with Rachel is all about connection, rhythm, and pure joy. You'll move through smooth, synchronized patterns set to the best in soul, neo-soul, old-school R&B, and country, whether you have two left feet or you are a seasoned slider.",
     whatToExpect: [
       'Step-by-step soul line-dancing routines',
-      'Soul, neo-soul, old-school R&B, and country music',
-      'A social cardio workout built around community',
+      'Soul, neo-soul, old-school R&B, and country soundtrack',
+      'A welcoming room for brand-new dancers and seasoned sliders',
     ],
-    whatToBring: ['Comfortable clothes you can sweat in', 'Smooth-soled sneakers', 'Water bottle'],
+    whatToBring: [
+      'Comfortable clothes you can sweat in',
+      'Smooth-soled sneakers',
+      'Water bottle',
+    ],
   },
   {
     slug: 'tcj-hip-hop-happy-hour-tricia',
-    name: 'TCJ Hip-Hop Happy Hour w/ Tricia',
+    name: 'TCJ Hip-Hop Happy Hour with Tricia',
     category: 'dance',
     duration: 75,
-    tagline: 'Beginner-friendly hip-hop choreography that feels like a night out',
+    tagline:
+      'Beginner-friendly hip-hop choreography that feels like a night out',
     description:
       'TCJ Hip-Hop Happy Hour with Tricia is a beginner-friendly dance experience that feels more like a night out than a workout. Each session breaks down a hip-hop or pop routine step by step to a different track, so you can move, sweat, and have fun at any pace.',
     whatToExpect: [
@@ -241,11 +313,15 @@ export const classes: RhyzeClass[] = [
       'A different track and routine each session',
       'Beginner-friendly movement with no experience needed',
     ],
-    whatToBring: ['Comfortable dancewear', 'Supportive sneakers', 'Water bottle'],
+    whatToBring: [
+      'Comfortable dancewear',
+      'Supportive sneakers',
+      'Water bottle',
+    ],
   },
   {
     slug: 'yoga-flow-adrianna',
-    name: 'Yoga Flow w/ Adrianna',
+    name: 'Flow with Adrianna',
     category: 'yoga',
     duration: 50,
     tagline: 'Vinyasa flow and functional movement for modern bodies',

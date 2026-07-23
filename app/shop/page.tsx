@@ -18,8 +18,8 @@ export default function ShopPage() {
           SHOP THE <span className="rhyze-gradient-text">DROP</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/75">
-          Launch capsule, cropped tees and hats designed for how we move.
-          More drops coming as we open the doors.
+          Launch capsule, cropped tees and hats designed for how we move. More
+          drops coming as we open the doors.
         </p>
       </section>
 
@@ -31,11 +31,11 @@ export default function ShopPage() {
 
       <section className="mt-20 rounded-3xl border border-white/10 bg-rhyze-charcoal p-10 text-center">
         <h2 className="font-display text-3xl tracking-wider md:text-4xl">
-          MEMBER DISCOUNT
+          MEMBER PROMO CODES
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-rhyze-cream/70">
-          All Rhyze members save 10% on every piece, automatically at
-          checkout. One more reason to pick your rhythm.
+          Membership holders receive a unique merch promo code: Elevate saves
+          10%, Ritual saves 15%, and VIP Access Pass saves 20% at checkout.
         </p>
       </section>
     </main>

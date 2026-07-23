@@ -7,6 +7,8 @@ import { Instagram, Phone, MapPin } from 'lucide-react';
 import { site, primaryNav } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 
+const footerNav = primaryNav.filter((item) => item.label !== 'Studio OS');
+
 export function Footer() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'err'>(
@@ -31,33 +33,35 @@ export function Footer() {
   }
 
   return (
-    <footer className="relative border-t border-white/5 bg-rhyze-charcoal/60">
-      <div className="mx-auto grid max-w-7xl gap-12 px-6 py-16 md:grid-cols-2 lg:grid-cols-4">
+    <footer className="relative border-t border-white/5 bg-rhyze-charcoal/80">
+      <div className="mx-auto grid max-w-7xl gap-12 px-6 py-20 md:grid-cols-2 xl:grid-cols-[1.25fr_1fr_1.25fr_1.25fr]">
         <div>
           <Image
-            src="/brand/rhyze-logo.png"
+            src="/brand/rhyze-logo-header.png"
             alt={`${site.name} logo`}
-            width={112}
-            height={112}
-            className="h-28 w-auto"
+            width={902}
+            height={643}
+            unoptimized
+            className="h-24 w-auto"
           />
-          <p className="mt-4 max-w-xs text-sm text-rhyze-cream/70">
-            {site.description}
+          <p className="mt-6 max-w-xs text-sm leading-relaxed text-rhyze-cream/70">
+            A boutique dance, yoga, and HIIT studio opening in Lafayette, NJ.
+            Elevate your energy. Rhyze together.
           </p>
-          <div className="mt-6 flex gap-3">
+          <div className="mt-7 flex gap-3">
             <a
               href={site.instagram.url}
               target="_blank"
               rel="noreferrer"
               aria-label="Instagram"
-              className="focus-ring rounded-full border border-white/10 p-2 transition hover:border-rhyze-coral hover:text-rhyze-coral"
+              className="focus-ring rounded-full border border-white/15 p-3 text-rhyze-cream/80 transition hover:border-rhyze-coral hover:text-rhyze-coral"
             >
               <Instagram className="h-5 w-5" />
             </a>
             <a
               href={`tel:${site.phoneTel}`}
               aria-label="Phone"
-              className="focus-ring rounded-full border border-white/10 p-2 transition hover:border-rhyze-coral hover:text-rhyze-coral"
+              className="focus-ring rounded-full border border-white/15 p-3 text-rhyze-cream/80 transition hover:border-rhyze-coral hover:text-rhyze-coral"
             >
               <Phone className="h-5 w-5" />
             </a>
@@ -65,9 +69,11 @@ export function Footer() {
         </div>
 
         <div>
-          <h3 className="mb-4 text-lg tracking-widest">EXPLORE</h3>
-          <ul className="space-y-2 text-sm">
-            {primaryNav.map((i) => (
+          <h3 className="mb-5 font-display text-2xl tracking-widest">
+            EXPLORE
+          </h3>
+          <ul className="space-y-2.5 text-sm">
+            {footerNav.map((i) => (
               <li key={i.href}>
                 <Link
                   href={i.href}
@@ -89,18 +95,20 @@ export function Footer() {
         </div>
 
         <div>
-          <h3 className="mb-4 text-lg tracking-widest">VISIT</h3>
-          <address className="space-y-3 text-sm not-italic text-rhyze-cream/70">
+          <h3 className="mb-5 font-display text-2xl tracking-widest">VISIT</h3>
+          <address className="space-y-5 text-sm not-italic text-rhyze-cream/70">
             <p className="flex items-start gap-2">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-coral" />
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-orange" />
               <span>
                 {site.address.line1}
                 <br />
                 {site.address.line2}
+                <br />
+                {site.address.line3}
               </span>
             </p>
             <p className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-rhyze-coral" />
+              <Phone className="h-4 w-4 text-rhyze-orange" />
               <a
                 href={`tel:${site.phoneTel}`}
                 className="hover:text-rhyze-coral"
@@ -108,20 +116,25 @@ export function Footer() {
                 {site.phone}
               </a>
             </p>
-            <div className="pt-2">
+            <div className="grid gap-1 pt-1 text-rhyze-gold">
               {site.hours.map((h) => (
-                <div key={h.days} className="flex justify-between gap-4">
+                <div key={h.days} className="flex justify-between gap-5">
                   <span>{h.days}</span>
-                  <span className="text-rhyze-cream/60">{h.hours}</span>
+                  <span>{h.hours}</span>
                 </div>
               ))}
+              <p className="pt-2 text-rhyze-gold">
+                Varies depending on the scheduled classes
+              </p>
             </div>
           </address>
         </div>
 
         <div>
-          <h3 className="mb-4 text-lg tracking-widest">STAY IN THE RHYTHM</h3>
-          <p className="mb-4 text-sm text-rhyze-cream/70">
+          <h3 className="mb-5 font-display text-2xl tracking-widest">
+            STAY IN THE RHYTHM
+          </h3>
+          <p className="mb-6 max-w-xs text-sm leading-relaxed text-rhyze-cream/70">
             Drop your email for opening updates, class schedules, and
             member-only events.
           </p>
@@ -136,9 +149,14 @@ export function Footer() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="focus-ring rounded-full border border-white/10 bg-rhyze-black/60 px-5 py-3 text-sm placeholder:text-rhyze-cream/40"
+              className="focus-ring rounded-full border border-white/10 bg-rhyze-black/60 px-5 py-3.5 text-sm placeholder:text-rhyze-cream/40"
             />
-            <Button type="submit" size="sm" disabled={status === 'sending'}>
+            <Button
+              type="submit"
+              size="sm"
+              className="w-full"
+              disabled={status === 'sending'}
+            >
               {status === 'sending' ? 'Sending…' : 'Subscribe'}
             </Button>
             {status === 'ok' && (

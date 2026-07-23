@@ -9,6 +9,8 @@ type Props = {
 };
 
 export function InstructorCard({ instructor: i, reverse }: Props) {
+  const fullName = [i.firstName, i.lastName].filter(Boolean).join(' ');
+
   return (
     <article
       className={cn(
@@ -19,7 +21,7 @@ export function InstructorCard({ instructor: i, reverse }: Props) {
       <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-rhyze-black/40">
         <Image
           src={i.photo}
-          alt={`${i.firstName} ${i.lastName}, instructor at Rhyze Fitness`}
+          alt={`${fullName}, instructor at Rhyze Fitness`}
           fill
           sizes="(max-width: 1024px) 100vw, 50vw"
           className="object-contain"
@@ -37,8 +39,12 @@ export function InstructorCard({ instructor: i, reverse }: Props) {
         )}
         <h2 className="font-display text-5xl leading-none tracking-wider md:text-7xl">
           {i.firstName.toUpperCase()}
-          <br />
-          {i.lastName.toUpperCase()}
+          {i.lastName && (
+            <>
+              <br />
+              {i.lastName.toUpperCase()}
+            </>
+          )}
         </h2>
 
         {i.quote && (

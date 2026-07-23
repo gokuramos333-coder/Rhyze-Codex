@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { tiers } from '@/lib/pricing';
@@ -44,7 +43,18 @@ export function PricingCards() {
               {t.perClass}
             </p>
           )}
-          <p className="mb-6 flex-1 text-sm text-rhyze-cream/70">{t.blurb}</p>
+          <p className="sr-only">{t.blurb}</p>
+          <ul className="mb-6 flex-1 space-y-2 text-sm text-rhyze-cream/75">
+            {t.bullets.map((bullet) => (
+              <li key={bullet} className="flex gap-2">
+                <Check
+                  className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-gold"
+                  aria-hidden
+                />
+                <span>{bullet}</span>
+              </li>
+            ))}
+          </ul>
           <Button
             href={t.cta.href}
             variant={t.popular ? 'primary' : 'outline'}

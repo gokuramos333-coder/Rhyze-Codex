@@ -19,11 +19,11 @@ export default function ClassesPage() {
         <h1 className="font-display text-6xl tracking-wider md:text-8xl">
           CLASSES
         </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/70">
-            Sixteen official formats across three pillars, Dance, Yoga &
-            Pilates, and Strength & HIIT, matched to Rhyze-managed booking,
-            capacity, waitlists, and member credits.
-          </p>
+        <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/70">
+          Seventeen official formats across three pillars, Dance, Yoga &
+          Pilates, and Strength & HIIT, matched to Rhyze-managed booking,
+          capacity, waitlists, and member credits.
+        </p>
         <div className="relative mx-auto mt-12 aspect-[16/9] max-w-5xl overflow-hidden rounded-3xl">
           <Image
             src="/founders/classes.jpg"

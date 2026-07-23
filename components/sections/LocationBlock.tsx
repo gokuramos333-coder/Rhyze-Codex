@@ -1,9 +1,10 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { MapPin, Phone, Clock } from 'lucide-react';
 import { site } from '@/lib/site';
 
 export function LocationBlock() {
-  const embed = `https://www.google.com/maps?q=${encodeURIComponent(site.address.mapQuery)}&output=embed`;
+  const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(site.address.mapQuery)}`;
 
   return (
     <section className="mx-auto max-w-7xl px-6 py-24">
@@ -63,7 +64,7 @@ export function LocationBlock() {
               Get in touch →
             </Link>
             <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(site.address.mapQuery)}`}
+              href={directionsHref}
               target="_blank"
               rel="noreferrer"
               className="focus-ring rounded-full border border-white/15 px-5 py-2 text-sm font-semibold uppercase tracking-wide hover:border-rhyze-coral hover:text-rhyze-coral"
@@ -74,13 +75,21 @@ export function LocationBlock() {
         </div>
 
         <div className="relative min-h-[360px] lg:col-span-3">
-          <iframe
-            src={embed}
-            className="absolute inset-0 h-full w-full border-0 grayscale contrast-125"
-            title={`Map to ${site.name}`}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
+          <a
+            href={directionsHref}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open Google directions to ${site.name}`}
+            className="focus-ring group absolute inset-0 block"
+          >
+            <Image
+              src="/reference/home-floor-map.jpeg"
+              alt="Aerial directions map showing the Rhyze Fitness studio location"
+              fill
+              sizes="(min-width: 1024px) 60vw, 100vw"
+              className="object-contain transition duration-500"
+            />
+          </a>
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-rhyze-black/60 via-transparent to-rhyze-coral/20 mix-blend-multiply"

@@ -32,20 +32,20 @@ export default function ContactPage() {
       <section className="mx-auto mt-16 max-w-7xl px-6">
         <div className="grid gap-10 lg:grid-cols-5">
           <aside className="space-y-6 lg:col-span-2">
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-rhyze-charcoal p-8">
-              <h2 className="font-display text-3xl tracking-wider">
+            <div className="rounded-[1.75rem] border border-white/15 bg-rhyze-charcoal/95 p-8 shadow-2xl shadow-black/20 md:p-10">
+              <h2 className="font-display text-4xl tracking-wider">
                 THE DETAILS
               </h2>
-              <div className="mt-6 space-y-5 text-sm">
-                <div className="flex items-start gap-3">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-coral" />
+              <div className="mt-8 space-y-6 text-base">
+                <div className="flex items-start gap-4">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-orange" />
                   <div>
-                    <p className="font-semibold">{site.address.line1}</p>
+                    <p className="font-black">{site.address.line1}</p>
                     <p className="text-rhyze-cream/70">{site.address.line2}</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-coral" />
+                <div className="flex items-start gap-4">
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-orange" />
                   <a
                     href={`tel:${site.phoneTel}`}
                     className="hover:text-rhyze-coral"
@@ -53,8 +53,8 @@ export default function ContactPage() {
                     {site.phone}
                   </a>
                 </div>
-                <div className="flex items-start gap-3">
-                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-coral" />
+                <div className="flex items-start gap-4">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-orange" />
                   <div className="space-y-1">
                     <a
                       href={`mailto:${site.emails.vanessa}`}
@@ -70,8 +70,8 @@ export default function ContactPage() {
                     </a>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <Instagram className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-coral" />
+                <div className="flex items-start gap-4">
+                  <Instagram className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-orange" />
                   <a
                     href={site.instagram.url}
                     target="_blank"
@@ -81,8 +81,8 @@ export default function ContactPage() {
                     {site.instagram.handle}
                   </a>
                 </div>
-                <div className="flex items-start gap-3">
-                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-coral" />
+                <div className="flex items-start gap-4">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-orange" />
                   <div className="space-y-1">
                     {site.hours.map((h) => (
                       <p key={h.days} className="flex gap-3">
