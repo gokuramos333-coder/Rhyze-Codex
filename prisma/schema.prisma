@@ -187,6 +187,8 @@ model User {
   referralAttribution    ReferralAttribution?    @relation("ReferredCustomer")
   instructorCommissions  ReferralCommission[]    @relation("CommissionInstructor")
   referralCommission     ReferralCommission?     @relation("CommissionCustomer")
+  inAppNotifications     InAppNotification[]
+  classMessagesAuthored  ClassMessage[]          @relation("ClassMessageInstructor")
 
   @@index([role, status])
   @@index([createdAt])
@@ -312,12 +314,45 @@ model ClassOccurrence {
   bookings          Booking[]
   waitlistEntries   WaitlistEntry[]
   attendanceRecords AttendanceRecord[]
+  classMessages     ClassMessage[]
 
   @@index([startAt, status])
   @@index([instructorId, startAt, endAt])
   @@index([roomId, startAt, endAt])
   @@index([templateId, startAt])
   @@index([seriesId, startAt])
+}
+
+model ClassMessage {
+  id             String   @id @default(cuid())
+  occurrenceId   String
+  instructorId   String
+  subject        String
+  body           String
+  kind           String   @default("UPDATE")
+  recipientCount Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  occurrence ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  instructor User            @relation("ClassMessageInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+
+  @@index([occurrenceId, createdAt])
+  @@index([instructorId, createdAt])
+}
+
+model InAppNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  link      String?
+  dedupeKey String?   @unique
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
 }
 
 model Booking {

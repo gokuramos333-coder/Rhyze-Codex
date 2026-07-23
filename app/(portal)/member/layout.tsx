@@ -7,6 +7,7 @@ const navigation = [
   { href: '/member/bookings', label: 'Bookings' },
   { href: '/member/membership', label: 'Membership' },
   { href: '/member/billing', label: 'Billing' },
+  { href: '/member/notifications', label: 'Notifications' },
   { href: '/member/profile', label: 'Profile' },
   { href: '/member/waiver', label: 'Waiver' },
 ];

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { Roster } from '@/components/attendance/Roster';
+import Link from 'next/link';
 
 export default async function InstructorRosterPage({ params }: { params: { occurrenceId: string } }) {
   const user = await requireArea('instructor');
@@ -27,6 +28,7 @@ export default async function InstructorRosterPage({ params }: { params: { occur
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class roster</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
       <p className="mt-3 text-rhyze-black/55">{occurrence.startAt.toLocaleString()} · {occurrence.room?.name || 'Room TBA'} · {occurrence.bookings.length}/{occurrence.capacity}</p>
+      <Link href={`/instructor/classes/${occurrence.id}/message`} className="mt-5 inline-block bg-rhyze-black px-4 py-3 text-xs font-black uppercase tracking-widest text-white">Message or cancel this class</Link>
       <Roster occurrenceId={occurrence.id} bookings={occurrence.bookings} canTransfer />
     </>
   );
