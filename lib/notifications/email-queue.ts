@@ -11,6 +11,7 @@ export function queueEmail(
     template: string;
     payload?: Prisma.InputJsonValue;
     scheduledFor?: Date;
+    dedupeKey?: string;
   },
 ) {
   return client.emailMessage.create({
@@ -21,6 +22,7 @@ export function queueEmail(
       template: message.template,
       payload: message.payload || {},
       scheduledFor: message.scheduledFor,
+      dedupeKey: message.dedupeKey,
     },
   });
 }

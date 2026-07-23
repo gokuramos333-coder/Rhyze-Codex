@@ -514,6 +514,7 @@ model EmailMessage {
   providerId   String?
   attempts     Int         @default(0)
   lastError    String?
+  dedupeKey    String?     @unique
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
