@@ -20,6 +20,8 @@ import {
   signInSchema,
   signUpSchema,
 } from '@/lib/validation/auth';
+import { prisma } from '@/lib/db/prisma';
+import { queueEmail } from '@/lib/notifications/email-queue';
 
 export async function signInAction(formData: FormData): Promise<void> {
   const parsed = signInSchema.safeParse({
@@ -57,7 +59,14 @@ export async function signUpAction(formData: FormData): Promise<void> {
   }
 
   try {
-    await createAccount(parsed.data, prismaAccountRepository);
+    const account = await createAccount(parsed.data, prismaAccountRepository);
+    await queueEmail(prisma, {
+      userId: account.id,
+      to: account.email,
+      subject: 'Welcome to Rhyze Fitness',
+      template: 'WELCOME',
+      payload: { name: parsed.data.name },
+    });
   } catch (error) {
     if (error instanceof AccountConflictError) {
       redirect('/sign-up?error=exists');

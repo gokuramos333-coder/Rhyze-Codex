@@ -8,6 +8,10 @@ const navigation = [
   { href: '/admin/classes', label: 'Classes' },
   { href: '/admin/schedule', label: 'Schedule' },
   { href: '/admin/waivers', label: 'Waivers' },
+  { href: '/admin/products', label: 'Products' },
+  { href: '/admin/payments', label: 'Payments' },
+  { href: '/admin/reports', label: 'Reports' },
+  { href: '/admin/campaigns', label: 'Campaigns' },
   { href: '/dashboard', label: 'RHYZE #2 preview' },
   { href: '/member', label: 'My member view' },
 ];
