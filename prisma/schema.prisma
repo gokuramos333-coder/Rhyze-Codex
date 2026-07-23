@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  INSTRUCTOR
+  MEMBER
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  ARCHIVED
+}
+
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  email         String     @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role       @default(MEMBER)
+  status        UserStatus @default(ACTIVE)
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  accounts               Account[]
+  sessions               Session[]
+  authenticators         Authenticator[]
+  memberProfile          MemberProfile?
+  instructorProfile      InstructorProfile?
+  notificationPreference NotificationPreference?
+  passwordResetTokens    PasswordResetToken[]
+  waiverAcceptances      WaiverAcceptance[]
+  auditLogs              AuditLog[]              @relation("AuditActor")
+
+  @@index([role, status])
+  @@index([createdAt])
+}
+
+model Account {
+  id                       String   @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String?
+  access_token             String?
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String?
+  session_state            String?
+  oauth_token_secret       String?
+  oauth_token              String?
+  refresh_token_expires_in Int?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, credentialID])
+}
+
+model MemberProfile {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  preferredName         String?
+  phone                 String?
+  addressLine1          String?
+  addressLine2          String?
+  city                  String?
+  region                String?
+  postalCode            String?
+  country               String    @default("US")
+  dateOfBirth           DateTime?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InstructorProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  bio               String?
+  photoUrl          String?
+  isActive          Boolean  @default(true)
+  canEditOwnProfile Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationPreference {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  transactionalEmail Boolean  @default(true)
+  classReminders     Boolean  @default(true)
+  marketingEmail     Boolean  @default(false)
+  smsEnabled         Boolean  @default(false)
+  timezone           String   @default("America/New_York")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model WaiverVersion {
+  id           String   @id @default(cuid())
+  version      Int      @unique
+  title        String
+  body         String
+  effectiveAt  DateTime
+  isActive     Boolean  @default(false)
+  requiresSign Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  acceptances WaiverAcceptance[]
+
+  @@index([isActive, effectiveAt])
+}
+
+model WaiverAcceptance {
+  id              String   @id @default(cuid())
+  waiverVersionId String
+  userId          String
+  acceptedAt      DateTime @default(now())
+  ipAddress       String?
+  userAgent       String?
+
+  waiverVersion WaiverVersion @relation(fields: [waiverVersionId], references: [id], onDelete: Restrict)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([waiverVersionId, userId])
+  @@index([userId, acceptedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+}
