@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import Link from 'next/link';
 import { ClassList } from '@/components/sections/ClassList';
-import { ScheduleFull } from '@/components/sections/ScheduleFull';
 
 export const metadata: Metadata = {
   title: 'Classes & Schedule',
@@ -37,7 +37,20 @@ export default function ClassesPage() {
         </div>
       </section>
 
-      <ScheduleFull />
+      <section className="mb-20 border-y border-white/10 py-10 text-center">
+        <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-orange">
+          Live schedule
+        </p>
+        <h2 className="mt-3 font-display text-5xl tracking-wider">
+          READY TO TAKE THE FLOOR?
+        </h2>
+        <Link
+          href="/schedule"
+          className="focus-ring mt-6 inline-block bg-rhyze-gradient px-7 py-4 text-xs font-black uppercase tracking-widest text-rhyze-black"
+        >
+          View live schedule
+        </Link>
+      </section>
 
       <section id="dance" className="mb-20 scroll-mt-28">
         <ClassList />

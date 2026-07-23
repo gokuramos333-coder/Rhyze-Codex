@@ -22,6 +22,19 @@ enum UserStatus {
   ARCHIVED
 }
 
+enum ClassIntensity {
+  LOW
+  MODERATE
+  HIGH
+  ALL_LEVELS
+}
+
+enum OccurrenceStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
 model User {
   id            String     @id @default(cuid())
   name          String?
@@ -44,9 +57,136 @@ model User {
   passwordResetTokens    PasswordResetToken[]
   waiverAcceptances      WaiverAcceptance[]
   auditLogs              AuditLog[]              @relation("AuditActor")
+  classOccurrences       ClassOccurrence[]       @relation("OccurrenceInstructor")
+  classSeries            ClassSeries[]           @relation("SeriesInstructor")
 
   @@index([role, status])
   @@index([createdAt])
+}
+
+model ClassCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  color       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  templates ClassTemplate[]
+
+  @@index([isActive, name])
+}
+
+model ClassTemplate {
+  id                 String         @id @default(cuid())
+  categoryId         String
+  name               String
+  slug               String         @unique
+  description        String
+  imageUrl           String?
+  durationMinutes    Int
+  intensity          ClassIntensity @default(ALL_LEVELS)
+  defaultCapacity    Int
+  dropInPriceCents   Int?
+  tags               String[]
+  equipment          String[]
+  cancellationPolicy String?
+  isActive           Boolean        @default(true)
+  archivedAt         DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  category    ClassCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  series      ClassSeries[]
+  occurrences ClassOccurrence[]
+
+  @@index([categoryId, isActive])
+  @@index([archivedAt])
+}
+
+model Location {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  timezone  String   @default("America/New_York")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rooms Room[]
+}
+
+model Room {
+  id         String   @id @default(cuid())
+  locationId String
+  name       String
+  capacity   Int?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  location    Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  series      ClassSeries[]
+  occurrences ClassOccurrence[]
+
+  @@unique([locationId, name])
+}
+
+model ClassSeries {
+  id             String    @id @default(cuid())
+  templateId     String
+  instructorId   String?
+  roomId         String?
+  timezone       String    @default("America/New_York")
+  recurrenceRule String
+  startsAt       DateTime
+  endsAt         DateTime?
+  capacity       Int?
+  priceCents     Int?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  template    ClassTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  instructor  User?             @relation("SeriesInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  room        Room?             @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  occurrences ClassOccurrence[]
+
+  @@index([templateId, isActive])
+  @@index([instructorId, startsAt])
+}
+
+model ClassOccurrence {
+  id                 String           @id @default(cuid())
+  templateId         String
+  seriesId           String?
+  instructorId       String?
+  roomId             String?
+  startAt            DateTime
+  endAt              DateTime
+  timezone           String           @default("America/New_York")
+  capacity           Int
+  priceCents         Int?
+  status             OccurrenceStatus @default(SCHEDULED)
+  publicNotes        String?
+  internalNotes      String?
+  cancellationReason String?
+  cancelledAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  template   ClassTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  series     ClassSeries?  @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  instructor User?         @relation("OccurrenceInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  room       Room?         @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([startAt, status])
+  @@index([instructorId, startAt, endAt])
+  @@index([roomId, startAt, endAt])
+  @@index([templateId, startAt])
+  @@index([seriesId, startAt])
 }
 
 model Account {

@@ -35,7 +35,7 @@ export const primaryNav = [
     label: 'Classes',
     href: '/classes',
     children: [
-      { label: 'Schedule', href: '/classes#schedule' },
+      { label: 'Schedule', href: '/schedule' },
       { label: 'Class List', href: '/classes#list' },
     ],
   },
