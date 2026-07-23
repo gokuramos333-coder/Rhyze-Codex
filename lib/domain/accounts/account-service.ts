@@ -19,7 +19,11 @@ export type AccountRepository = {
     passwordHash: string;
     createInstructorApplication: boolean;
     referralCode?: string;
-  }): Promise<{ id: string; email: string }>;
+  }): Promise<{
+    id: string;
+    email: string;
+    instructorApplicationId: string | null;
+  }>;
 };
 
 export class AccountConflictError extends Error {
@@ -49,7 +53,11 @@ export class InvalidInstructorCodeError extends Error {
 export async function createAccount(
   input: NewAccountInput,
   repository: AccountRepository,
-): Promise<{ id: string; email: string }> {
+): Promise<{
+  id: string;
+  email: string;
+  instructorApplicationId: string | null;
+}> {
   const email = input.email.trim().toLowerCase();
   const name = input.name.trim();
   const phone = input.phone.trim();

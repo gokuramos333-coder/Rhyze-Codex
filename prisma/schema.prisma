@@ -720,7 +720,7 @@ model InstructorCredential {
   storageKey       String
   originalFilename String
   contentType      String
-  expiresAt        DateTime
+  expiresAt        DateTime?
   reviewedById     String?
   reviewedAt       DateTime?
   rejectionNote    String?
@@ -857,6 +857,7 @@ model WaiverAcceptance {
   acceptedAt      DateTime @default(now())
   ipAddress       String?
   userAgent       String?
+  mediaConsent    Boolean  @default(false)
 
   waiverVersion WaiverVersion @relation(fields: [waiverVersionId], references: [id], onDelete: Restrict)
   user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)

@@ -8,11 +8,12 @@ export async function POST(request: Request) {
   }
   const now = new Date();
   const credentials = await prisma.instructorCredential.findMany({
-    where: { expiresAt: { lte: new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000) } },
+    where: { expiresAt: { not: null, lte: new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000) } },
     include: { instructor: true },
   });
   let queued = 0;
   for (const credential of credentials) {
+    if (!credential.expiresAt) continue;
     const kind = credentialReminderKind(credential.expiresAt, now);
     if (!kind) continue;
     const dedupeKey = `credential:${credential.id}:${kind}:${now.toISOString().slice(0, 10)}`;

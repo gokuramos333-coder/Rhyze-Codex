@@ -13,7 +13,7 @@ export const prismaAccountRepository: AccountRepository = {
       const referral = input.referralCode
         ? await tx.referralCode.findFirst({ where: { code: input.referralCode, isActive: true } })
         : null;
-      return tx.user.create({
+      const user = await tx.user.create({
         data: {
           email: input.email,
           name: input.name,
@@ -23,8 +23,17 @@ export const prismaAccountRepository: AccountRepository = {
           instructorApplication: input.createInstructorApplication ? { create: { status: 'PENDING' } } : undefined,
           referralAttribution: referral ? { create: { referralCodeId: referral.id } } : undefined,
         },
-        select: { id: true, email: true },
+        select: {
+          id: true,
+          email: true,
+          instructorApplication: { select: { id: true } },
+        },
       });
+      return {
+        id: user.id,
+        email: user.email,
+        instructorApplicationId: user.instructorApplication?.id || null,
+      };
     });
   },
 };

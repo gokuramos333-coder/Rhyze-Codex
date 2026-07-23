@@ -6,13 +6,19 @@ import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { putPrivateDocument } from '@/lib/storage/object-storage';
+import { parseOptionalExpiration } from '@/lib/domain/credentials/credential-upload';
 
 export async function uploadCredentialAction(formData: FormData) {
   const user = await requireArea('instructor');
   const file = formData.get('document');
   const type = String(formData.get('type') || '') as CredentialType;
-  const expiresAt = new Date(String(formData.get('expiresAt') || ''));
-  if (!(file instanceof File) || !file.size || !['INSURANCE','CPR'].includes(type) || Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
+  let expiresAt: Date | null;
+  try {
+    expiresAt = parseOptionalExpiration(formData.get('expiresAt'));
+  } catch {
+    redirect('/instructor/profile?error=document');
+  }
+  if (!(file instanceof File) || !file.size || !['INSURANCE','CPR'].includes(type)) {
     redirect('/instructor/profile?error=document');
   }
   let storageKey: string;

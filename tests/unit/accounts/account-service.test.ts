@@ -23,7 +23,13 @@ function repository(existingEmail?: string): AccountRepository & {
     },
     async createMember(input) {
       created.push(input);
-      return { id: 'new-member', email: input.email };
+      return {
+        id: 'new-member',
+        email: input.email,
+        instructorApplicationId: input.createInstructorApplication
+          ? 'application-1'
+          : null,
+      };
     },
   };
 }
@@ -42,7 +48,11 @@ describe('createAccount', () => {
       repo,
     );
 
-    expect(account).toEqual({ id: 'new-member', email: 'maya@example.com' });
+    expect(account).toEqual({
+      id: 'new-member',
+      email: 'maya@example.com',
+      instructorApplicationId: null,
+    });
     expect(repo.created).toHaveLength(1);
     expect(repo.created[0].name).toBe('Maya Collins');
     expect(repo.created[0].email).toBe('maya@example.com');

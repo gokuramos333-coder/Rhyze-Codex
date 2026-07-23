@@ -24,6 +24,7 @@ import {
 } from '@/lib/validation/auth';
 import { prisma } from '@/lib/db/prisma';
 import { queueEmail } from '@/lib/notifications/email-queue';
+import { queueInstructorApprovalNotifications } from '@/lib/domain/onboarding/instructor-approval-notifications';
 
 export async function signInAction(formData: FormData): Promise<void> {
   const parsed = signInSchema.safeParse({
@@ -67,6 +68,13 @@ export async function signUpAction(formData: FormData): Promise<void> {
       template: 'WELCOME',
       payload: { name: parsed.data.name },
     });
+    if (account.instructorApplicationId) {
+      await queueInstructorApprovalNotifications(prisma, {
+        applicationId: account.instructorApplicationId,
+        applicantName: parsed.data.name,
+        applicantEmail: account.email,
+      });
+    }
   } catch (error) {
     if (error instanceof AccountConflictError) {
       redirect('/sign-up?error=exists');

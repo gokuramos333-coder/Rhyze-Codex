@@ -5,10 +5,11 @@ import Credentials from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/db/prisma';
 import { verifyPassword } from '@/lib/auth/password';
 import { signInSchema } from '@/lib/validation/auth';
+import { AUTH_SESSION_MAX_AGE_SECONDS } from '@/lib/auth/session-config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: AUTH_SESSION_MAX_AGE_SECONDS },
   pages: {
     signIn: '/sign-in',
   },
