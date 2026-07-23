@@ -14,6 +14,7 @@ export default function InstructorHomePage() {
         attendance, late cancellations, and no-shows.
       </p>
       <Link href="/instructor/schedule" className="mt-8 inline-block bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase tracking-widest">Open my schedule</Link>
+      <Link href="/instructor/referrals" className="ml-3 mt-8 inline-block border border-rhyze-black px-5 py-3 text-xs font-black uppercase tracking-widest">Referral dashboard</Link>
     </>
   );
 }

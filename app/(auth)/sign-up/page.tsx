@@ -13,7 +13,7 @@ const errorMessages: Record<string, string> = {
 export default function SignUpPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; ref?: string };
 }) {
   const error = searchParams.error
     ? errorMessages[searchParams.error]
@@ -44,7 +44,7 @@ export default function SignUpPage({
           {error}
         </p>
       )}
-      <SignUpForm />
+      <SignUpForm defaultReferral={searchParams.ref || ''} />
     </AuthFrame>
   );
 }

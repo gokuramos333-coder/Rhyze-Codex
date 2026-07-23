@@ -5,7 +5,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { signUpAction } from '@/app/(auth)/actions';
 import { AuthField } from './AuthFrame';
 
-export function SignUpForm() {
+export function SignUpForm({ defaultReferral = '' }: { defaultReferral?: string }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -29,7 +29,10 @@ export function SignUpForm() {
       <p className="-mt-1 text-xs leading-5 text-rhyze-black/50">
         Use at least 9 characters with an uppercase letter, number, and symbol.
       </p>
-      <AuthField label="Referral code (optional)" name="referralCode" autoComplete="off" required={false} />
+      <label className="grid gap-2">
+        <span className="text-xs font-black uppercase tracking-[0.22em] text-rhyze-black/65">Referral code (optional)</span>
+        <input name="referralCode" defaultValue={defaultReferral} autoComplete="off" className="focus-ring min-h-14 border border-rhyze-black/20 bg-white px-4 text-base outline-none focus:border-rhyze-coral"/>
+      </label>
       <AuthField
         label="RHYZE INSTRUCTOR? ENTER CODE HERE (Optional)"
         name="instructorCode"
