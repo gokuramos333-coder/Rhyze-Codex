@@ -10,11 +10,19 @@ const errorMessages: Record<string, string> = {
 export default function SignInPage({
   searchParams,
 }: {
-  searchParams: { error?: string; reset?: string };
+  searchParams: { error?: string; reset?: string; callbackUrl?: string };
 }) {
   const error = searchParams.error
     ? errorMessages[searchParams.error]
     : undefined;
+  const callbackUrl =
+    searchParams.callbackUrl?.startsWith('/') &&
+    !searchParams.callbackUrl.startsWith('//')
+      ? searchParams.callbackUrl
+      : '';
+  const signUpHref = callbackUrl
+    ? `/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : '/sign-up';
 
   return (
     <AuthFrame
@@ -24,7 +32,7 @@ export default function SignInPage({
       footer={
         <p>
           New to Rhyze?{' '}
-          <Link href="/sign-up" className="font-black text-rhyze-coral">
+          <Link href={signUpHref} className="font-black text-rhyze-coral">
             Create your account
           </Link>
         </p>
@@ -45,6 +53,9 @@ export default function SignInPage({
         </p>
       )}
       <form action={signInAction} className="mt-8 grid gap-5">
+        {callbackUrl && (
+          <input type="hidden" name="callbackUrl" value={callbackUrl} />
+        )}
         <AuthField
           label="Email address"
           name="email"

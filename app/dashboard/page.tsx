@@ -186,7 +186,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.34em] text-rhyze-orange">
-                  Rhyze #2 New - Studio command center
+                  Rhyze Fitness - Studio command center
                 </p>
                 <h2 className="mt-3 font-display text-6xl leading-none tracking-wider md:text-8xl">
                   IN RHYTHM WE RISE
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                   Admin View
                 </ToolbarLink>
                 <ToolbarLink href="/sign-in">Customer View</ToolbarLink>
-                <ToolbarLink href="/classes#schedule">Book Class</ToolbarLink>
+                <ToolbarLink href="/schedule">Book Class</ToolbarLink>
                 <ToolbarLink tone="primary" href="#automations">
                   Send Reminder
                 </ToolbarLink>
@@ -209,7 +209,7 @@ export default function DashboardPage() {
             <SectionHeading
               eyebrow="Control room"
               title="TODAY AT RHYZE"
-              action="Live prototype data"
+              action="Live studio snapshot"
             />
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {metricDeck.map((metric, index) => (
@@ -782,7 +782,7 @@ export default function DashboardPage() {
             <SectionHeading
               eyebrow="Contacts"
               title="ALL SIGNUPS"
-              action={`${studioSignups.length} prototype records`}
+              action={`${studioSignups.length} recent records`}
             />
             <article className="border border-white/10 bg-rhyze-charcoal/75 p-5 shadow-2xl shadow-black/20">
               <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

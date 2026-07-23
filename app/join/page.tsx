@@ -77,7 +77,7 @@ export default function JoinPage() {
                 Plans, account creation, waiver reminders, booking credits, and
                 future billing all live inside the Rhyze member portal.
               </p>
-              <Button href="/sign-in" size="lg" className="mt-8">
+              <Button href="/sign-up" size="lg" className="mt-8">
                 Create Rhyze Account →
               </Button>
             </div>
@@ -93,8 +93,8 @@ export default function JoinPage() {
             </p>
           </div>
           <p className="max-w-sm text-sm text-rhyze-cream/60">
-            These options are managed in the Rhyze #2 New member portal with
-            class credits, waivers, renewals, and booking reminders.
+            These options are managed in the My Rhyze member portal with class
+            credits, waivers, renewals, and booking reminders.
           </p>
         </div>
         <div className="mb-6 rounded-2xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-5 text-sm font-bold leading-relaxed text-rhyze-cream/80">

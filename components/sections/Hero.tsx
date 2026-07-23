@@ -90,7 +90,7 @@ export function Hero() {
             </p>
           </div>
           <Link
-            href="/classes#schedule"
+            href="/schedule"
             className="focus-ring group rounded-full px-4 py-2 text-sm font-semibold uppercase tracking-wide text-rhyze-cream hover:text-rhyze-coral"
           >
             View Class Schedule{' '}

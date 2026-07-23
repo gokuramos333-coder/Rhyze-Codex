@@ -59,7 +59,7 @@ export function MobileNav({ open, onClose }: Props) {
               </button>
             </div>
             <p className="mb-4 rounded-full border border-rhyze-gold/30 px-3 py-1 text-xs font-bold uppercase tracking-[0.25em] text-rhyze-gold">
-              Rhyze #2 New
+              Rhyze Fitness
             </p>
             <nav className="flex flex-1 flex-col gap-1">
               {primaryNav.map((item) => (

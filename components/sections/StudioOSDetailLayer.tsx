@@ -678,7 +678,7 @@ const detailCatalog: Record<string, DetailRecord> = {
         rows: [
           {
             label: 'All contacts',
-            value: '5 prototype records',
+            value: '5 recent records',
             meta: 'Members, buyers, and newsletter leads',
           },
           {

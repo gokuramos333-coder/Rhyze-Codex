@@ -15,6 +15,8 @@ import { categoryLabel, classes, getClass } from '@/lib/classes';
 import { instructors } from '@/lib/instructors';
 import { ownedMemberships, ownedSchedule } from '@/lib/rhyze-platform';
 import { Button } from '@/components/ui/Button';
+import { auth } from '@/auth';
+import { prisma } from '@/lib/db/prisma';
 
 export const metadata: Metadata = {
   title: 'Book on Rhyze',
@@ -32,9 +34,31 @@ function stripInstructorFromTitle(title: string) {
     .trim();
 }
 
-export default function BookingPage({ params }: { params: { slug: string } }) {
+export default async function BookingPage({
+  params,
+}: {
+  params: { slug: string };
+}) {
   const cls = getClass(params.slug);
   if (!cls) notFound();
+  const [session, occurrence] = await Promise.all([
+    auth(),
+    prisma.classOccurrence.findFirst({
+      where: {
+        template: { slug: params.slug },
+        status: 'SCHEDULED',
+        startAt: { gt: new Date() },
+      },
+      orderBy: { startAt: 'asc' },
+      select: { id: true },
+    }),
+  ]);
+  const returnPath = `/book/${params.slug}`;
+  const bookingHref = !session?.user
+    ? `/sign-in?callbackUrl=${encodeURIComponent(returnPath)}`
+    : occurrence
+      ? `/member/bookings/new?occurrence=${occurrence.id}`
+      : `/book/next-step?type=class&slug=${encodeURIComponent(params.slug)}`;
 
   const matchingSlot =
     ownedSchedule.find((slot) => slot.classSlug === params.slug) ?? null;
@@ -232,7 +256,7 @@ export default function BookingPage({ params }: { params: { slug: string } }) {
             </div>
           </div>
 
-          <Button href="/sign-in" size="lg" className="mt-6 w-full">
+          <Button href={bookingHref} size="lg" className="mt-6 w-full">
             Confirm Booking <CheckCircle2 className="h-5 w-5" aria-hidden />
           </Button>
         </aside>

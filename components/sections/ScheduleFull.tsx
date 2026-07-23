@@ -12,7 +12,7 @@ export function ScheduleFull() {
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-rhyze-cream/65">
             Browse Rhyze-managed classes, check capacity, see waitlists, and
-            book your spot directly through the Rhyze #2 New experience.
+            book your spot directly through the My Rhyze experience.
           </p>
         </div>
         <Link

@@ -40,9 +40,14 @@ export async function signInAction(formData: FormData): Promise<void> {
   }
 
   try {
+    const requestedCallback = String(formData.get('callbackUrl') ?? '');
+    const redirectTo =
+      requestedCallback.startsWith('/') && !requestedCallback.startsWith('//')
+        ? requestedCallback
+        : '/continue';
     await signIn('credentials', {
       ...parsed.data,
-      redirectTo: '/continue',
+      redirectTo,
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -88,10 +93,15 @@ export async function signUpAction(formData: FormData): Promise<void> {
     throw error;
   }
 
+  const requestedCallback = String(formData.get('callbackUrl') ?? '');
+  const redirectTo =
+    requestedCallback.startsWith('/') && !requestedCallback.startsWith('//')
+      ? requestedCallback
+      : '/continue';
   await signIn('credentials', {
     email: parsed.data.email,
     password: parsed.data.password,
-    redirectTo: '/continue',
+    redirectTo,
   });
 }
 

@@ -5,12 +5,21 @@ import { Eye, EyeOff } from 'lucide-react';
 import { signUpAction } from '@/app/(auth)/actions';
 import { AuthField } from './AuthFrame';
 
-export function SignUpForm({ defaultReferral = '' }: { defaultReferral?: string }) {
+export function SignUpForm({
+  defaultReferral = '',
+  callbackUrl = '',
+}: {
+  defaultReferral?: string;
+  callbackUrl?: string;
+}) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   return (
     <form action={signUpAction} className="mt-8 grid gap-5">
+      {callbackUrl && (
+        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+      )}
       <AuthField label="Full name" name="name" autoComplete="name" showRequiredIndicator />
       <AuthField label="Email address" name="email" type="email" autoComplete="email" showRequiredIndicator />
       <AuthField label="Phone number" name="phone" type="tel" autoComplete="tel" showRequiredIndicator />

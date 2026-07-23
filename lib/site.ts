@@ -1,6 +1,6 @@
 export const site = {
   name: 'Rhyze Fitness',
-  versionLabel: 'Rhyze #2 New',
+  versionLabel: 'Rhyze Fitness',
   tagline: 'In Rhythm, We Rise',
   url: 'https://rhyzefit.com',
   description:

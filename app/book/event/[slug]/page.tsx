@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Calendar, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { getOwnedEvent, ownedEvents } from '@/lib/rhyze-platform';
 import { Button } from '@/components/ui/Button';
+import { auth } from '@/auth';
 
 export const metadata: Metadata = {
   title: 'Book Event on Rhyze',
@@ -14,13 +15,18 @@ export function generateStaticParams() {
   return ownedEvents.map((event) => ({ slug: event.slug }));
 }
 
-export default function EventBookingPage({
+export default async function EventBookingPage({
   params,
 }: {
   params: { slug: string };
 }) {
   const event = getOwnedEvent(params.slug);
   if (!event) notFound();
+  const session = await auth();
+  const returnPath = `/book/event/${params.slug}`;
+  const bookingHref = session?.user
+    ? `/book/next-step?type=event&slug=${encodeURIComponent(params.slug)}`
+    : `/sign-in?callbackUrl=${encodeURIComponent(returnPath)}`;
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-20">
@@ -105,7 +111,7 @@ export default function EventBookingPage({
             </div>
           </div>
 
-          <Button href="/sign-in" size="lg" className="mt-6 w-full">
+          <Button href={bookingHref} size="lg" className="mt-6 w-full">
             Confirm Event Booking
             <CheckCircle2 className="h-5 w-5" aria-hidden />
           </Button>

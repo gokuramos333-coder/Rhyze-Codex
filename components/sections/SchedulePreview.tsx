@@ -15,12 +15,12 @@ export function SchedulePreview() {
               ON THE FLOOR
             </h2>
             <p className="mt-4 max-w-2xl text-rhyze-cream/65">
-              Rhyze #2 New keeps class times, capacity, waitlists, credits, and
+              My Rhyze keeps class times, capacity, waitlists, credits, and
               booking inside the Rhyze website.
             </p>
           </div>
           <Link
-            href="/classes#schedule"
+            href="/schedule"
             className="focus-ring inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-rhyze-cream/75 hover:border-rhyze-coral hover:text-rhyze-coral"
           >
             View Full Schedule

@@ -13,11 +13,26 @@ const errorMessages: Record<string, string> = {
 export default function SignUpPage({
   searchParams,
 }: {
-  searchParams: { error?: string; ref?: string };
+  searchParams: {
+    error?: string;
+    ref?: string;
+    callbackUrl?: string;
+    plan?: string;
+  };
 }) {
   const error = searchParams.error
     ? errorMessages[searchParams.error]
     : undefined;
+  const requestedCallback = searchParams.callbackUrl ?? '';
+  const callbackUrl =
+    requestedCallback.startsWith('/') && !requestedCallback.startsWith('//')
+      ? requestedCallback
+      : searchParams.plan
+        ? `/member/membership?plan=${encodeURIComponent(searchParams.plan)}`
+        : '';
+  const signInHref = callbackUrl
+    ? `/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : '/sign-in';
 
   return (
     <AuthFrame
@@ -27,7 +42,7 @@ export default function SignUpPage({
       footer={
         <p>
           Already have an account?{' '}
-          <Link href="/sign-in" className="font-black text-rhyze-coral">
+          <Link href={signInHref} className="font-black text-rhyze-coral">
             Sign in
           </Link>
         </p>
@@ -44,7 +59,10 @@ export default function SignUpPage({
           {error}
         </p>
       )}
-      <SignUpForm defaultReferral={searchParams.ref || ''} />
+      <SignUpForm
+        defaultReferral={searchParams.ref || ''}
+        callbackUrl={callbackUrl}
+      />
     </AuthFrame>
   );
 }

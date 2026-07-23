@@ -1,4 +1,4 @@
-export const versionLabel = 'Rhyze #2 New';
+export const versionLabel = 'Rhyze Fitness';
 
 export const weekDays = [
   {
