@@ -40,7 +40,7 @@ export async function signInAction(formData: FormData): Promise<void> {
   try {
     await signIn('credentials', {
       ...parsed.data,
-      redirectTo: '/member',
+      redirectTo: '/continue',
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -87,7 +87,7 @@ export async function signUpAction(formData: FormData): Promise<void> {
   await signIn('credentials', {
     email: parsed.data.email,
     password: parsed.data.password,
-    redirectTo: '/member/waiver',
+    redirectTo: '/continue',
   });
 }
 

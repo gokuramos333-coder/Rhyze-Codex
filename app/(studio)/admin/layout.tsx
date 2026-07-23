@@ -5,6 +5,7 @@ import { requireArea } from '@/lib/auth/session';
 const navigation = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/members', label: 'Members' },
+  { href: '/admin/instructors', label: 'Instructors' },
   { href: '/admin/classes', label: 'Classes' },
   { href: '/admin/schedule', label: 'Schedule' },
   { href: '/admin/waivers', label: 'Waivers' },

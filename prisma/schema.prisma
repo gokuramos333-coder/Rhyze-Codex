@@ -156,6 +156,7 @@ model User {
   campaignsCreated       EmailCampaign[]         @relation("CampaignCreator")
   instructorApplication  InstructorApplication?  @relation("InstructorApplicant")
   instructorReviews      InstructorApplication[] @relation("InstructorReviewer")
+  referralCodes          ReferralCode[]          @relation("ReferralInstructor")
 
   @@index([role, status])
   @@index([createdAt])
@@ -637,6 +638,19 @@ model InstructorApplication {
   reviewedBy User? @relation("InstructorReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+}
+
+model ReferralCode {
+  id            String    @id @default(cuid())
+  instructorId  String
+  code          String    @unique
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  deactivatedAt DateTime?
+
+  instructor User @relation("ReferralInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+
+  @@index([instructorId, isActive])
 }
 
 model NotificationPreference {
