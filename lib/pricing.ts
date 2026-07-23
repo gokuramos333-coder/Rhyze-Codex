@@ -38,7 +38,7 @@ export const tiers: PricingTier[] = [
       'Specialty events and workshops excluded',
       'Valid for first-time clients only',
     ],
-    cta: { label: 'Choose Plan', href: '/join?plan=intro-offer' },
+    cta: { label: 'Choose Plan', href: '/memberships' },
   },
   {
     id: 'full-rhythm',
@@ -56,7 +56,7 @@ export const tiers: PricingTier[] = [
       'Unique member promo code for 15% off Rhyze merchandise',
       'Credits do not roll over',
     ],
-    cta: { label: 'Choose Plan', href: '/join?plan=full-rhythm' },
+    cta: { label: 'Choose Plan', href: '/memberships' },
   },
   {
     id: 'elevate',
@@ -74,7 +74,7 @@ export const tiers: PricingTier[] = [
       'Unique member promo code for 10% off Rhyze merchandise',
       'Credits do not roll over',
     ],
-    cta: { label: 'Choose Plan', href: '/join?plan=elevate' },
+    cta: { label: 'Choose Plan', href: '/memberships' },
   },
   {
     id: 'vip-access-pass',
@@ -92,6 +92,6 @@ export const tiers: PricingTier[] = [
       'Eligible event choices are announced monthly',
       'Unique member promo code for 20% off Rhyze merchandise',
     ],
-    cta: { label: 'Choose Plan', href: '/join?plan=vip-access-pass' },
+    cta: { label: 'Choose Plan', href: '/memberships' },
   },
 ];

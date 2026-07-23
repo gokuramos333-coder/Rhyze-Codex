@@ -142,6 +142,21 @@ async function main() {
     }),
   ]);
 
+  await Promise.all(
+    [
+      { slug: 'intro-trial', name: 'Intro Trial', description: 'Two weeks to explore the Rhyze class lineup.', kind: 'INTRO_TRIAL' as const, priceCents: 4900, includedCredits: 4, trialDays: 14 },
+      { slug: 'monthly-unlimited', name: 'Monthly Unlimited', description: 'Unlimited eligible studio classes every month.', kind: 'MONTHLY_UNLIMITED' as const, priceCents: 16900, billingInterval: 'MONTHLY' as const, isUnlimited: true },
+      { slug: 'eight-class-pack', name: '8 Class Pack', description: 'Eight flexible class credits for your schedule.', kind: 'CLASS_PACK' as const, priceCents: 17600, includedCredits: 8 },
+      { slug: 'drop-in', name: 'Drop-in', description: 'One class credit for any eligible class.', kind: 'DROP_IN' as const, priceCents: 2800, includedCredits: 1 },
+    ].map((product) =>
+      prisma.product.upsert({
+        where: { slug: product.slug },
+        update: {},
+        create: { billingInterval: 'ONE_TIME', eligibleCategoryIds: [], ...product },
+      }),
+    ),
+  );
+
   const email = process.env.SEED_OWNER_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_OWNER_PASSWORD;
 

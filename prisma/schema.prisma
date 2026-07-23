@@ -67,6 +67,54 @@ enum CreditEntryType {
   ADJUSTMENT
 }
 
+enum ProductKind {
+  INTRO_TRIAL
+  MONTHLY_UNLIMITED
+  LIMITED_MEMBERSHIP
+  CLASS_PACK
+  DROP_IN
+  VIP
+}
+
+enum BillingInterval {
+  ONE_TIME
+  MONTHLY
+  YEARLY
+}
+
+enum PurchaseStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum MembershipStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+enum EmailStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
 model User {
   id            String     @id @default(cuid())
   name          String?
@@ -96,6 +144,10 @@ model User {
   attendanceRecords      AttendanceRecord[]      @relation("AttendanceMember")
   attendanceMarked       AttendanceRecord[]      @relation("AttendanceMarker")
   creditAccounts         CreditAccount[]
+  purchases              Purchase[]
+  memberships            Membership[]
+  emailMessages          EmailMessage[]
+  campaignsCreated       EmailCampaign[]         @relation("CampaignCreator")
 
   @@index([role, status])
   @@index([createdAt])
@@ -318,6 +370,155 @@ model CreditLedgerEntry {
 
   @@index([creditAccountId, createdAt])
   @@index([bookingId])
+}
+
+model Product {
+  id                  String          @id @default(cuid())
+  name                String
+  slug                String          @unique
+  description         String
+  kind                ProductKind
+  priceCents          Int
+  billingInterval     BillingInterval @default(ONE_TIME)
+  includedCredits     Int?
+  isUnlimited         Boolean         @default(false)
+  eligibleCategoryIds String[]
+  trialDays           Int?
+  cancellationPolicy  String?
+  isPublic            Boolean         @default(true)
+  isActive            Boolean         @default(true)
+  stripePriceId       String?         @unique
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  purchases   Purchase[]
+  memberships Membership[]
+
+  @@index([isActive, isPublic, kind])
+}
+
+model Purchase {
+  id                      String         @id @default(cuid())
+  userId                  String
+  productId               String
+  status                  PurchaseStatus @default(PENDING)
+  amountCents             Int
+  currency                String         @default("usd")
+  stripeCheckoutSessionId String?        @unique
+  stripePaymentIntentId   String?        @unique
+  paidAt                  DateTime?
+  failedAt                DateTime?
+  refundedAmountCents     Int            @default(0)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  invoice    Invoice?
+  refunds    Refund[]
+  membership Membership?
+
+  @@index([userId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model Membership {
+  id                   String           @id @default(cuid())
+  userId               String
+  productId            String
+  purchaseId           String?          @unique
+  status               MembershipStatus
+  stripeSubscriptionId String?          @unique
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean          @default(false)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, currentPeriodEnd])
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  purchaseId      String   @unique
+  number          String   @unique
+  amountCents     Int
+  currency        String   @default("usd")
+  receiptUrl      String?
+  stripeInvoiceId String?  @unique
+  issuedAt        DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+}
+
+model Refund {
+  id             String   @id @default(cuid())
+  purchaseId     String
+  amountCents    Int
+  reason         String?
+  stripeRefundId String?  @unique
+  createdAt      DateTime @default(now())
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseId, createdAt])
+}
+
+model StripeEvent {
+  id          String    @id
+  type        String
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([type, createdAt])
+}
+
+model EmailMessage {
+  id           String      @id @default(cuid())
+  userId       String?
+  to           String
+  subject      String
+  template     String
+  payload      Json
+  status       EmailStatus @default(QUEUED)
+  scheduledFor DateTime    @default(now())
+  sentAt       DateTime?
+  providerId   String?
+  attempts     Int         @default(0)
+  lastError    String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledFor])
+  @@index([userId, createdAt])
+}
+
+model EmailCampaign {
+  id             String         @id @default(cuid())
+  createdById    String
+  name           String
+  subject        String
+  previewText    String?
+  body           String
+  segment        String
+  status         CampaignStatus @default(DRAFT)
+  scheduledFor   DateTime?
+  sentAt         DateTime?
+  recipientCount Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  createdBy User @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([status, scheduledFor])
 }
 
 model Account {
