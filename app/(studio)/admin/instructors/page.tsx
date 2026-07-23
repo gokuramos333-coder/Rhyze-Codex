@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma';
 import { approveInstructorAction, rejectInstructorAction } from './actions';
+import Link from 'next/link';
 
 export default async function AdminInstructorsPage() {
   const [applications, instructors] = await Promise.all([
@@ -35,7 +36,7 @@ export default async function AdminInstructorsPage() {
       <section className="mt-10">
         <h2 className="font-display text-4xl tracking-wider">ACTIVE INSTRUCTORS</h2>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {instructors.map((item) => <article key={item.id} className="bg-white p-5"><strong className="block font-display text-3xl tracking-wider">{item.name || item.email}</strong><span className="text-sm text-rhyze-black/55">{item.email}</span><p className="mt-3 text-xs font-black uppercase tracking-widest text-rhyze-coral">{item.referralCodes[0]?.code || 'Code pending'}</p></article>)}
+          {instructors.map((item) => <Link href={`/admin/instructors/${item.id}`} key={item.id} className="bg-white p-5"><strong className="block font-display text-3xl tracking-wider">{item.name || item.email}</strong><span className="text-sm text-rhyze-black/55">{item.email}</span><p className="mt-3 text-xs font-black uppercase tracking-widest text-rhyze-coral">{item.referralCodes[0]?.code || 'Code pending'} · Review credentials →</p></Link>)}
         </div>
       </section>
     </>

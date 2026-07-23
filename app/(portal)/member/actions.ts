@@ -9,6 +9,7 @@ import {
   notificationPreferenceSchema,
   profileSchema,
 } from '@/lib/validation/profile';
+import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
 
 export async function updateProfileAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
@@ -44,6 +45,27 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
 
   revalidatePath('/member/profile');
   redirect('/member/profile?saved=profile');
+}
+
+export async function updateProfilePhotoAction(formData: FormData): Promise<void> {
+  const user = await requireArea('member');
+  const file = formData.get('photo');
+  if (!(file instanceof File) || !file.size) redirect('/member/profile?error=photo');
+  let photoUrl: string;
+  try { photoUrl = await putPublicImage(file); } catch { redirect('/member/profile?error=photo'); }
+  const current = await prisma.memberProfile.findUnique({ where: { userId: user.id }, select: { photoUrl: true } });
+  await prisma.memberProfile.upsert({ where: { userId: user.id }, update: { photoUrl }, create: { userId: user.id, photoUrl } });
+  await deleteObject(current?.photoUrl || null);
+  revalidatePath('/member/profile');
+  redirect('/member/profile?saved=photo');
+}
+
+export async function removeProfilePhotoAction(): Promise<void> {
+  const user = await requireArea('member');
+  const current = await prisma.memberProfile.findUnique({ where: { userId: user.id }, select: { photoUrl: true } });
+  await prisma.memberProfile.updateMany({ where: { userId: user.id }, data: { photoUrl: null } });
+  await deleteObject(current?.photoUrl || null);
+  revalidatePath('/member/profile');
 }
 
 export async function updateNotificationPreferencesAction(

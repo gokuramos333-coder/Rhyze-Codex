@@ -121,6 +121,17 @@ enum InstructorApplicationStatus {
   REJECTED
 }
 
+enum CredentialType {
+  INSURANCE
+  CPR
+}
+
+enum CredentialStatus {
+  UNDER_REVIEW
+  VALID
+  REJECTED
+}
+
 model User {
   id            String     @id @default(cuid())
   name          String?
@@ -157,6 +168,8 @@ model User {
   instructorApplication  InstructorApplication?  @relation("InstructorApplicant")
   instructorReviews      InstructorApplication[] @relation("InstructorReviewer")
   referralCodes          ReferralCode[]          @relation("ReferralInstructor")
+  instructorCredentials  InstructorCredential[]  @relation("CredentialInstructor")
+  credentialReviews      InstructorCredential[]  @relation("CredentialReviewer")
 
   @@index([role, status])
   @@index([createdAt])
@@ -596,6 +609,7 @@ model MemberProfile {
   userId                String    @unique
   preferredName         String?
   phone                 String?
+  photoUrl              String?
   addressLine1          String?
   addressLine2          String?
   city                  String?
@@ -622,6 +636,28 @@ model InstructorProfile {
   updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InstructorCredential {
+  id               String           @id @default(cuid())
+  instructorId     String
+  type             CredentialType
+  status           CredentialStatus @default(UNDER_REVIEW)
+  storageKey       String
+  originalFilename String
+  contentType      String
+  expiresAt        DateTime
+  reviewedById     String?
+  reviewedAt       DateTime?
+  rejectionNote    String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  instructor User  @relation("CredentialInstructor", fields: [instructorId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("CredentialReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([instructorId, type, status])
+  @@index([expiresAt, status])
 }
 
 model InstructorApplication {

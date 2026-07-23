@@ -1,7 +1,10 @@
 import { ProfileField } from '@/components/domain/accounts/ProfileField';
+import Image from 'next/image';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import {
+  removeProfilePhotoAction,
+  updateProfilePhotoAction,
   updateNotificationPreferencesAction,
   updateProfileAction,
 } from '../actions';
@@ -22,6 +25,23 @@ export default async function MemberProfilePage({
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">
         Your account
       </p>
+
+      <section className="mt-8 flex flex-wrap items-center gap-5 border-t-4 border-rhyze-gold bg-white p-6">
+        <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-rhyze-black text-3xl font-black text-white">
+          {profile?.photoUrl ? <Image src={profile.photoUrl} alt="" width={96} height={96} className="h-full w-full object-cover"/> : (user.name || 'R').charAt(0)}
+        </div>
+        <div>
+          <h2 className="font-display text-3xl tracking-wider">PROFILE PHOTO</h2>
+          <p className="mt-1 text-sm text-rhyze-black/55">JPG or PNG, up to 8 MB.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={updateProfilePhotoAction} className="flex flex-wrap gap-2">
+              <input type="file" name="photo" accept="image/jpeg,image/png" required className="max-w-56 text-xs"/>
+              <button className="bg-rhyze-black px-3 py-2 text-xs font-black uppercase text-white">Upload</button>
+            </form>
+            {profile?.photoUrl && <form action={removeProfilePhotoAction}><button className="border border-rhyze-coral px-3 py-2 text-xs font-black uppercase text-rhyze-coral">Remove</button></form>}
+          </div>
+        </div>
+      </section>
       <h1 className="mt-3 font-display text-6xl tracking-wider">PROFILE</h1>
       <p className="mt-3 max-w-2xl text-rhyze-black/60">
         Keep your contact and emergency details current so the studio can
@@ -131,7 +151,7 @@ export default async function MemberProfilePage({
             <input
               type="checkbox"
               name="marketingEmail"
-              defaultChecked={preferences?.marketingEmail ?? false}
+              defaultChecked={preferences?.marketingEmail ?? true}
               className="mt-1 h-4 w-4 accent-rhyze-coral"
             />
             <span>
