@@ -1,12 +1,13 @@
 import Link from 'next/link';
-import { AuthField, AuthFrame } from '@/components/domain/accounts/AuthFrame';
-import { signUpAction } from '../actions';
+import { AuthFrame } from '@/components/domain/accounts/AuthFrame';
+import { SignUpForm } from '@/components/domain/accounts/SignUpForm';
 
 const errorMessages: Record<string, string> = {
   invalid: 'Check each field and make sure the passwords match.',
   exists: 'An account already exists for this email. Sign in instead.',
   password:
-    'Use 12 or more characters with an uppercase letter, number, and symbol.',
+    'Use 9 or more characters with an uppercase letter, number, and symbol.',
+  instructor: 'That instructor access code is not valid.',
 };
 
 export default function SignUpPage({
@@ -43,38 +44,7 @@ export default function SignUpPage({
           {error}
         </p>
       )}
-      <form action={signUpAction} className="mt-8 grid gap-5">
-        <AuthField
-          label="Full name"
-          name="name"
-          autoComplete="name"
-        />
-        <AuthField
-          label="Email address"
-          name="email"
-          type="email"
-          autoComplete="email"
-        />
-        <AuthField
-          label="Password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-        />
-        <AuthField
-          label="Confirm password"
-          name="passwordConfirmation"
-          type="password"
-          autoComplete="new-password"
-        />
-        <p className="-mt-1 text-xs leading-5 text-rhyze-black/50">
-          Use at least 12 characters with an uppercase letter, number, and
-          symbol.
-        </p>
-        <button className="min-h-14 bg-rhyze-gradient px-6 text-sm font-black uppercase tracking-[0.2em] text-rhyze-black">
-          Create My Rhyze
-        </button>
-      </form>
+      <SignUpForm />
     </AuthFrame>
   );
 }

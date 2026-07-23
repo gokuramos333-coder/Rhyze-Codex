@@ -6,6 +6,7 @@ import { signIn, signOut } from '@/auth';
 import {
   AccountConflictError,
   createAccount,
+  InvalidInstructorCodeError,
   InvalidPasswordError,
 } from '@/lib/domain/accounts/account-service';
 import { prismaAccountRepository } from '@/lib/domain/accounts/prisma-account-repository';
@@ -26,6 +27,9 @@ import { queueEmail } from '@/lib/notifications/email-queue';
 export async function signInAction(formData: FormData): Promise<void> {
   const parsed = signInSchema.safeParse({
     email: formData.get('email'),
+    phone: formData.get('phone'),
+    referralCode: formData.get('referralCode'),
+    instructorCode: formData.get('instructorCode'),
     password: formData.get('password'),
   });
 
@@ -73,6 +77,9 @@ export async function signUpAction(formData: FormData): Promise<void> {
     }
     if (error instanceof InvalidPasswordError) {
       redirect('/sign-up?error=password');
+    }
+    if (error instanceof InvalidInstructorCodeError) {
+      redirect('/sign-up?error=instructor');
     }
     throw error;
   }

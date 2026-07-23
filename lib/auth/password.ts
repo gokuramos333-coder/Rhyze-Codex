@@ -2,8 +2,8 @@ import { hash, verify } from '@node-rs/argon2';
 
 const passwordRules = [
   {
-    message: 'Use at least 12 characters.',
-    passes: (password: string) => password.length >= 12,
+    message: 'Use at least 9 characters.',
+    passes: (password: string) => password.length >= 9,
   },
   {
     message: 'Include an uppercase letter.',

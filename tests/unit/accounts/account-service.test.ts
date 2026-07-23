@@ -6,12 +6,14 @@ import {
 } from '@/lib/domain/accounts/account-service';
 
 function repository(existingEmail?: string): AccountRepository & {
-  created: Array<{ email: string; name: string; passwordHash: string }>;
+  created: Array<{ email: string; name: string; phone: string; passwordHash: string; createInstructorApplication: boolean }>;
 } {
   const created: Array<{
     email: string;
     name: string;
+    phone: string;
     passwordHash: string;
+    createInstructorApplication: boolean;
   }> = [];
 
   return {
@@ -34,6 +36,7 @@ describe('createAccount', () => {
       {
         name: '  Maya Collins ',
         email: ' MAYA@Example.COM ',
+        phone: '973-555-0101',
         password: 'Rhyze!StrongPass2026',
       },
       repo,
@@ -54,6 +57,7 @@ describe('createAccount', () => {
         {
           name: 'Maya Collins',
           email: 'MAYA@example.com',
+          phone: '973-555-0101',
           password: 'Rhyze!StrongPass2026',
         },
         repo,
@@ -69,11 +73,12 @@ describe('createAccount', () => {
         {
           name: 'Maya Collins',
           email: 'maya@example.com',
+          phone: '973-555-0101',
           password: 'weak',
         },
         repo,
       ),
-    ).rejects.toThrow('Use at least 12 characters.');
+    ).rejects.toThrow('Use at least 9 characters.');
     expect(repo.created).toHaveLength(0);
   });
 });

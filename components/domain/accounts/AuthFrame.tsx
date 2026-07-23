@@ -77,11 +77,13 @@ export function AuthField({
   name,
   type = 'text',
   autoComplete,
+  required = true,
 }: {
   label: string;
   name: string;
   type?: string;
   autoComplete?: string;
+  required?: boolean;
 }) {
   return (
     <label className="grid gap-2">
@@ -89,7 +91,7 @@ export function AuthField({
         {label}
       </span>
       <input
-        required
+        required={required}
         name={name}
         type={type}
         autoComplete={autoComplete}

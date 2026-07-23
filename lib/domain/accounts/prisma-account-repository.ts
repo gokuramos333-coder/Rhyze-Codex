@@ -14,8 +14,11 @@ export const prismaAccountRepository: AccountRepository = {
         email: input.email,
         name: input.name,
         passwordHash: input.passwordHash,
-        memberProfile: { create: {} },
-        notificationPreference: { create: {} },
+        memberProfile: { create: { phone: input.phone } },
+        notificationPreference: { create: { marketingEmail: true } },
+        instructorApplication: input.createInstructorApplication
+          ? { create: { status: 'PENDING' } }
+          : undefined,
       },
       select: { id: true, email: true },
     });

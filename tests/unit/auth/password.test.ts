@@ -19,7 +19,7 @@ describe('password security', () => {
     expect(validatePassword('short')).toEqual({
       valid: false,
       errors: [
-        'Use at least 12 characters.',
+        'Use at least 9 characters.',
         'Include an uppercase letter.',
         'Include a number.',
         'Include a symbol.',
@@ -28,7 +28,7 @@ describe('password security', () => {
   });
 
   it('accepts a strong password', () => {
-    expect(validatePassword('Rhyze!StrongPass2026')).toEqual({
+    expect(validatePassword('Rhyze26!A')).toEqual({
       valid: true,
       errors: [],
     });

@@ -115,6 +115,12 @@ enum CampaignStatus {
   CANCELLED
 }
 
+enum InstructorApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id            String     @id @default(cuid())
   name          String?
@@ -148,6 +154,8 @@ model User {
   memberships            Membership[]
   emailMessages          EmailMessage[]
   campaignsCreated       EmailCampaign[]         @relation("CampaignCreator")
+  instructorApplication  InstructorApplication?  @relation("InstructorApplicant")
+  instructorReviews      InstructorApplication[] @relation("InstructorReviewer")
 
   @@index([role, status])
   @@index([createdAt])
@@ -615,12 +623,28 @@ model InstructorProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model InstructorApplication {
+  id           String                      @id @default(cuid())
+  userId       String                      @unique
+  status       InstructorApplicationStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+
+  user       User  @relation("InstructorApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("InstructorReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
 model NotificationPreference {
   id                 String   @id @default(cuid())
   userId             String   @unique
   transactionalEmail Boolean  @default(true)
   classReminders     Boolean  @default(true)
-  marketingEmail     Boolean  @default(false)
+  marketingEmail     Boolean  @default(true)
   smsEnabled         Boolean  @default(false)
   timezone           String   @default("America/New_York")
   createdAt          DateTime @default(now())
