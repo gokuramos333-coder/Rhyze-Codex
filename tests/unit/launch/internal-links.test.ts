@@ -21,7 +21,11 @@ function routePattern(pageFile: string) {
 
 describe('launch links', () => {
   const pageFiles = walk('app').filter((file) => file.endsWith('/page.tsx'));
+  const endpointFiles = walk('app').filter(
+    (file) => file.endsWith('/page.tsx') || file.endsWith('/route.ts'),
+  );
   const routePatterns = pageFiles.map(routePattern);
+  const endpointPatterns = endpointFiles.map(routePattern);
   const sourceFiles = [...walk('app'), ...walk('components')].filter((file) =>
     file.endsWith('.tsx'),
   );
@@ -37,7 +41,7 @@ describe('launch links', () => {
         const href = match[1];
         const pathname = href.split(/[?#]/)[0].replace(/\/$/, '') || '/';
         const segments = pathname.split('/').filter(Boolean);
-        const resolves = routePatterns.some((pattern) => {
+        const resolves = endpointPatterns.some((pattern) => {
           const routeSegments = pattern.split('/').filter(Boolean);
           return (
             routeSegments.length === segments.length &&

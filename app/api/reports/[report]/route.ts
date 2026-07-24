@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireArea } from '@/lib/auth/session';
+import { requireApprovedOwner } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 
 function csvCell(value: unknown) {
@@ -7,7 +7,7 @@ function csvCell(value: unknown) {
 }
 
 export async function GET(_request: Request, { params }: { params: { report: string } }) {
-  await requireArea('admin');
+  await requireApprovedOwner();
   let rows: unknown[][] = [];
   if (params.report === 'attendance') {
     const data = await prisma.attendanceRecord.findMany({ include: { user: true, occurrence: { include: { template: true } } }, orderBy: { createdAt: 'desc' } });

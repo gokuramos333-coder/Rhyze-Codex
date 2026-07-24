@@ -16,10 +16,10 @@ export function ScheduleFull() {
           </p>
         </div>
         <Link
-          href="/dashboard"
+          href="/member/bookings"
           className="focus-ring inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-rhyze-cream/75 hover:border-rhyze-coral hover:text-rhyze-coral"
         >
-          Studio OS
+          My Bookings
           <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       </div>

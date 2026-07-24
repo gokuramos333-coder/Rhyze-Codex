@@ -4,15 +4,17 @@ import { requireApprovedOwner } from '@/lib/auth/session';
 
 const navigation = [
   { href: '/admin', label: 'Overview' },
-  { href: '/admin/members', label: 'Members' },
-  { href: '/admin/instructors', label: 'Instructors' },
-  { href: '/admin/classes', label: 'Classes' },
+  { href: '/admin/activity', label: 'Activity' },
+  { href: '/admin/members', label: 'Clients' },
+  { href: '/admin/offerings', label: 'Offerings' },
   { href: '/admin/schedule', label: 'Schedule' },
-  { href: '/admin/waivers', label: 'Waivers' },
-  { href: '/admin/products', label: 'Products' },
-  { href: '/admin/payments', label: 'Payments' },
-  { href: '/admin/reports', label: 'Reports' },
-  { href: '/admin/campaigns', label: 'Campaigns' },
+  { href: '/admin/payments', label: 'Sales' },
+  { href: '/admin/reports', label: 'Engagement' },
+  { href: '/admin/messages', label: 'Messages' },
+  { href: '/admin/campaigns', label: 'Promotions' },
+  { href: '/admin/integrations', label: 'Integrations' },
+  { href: '/admin/reviews', label: 'Reviews' },
+  { href: '/admin/settings', label: 'Settings' },
   { href: '/member', label: 'My member view' },
 ];
 

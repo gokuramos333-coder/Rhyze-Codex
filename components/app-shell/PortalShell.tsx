@@ -18,7 +18,7 @@ export function PortalShell({
 }) {
   return (
     <main className="relative z-[60] min-h-screen bg-[#eee9dd] text-rhyze-black">
-      <div className="grid min-h-screen lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="grid min-h-screen lg:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="border-b border-white/10 bg-rhyze-black p-5 text-rhyze-cream lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
           <Link href="/" className="focus-ring flex items-center gap-3">
             <Image
@@ -38,12 +38,12 @@ export function PortalShell({
             </span>
           </Link>
 
-          <nav className="mt-8 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+          <nav className="mt-8 grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-1">
             {navigation.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="focus-ring border-l-2 border-white/10 px-3 py-2.5 text-sm font-bold text-rhyze-cream/60 transition hover:border-rhyze-coral hover:bg-white/5 hover:text-rhyze-cream"
+                className="focus-ring border-l-2 border-white/10 px-3 py-2 text-sm font-bold text-rhyze-cream/60 transition hover:border-rhyze-coral hover:bg-rhyze-coral/10 hover:text-rhyze-cream"
               >
                 {item.label}
               </Link>
@@ -65,7 +65,7 @@ export function PortalShell({
           </div>
         </aside>
 
-        <section className="min-w-0 px-5 py-8 md:px-8 lg:px-12">
+        <section className="min-w-0 px-5 py-8 md:px-8 lg:px-10">
           {children}
         </section>
       </div>
