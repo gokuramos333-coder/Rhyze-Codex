@@ -10,10 +10,12 @@ import { primaryNav, site } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { CartButton } from '@/components/layout/CartButton';
+import { isApprovedOwner } from '@/lib/auth/owner-access';
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const pathname = usePathname();
   const isHome = pathname === '/';
 
@@ -22,6 +24,26 @@ export function Header() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/session')
+      .then((response) => response.json())
+      .then((session) => {
+        if (!active || !session?.user?.email) return;
+        setShowAdmin(
+          isApprovedOwner({
+            email: session.user.email,
+            role: session.user.role,
+            status: session.user.status,
+          }),
+        );
+      })
+      .catch(() => setShowAdmin(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
@@ -109,6 +131,14 @@ export function Header() {
                 </Link>
               );
             })}
+            {showAdmin && (
+              <Link
+                href="/admin"
+                className="focus-ring rounded-md px-3 py-2 text-sm font-medium uppercase tracking-wide text-rhyze-gold transition hover:text-rhyze-coral"
+              >
+                Admin
+              </Link>
+            )}
           </nav>
 
           <div className="hidden items-center gap-3 lg:flex">
@@ -138,7 +168,11 @@ export function Header() {
           </div>
         </div>
       </header>
-      <MobileNav open={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <MobileNav
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        showAdmin={showAdmin}
+      />
     </>
   );
 }

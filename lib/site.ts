@@ -44,5 +44,4 @@ export const primaryNav = [
   { label: 'Shop', href: '/shop' },
   { label: 'Gallery', href: '/gallery' },
   { label: 'Contact', href: '/contact' },
-  { label: 'Studio OS', href: '/dashboard' },
 ] as const;

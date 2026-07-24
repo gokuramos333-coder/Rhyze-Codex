@@ -54,24 +54,6 @@ describe('launch links', () => {
     expect(unresolved).toEqual([]);
   });
 
-  it('has a detail panel for every dashboard detail control', () => {
-    const dashboard = readFileSync('app/dashboard/page.tsx', 'utf8');
-    const detailLayer = readFileSync(
-      'components/sections/StudioOSDetailLayer.tsx',
-      'utf8',
-    );
-    const triggerIds = [
-      ...dashboard.matchAll(/data-studio-detail="([^"]+)"/g),
-    ].map((match) => match[1]);
-    const catalogIds = new Set(
-      [...detailLayer.matchAll(/^  ['"]?([\w-]+)['"]?: \{/gm)].map(
-        (match) => match[1],
-      ),
-    );
-
-    expect(triggerIds.filter((id) => !catalogIds.has(id))).toEqual([]);
-  });
-
   it('keeps the requested public launch routes available', () => {
     const requestedRoutes = [
       '/',

@@ -7,9 +7,9 @@ import { useEffect } from 'react';
 import { primaryNav } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 
-type Props = { open: boolean; onClose: () => void };
+type Props = { open: boolean; onClose: () => void; showAdmin?: boolean };
 
-export function MobileNav({ open, onClose }: Props) {
+export function MobileNav({ open, onClose, showAdmin = false }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -79,13 +79,15 @@ export function MobileNav({ open, onClose }: Props) {
               >
                 Member Portal
               </Link>
-              <Link
-                href="/dashboard"
-                onClick={onClose}
-                className="focus-ring rounded-md px-3 py-4 text-base uppercase tracking-wide text-rhyze-cream/70 hover:text-rhyze-coral"
-              >
-                Studio OS
-              </Link>
+              {showAdmin && (
+                <Link
+                  href="/admin"
+                  onClick={onClose}
+                  className="focus-ring rounded-md px-3 py-4 text-base uppercase tracking-wide text-rhyze-gold hover:text-rhyze-coral"
+                >
+                  Admin
+                </Link>
+              )}
             </nav>
             <Button href="/join" size="lg" className="w-full">
               Join Now

@@ -7,7 +7,7 @@ import { Instagram, Phone, MapPin } from 'lucide-react';
 import { site, primaryNav } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 
-const footerNav = primaryNav.filter((item) => item.label !== 'Studio OS');
+const footerNav = primaryNav;
 
 export function Footer() {
   const [email, setEmail] = useState('');

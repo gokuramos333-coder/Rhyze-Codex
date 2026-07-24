@@ -7,6 +7,7 @@ import {
   type PortalArea,
 } from '@/lib/auth/authorization';
 import { prisma } from '@/lib/db/prisma';
+import { isApprovedOwner } from '@/lib/auth/owner-access';
 
 export type ActiveUser = {
   id: string;
@@ -40,6 +41,16 @@ export async function requireArea(area: PortalArea): Promise<ActiveUser> {
 
   if (!canAccessArea(user.role, area)) {
     redirect(dashboardPathForRole(user.role));
+  }
+
+  return user;
+}
+
+export async function requireApprovedOwner(): Promise<ActiveUser> {
+  const user = await requireActiveUser();
+
+  if (!isApprovedOwner({ ...user, status: 'ACTIVE' })) {
+    redirect('/member');
   }
 
   return user;
