@@ -16,7 +16,8 @@
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
-    "prisma:validate": "prisma validate"
+    "prisma:validate": "prisma validate",
+    "import:somble": "tsx scripts/import-somble.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

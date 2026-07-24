@@ -189,6 +189,8 @@ model User {
   referralCommission     ReferralCommission?     @relation("CommissionCustomer")
   inAppNotifications     InAppNotification[]
   classMessagesAuthored  ClassMessage[]          @relation("ClassMessageInstructor")
+  sombleClientProfile    SombleClientProfile?
+  sombleTransactions     SombleTransaction[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -893,4 +895,43 @@ model NewsletterLead {
   updatedAt DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+model SombleClientProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  sourceStatus   String
+  lastWorkoutAt  DateTime?
+  lastLoginAt    DateTime?
+  sourceJoinedAt DateTime
+  totalWorkouts  Int       @default(0)
+  appDownloaded  Boolean   @default(false)
+  birthday       DateTime?
+  sourceFile     String
+  importedAt     DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sourceStatus])
+  @@index([sourceJoinedAt])
+}
+
+model SombleTransaction {
+  id            String   @id @default(cuid())
+  userId        String
+  transferId    String   @unique
+  paymentId     String   @unique
+  transferredAt DateTime
+  amountCents   Int
+  contentType   String
+  supporterName String
+  sourceFile    String
+  importedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([transferredAt])
+  @@index([contentType, transferredAt])
+  @@index([userId, transferredAt])
 }
