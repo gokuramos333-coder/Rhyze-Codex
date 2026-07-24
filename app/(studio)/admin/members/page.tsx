@@ -48,7 +48,7 @@ export default async function AdminMembersPage({
             CLIENTS
           </h1>
           <p className="mt-2 text-sm font-bold text-rhyze-black/50">
-            {total} Somble clients moved into Rhyze as invited accounts.
+            {total} Somble client histories moved into the Rhyze directory.
           </p>
         </div>
         <Link

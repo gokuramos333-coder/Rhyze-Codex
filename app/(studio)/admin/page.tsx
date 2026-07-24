@@ -149,9 +149,9 @@ export default async function AdminHomePage({
           icon={<Users />}
         />
         <Metric
-          label="Active memberships"
-          value={`${activeMemberships}`}
-          detail={`${metrics.revenueByType.Subscription ? money(metrics.revenueByType.Subscription) : '$0.00'} historical subscription transfers`}
+          label="Historical subscriptions"
+          value={`${transactions.filter((item) => item.contentType === 'Subscription').length}`}
+          detail={`${metrics.revenueByType.Subscription ? money(metrics.revenueByType.Subscription) : '$0.00'} transferred · ${activeMemberships} native active`}
           href="/admin/products"
           icon={<ArrowRight />}
         />
