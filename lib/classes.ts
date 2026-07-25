@@ -79,21 +79,6 @@ export const classes: RhyzeClass[] = [
     whatToBring: ['Comfortable athletic wear', 'Water bottle', 'Sneakers or grip socks'],
   },
   {
-    slug: 'dance-fit-jessica',
-    name: 'Dance Fit with Jessica',
-    category: 'dance',
-    duration: 50,
-    tagline: 'High-energy dance cardio with strength and toning',
-    description:
-      'Dance Fit with Jessica is a high-energy, feel-good workout that blends upbeat dance cardio with strength and toning. Expect great music, welcoming vibes, and a confidence-building sweat that feels more like a dance party than a traditional fitness class.',
-    whatToExpect: [
-      'Dance-cardio blended with functional strength and sculpting',
-      'A welcoming, judgment-free dance party atmosphere',
-      'A confidence-building full-body sweat',
-    ],
-    whatToBring: ['Comfortable athletic wear', 'Supportive sneakers', 'Water bottle'],
-  },
-  {
     slug: 'grind-and-grow-carla-reo',
     name: 'Grind & Grow with Carla Reo',
     category: 'strength',

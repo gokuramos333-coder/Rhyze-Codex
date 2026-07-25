@@ -9,7 +9,6 @@ test('class catalog matches the official recurring Somble class formats', () => 
     ['yoga-kenzie', 'Yoga / Vinyasa with Mackenzie', 'yoga', 50],
     ['pound-mackenzie', 'POUND with Mackenzie', 'strength', 50],
     ['core-360-carla-rio', 'Core 360 with Carla Rio', 'strength', 50],
-    ['dance-fit-jessica', 'Dance Fit with Jessica', 'dance', 50],
     ['grind-and-grow-carla-reo', 'Grind & Grow with Carla Reo', 'strength', 50],
     ['heels-101-walk-with-me-jessica', 'Heels 101 "Walk with Me" with Jessica', 'dance', 50],
     ['hypnotic-heels-jessica', 'Hypnotic Heels with Jessica', 'dance', 75],
