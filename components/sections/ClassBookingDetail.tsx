@@ -46,7 +46,7 @@ const scheduleHighlights: Record<string, ClassScheduleHighlight> = {
     room: 'Main Floor',
     price: '$28',
   },
-  'heels-101-walk-with-me-jessica': {
+  'heels-101-walk-with-me-nicole': {
     day: 'Mon',
     date: 'Aug 3',
     time: '6:10 PM',
@@ -73,13 +73,6 @@ const scheduleHighlights: Record<string, ClassScheduleHighlight> = {
     time: '5:30 PM',
     room: 'Studio B',
     price: '$28',
-  },
-  'hypnotic-heels-jessica': {
-    day: 'Fri',
-    date: 'Aug 7',
-    time: '8:00 PM',
-    room: 'Main Floor',
-    price: '$30',
   },
 };
 

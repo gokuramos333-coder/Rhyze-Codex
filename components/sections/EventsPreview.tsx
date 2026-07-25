@@ -16,14 +16,14 @@ const events = [
     href: 'https://www.somble.com/rhyzefitness/events/hip-hop-happy-hour-with-t-100o7',
   },
   {
-    title: 'Hypnotic Heels with Jessica',
+    title: 'Hypnotic Heels with Nicole',
     date: 'Aug 10',
     time: '6:45 PM',
     length: '75 min',
     price: '$30',
     blurb: 'A specialty heels class for confidence, poise, technique, and flow.',
-    image: '/founders/instructor-jessica.jpg',
-    imagePosition: 'center 12%',
+    image: '/founders/instructor-nicole.jpg',
+    imagePosition: 'center 18%',
     href: 'https://www.somble.com/rhyzefitness/events/hypnotic-heels-with-jessi-101gc',
   },
   {

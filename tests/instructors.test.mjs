@@ -10,7 +10,7 @@ const expected = [
   ['tricia-johnsen', 'Tricia', 'Johnsen'],
   ['adrianna-jones', 'Adrianna', 'Jones'],
   ['julie-reese', 'Julie', 'Reese'],
-  ['jessica-blundetto', 'Jessica', 'Blundetto'],
+  ['nicole-finley', 'Nicole', 'Finley'],
   ['rachel', 'Rachel', ''],
   ['mackenzie-heffernan', 'Mackenzie', 'Heffernan'],
   ['carla-hotrock', 'Carla', 'Hotrock'],
@@ -45,7 +45,7 @@ test('new instructor headings match the approved copy', () => {
     bySlug['julie-reese'].descriptor,
     'FUNCTIONAL FITNESS & CONDITIONING',
   );
-  assert.equal(bySlug['jessica-blundetto'].role, 'DANCE FIT / HEELS');
+  assert.equal(bySlug['nicole-finley'].role, 'Heels 101 / Hypnotic Heels');
   assert.equal(bySlug['tricia-johnsen'].role, 'HIP-HOP HAPPY HOUR');
   assert.equal(bySlug['carla-hotrock'].role, 'CORE-WERK');
 });
@@ -85,8 +85,8 @@ test('replacement instructor photos match the approved files', () => {
   const expectedHashes = {
     '/founders/instructor-carla.jpg':
       '91792ec220824b16a4f6739ef6c044431a8765cc5ae2d45389fdab8284fb7cb6',
-    '/founders/instructor-jessica.jpg':
-      'afa21cc9716154eb333c063e84e3b0c76f725531111dee704e1ccac5abc8e4c8',
+    '/founders/instructor-nicole.jpg':
+      'a26c91ba1a647d4e3f17665e4937941e1733a8e606b0cbb93d60705c51c3a4ae',
     '/founders/instructor-julie.jpg':
       '1615a6efe0c7355f818fb76951354267b296262fa531fd0088a72593f8d27596',
     '/founders/instructor-tricia.jpg':

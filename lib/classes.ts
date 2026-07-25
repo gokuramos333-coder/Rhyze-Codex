@@ -94,34 +94,19 @@ export const classes: RhyzeClass[] = [
     whatToBring: ['Supportive athletic sneakers', 'Comfortable workout clothes', 'Water bottle'],
   },
   {
-    slug: 'heels-101-walk-with-me-jessica',
-    name: 'Heels 101 "Walk with Me" with Jessica',
+    slug: 'heels-101-walk-with-me-nicole',
+    name: 'Heels 101 "Walk with Me" with Nicole',
     category: 'dance',
     duration: 50,
-    tagline: 'Beginner-friendly heels fundamentals',
+    tagline: 'Step into your power and build unshakeable confidence',
     description:
-      'Heels 101 "Walk with Me" with Jessica is a beginner-friendly heels class focused on posture, balance, walking technique, and confidence. It helps you learn how to move safely and feel strong in heels before progressing into more choreographed heels work.',
+      'Step into your power and build unshakeable confidence with Heels 101: Walk with Me. Whether you are completely new to heels or looking to sharpen your technique, this class focuses on posture, balance, core strength, and the mechanics of a fierce, graceful stride so you can move with poise and attitude in a safe, empowering space.',
     whatToExpect: [
-      'Heels movement and walking technique',
-      'Beginner-friendly pacing with confidence-building support',
-      'A focused class for learning how to move safely in heels',
+      'Posture, balance, core strength, and heels foundations',
+      'Technique for a fierce, graceful stride',
+      'A safe, empowering space to build confidence and own the room',
     ],
-    whatToBring: ['Supportive heels', 'Comfortable clothes you can move in', 'Water bottle'],
-  },
-  {
-    slug: 'hypnotic-heels-jessica',
-    name: 'Hypnotic Heels with Jessica',
-    category: 'dance',
-    duration: 75,
-    tagline: 'A specialty heels class for confidence, technique, and flow',
-    description:
-      'Hypnotic Heels with Jessica is a 75-minute specialty class for dancers ready to build confidence, poise, technique, and flow in heels. You will warm up, practice posture and balance, learn a choreographed routine, and explore a fresh monthly theme.',
-    whatToExpect: [
-      'A barefoot or socks warm-up before heels work',
-      'Posture, balance, strutting, and choreographed routine work',
-      'Optional group and solo video runs',
-    ],
-    whatToBring: ['Sturdy heels with ankle support', 'Knee pads', 'Water bottle'],
+    whatToBring: ['Favorite heels', 'Comfortable clothes you can move in', 'Water bottle'],
   },
   {
     slug: 'ignite-julie',
