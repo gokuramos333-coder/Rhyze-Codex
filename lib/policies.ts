@@ -24,6 +24,7 @@ export const policySections: PolicySection[] = [
       'Cancellations made more than 6 hours before class start time are eligible for transfer without a fee.',
       'Cancellations made within 6 hours of class start time are eligible for transfer with a $10 transfer fee.',
       'Cancellations made 2 hours or less before class start time are not eligible for transfer and will be marked as a late cancel or no-show.',
+      'All cancellations must be submitted through the website before class. If a booked client does not cancel through the website and is marked as a no-show, an automatic no-show charge may apply: $5 for membership holders and standard clients, and $10 for clients on the $7 for 7 days trial subscription.',
       'The official cancellation window is 6 hours before class start time. Transfer requests received after this window may not be honored.',
       'Transfer fees are waived for VIP Access membership holders only.',
     ],

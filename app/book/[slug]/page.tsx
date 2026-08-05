@@ -5,16 +5,18 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Calendar,
-  CheckCircle2,
   Clock,
-  MapPin,
-  ShieldCheck,
   Tag,
 } from 'lucide-react';
 import { categoryLabel, classes, getClass } from '@/lib/classes';
+import {
+  complimentaryStandardAccessCanBook,
+  instructorAugustStandardClassAccess,
+  standardSingleClassCreditCanBook,
+} from '@/lib/domain/bookings/booking-rules';
 import { instructors } from '@/lib/instructors';
-import { ownedMemberships, ownedSchedule } from '@/lib/rhyze-platform';
-import { Button } from '@/components/ui/Button';
+import { ownedSchedule } from '@/lib/rhyze-platform';
+import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db/prisma';
 
@@ -34,34 +36,161 @@ function stripInstructorFromTitle(title: string) {
     .trim();
 }
 
-export default async function BookingPage({
-  params,
-}: {
-  params: { slug: string };
-}) {
+export default async function BookingPage(
+  props: {
+    params: Promise<{ slug: string }>;
+    searchParams: Promise<{ occurrence?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const cls = getClass(params.slug);
   if (!cls) notFound();
-  const [session, occurrence] = await Promise.all([
-    auth(),
+  const session = await auth();
+  const now = new Date();
+  const [occurrence, bookingProducts, activeMembership, creditAccounts] = await Promise.all([
     prisma.classOccurrence.findFirst({
       where: {
         template: { slug: params.slug },
         status: 'SCHEDULED',
-        startAt: { gt: new Date() },
+        ...(searchParams.occurrence
+          ? { id: searchParams.occurrence }
+          : { startAt: { gt: now } }),
       },
       orderBy: { startAt: 'asc' },
-      select: { id: true },
+      include: {
+        template: { select: { isEvent: true, durationMinutes: true } },
+        instructor: { include: { instructorProfile: true } },
+        series: { select: { recurrenceRule: true } },
+        _count: {
+          select: {
+            bookings: { where: { status: 'CONFIRMED' } },
+            waitlistEntries: { where: { status: 'WAITING' } },
+          },
+        },
+      },
     }),
+    prisma.product.findMany({
+      where: {
+        isActive: true,
+        isPublic: true,
+        kind: {
+           in: [
+             'INTRO_TRIAL',
+             'DROP_IN',
+           ],
+        },
+      },
+      select: {
+        id: true,
+        kind: true,
+        name: true,
+        description: true,
+        priceCents: true,
+        billingInterval: true,
+      },
+      orderBy: [{ displayOrder: 'asc' }, { priceCents: 'asc' }],
+    }),
+    session?.user?.id
+      ? prisma.membership.findFirst({
+          where: {
+            userId: session.user.id,
+            status: { in: ['TRIALING', 'ACTIVE'] },
+          },
+          include: { product: true },
+        })
+      : Promise.resolve(null),
+    session?.user?.id
+      ? prisma.creditAccount.findMany({
+          where: {
+            userId: session.user.id,
+            validFrom: { lte: now },
+            OR: [{ validUntil: null }, { validUntil: { gt: now } }],
+          },
+          include: {
+            entries: true,
+            sourcePurchase: {
+              include: { product: { select: { kind: true, customPlanType: true } } },
+            },
+          },
+        })
+      : Promise.resolve([]),
   ]);
-  const returnPath = `/book/${params.slug}`;
+  const eligibleCreditAccounts = occurrence
+    ? creditAccounts.filter((account) => {
+        const productKind = account.sourcePurchase?.product.kind ?? null;
+        const productAllowsOccurrence = complimentaryStandardAccessCanBook({
+          customPlanType: account.sourcePurchase?.product.customPlanType,
+          isEvent: occurrence.template.isEvent,
+          durationMinutes: occurrence.template.durationMinutes,
+        });
+        return productAllowsOccurrence && (productKind !== 'DROP_IN' || standardSingleClassCreditCanBook({
+          productKind,
+          paidAt: account.sourcePurchase?.paidAt,
+          occurrenceStartsAt: occurrence.startAt,
+          isEvent: occurrence.template.isEvent,
+          validUntil: account.validUntil,
+        }));
+      })
+    : creditAccounts;
+  const occurrenceAllowsPlan = (customPlanType: string | null | undefined) => occurrence
+    ? complimentaryStandardAccessCanBook({
+        customPlanType,
+        isEvent: occurrence.template.isEvent,
+        durationMinutes: occurrence.template.durationMinutes,
+      })
+    : true;
+  const availableCredits = eligibleCreditAccounts.reduce(
+    (total, account) =>
+      total +
+      (account.isUnlimited
+        ? 0
+        : account.entries.reduce((balance, entry) => balance + entry.quantity, 0)),
+    0,
+  );
+  const hasUnlimitedAccess =
+    eligibleCreditAccounts.some((account) => account.isUnlimited) ||
+    (activeMembership?.product.isUnlimited && occurrenceAllowsPlan(activeMembership.product.customPlanType)) ||
+    activeMembership?.product.kind === 'INTRO_TRIAL';
+  const hasInstructorAugustStandardAccess = occurrence
+    ? instructorAugustStandardClassAccess({
+        role: session?.user?.role,
+        occurrenceStartsAt: occurrence.startAt,
+        isEvent: occurrence.template.isEvent,
+      })
+    : false;
+  const hasMembershipAccess = Boolean(
+    hasInstructorAugustStandardAccess ||
+    hasUnlimitedAccess ||
+    availableCredits > 0,
+  );
+  const creditDisplay = hasInstructorAugustStandardAccess
+    ? 'Instructor August access: standard classes are free'
+    : hasUnlimitedAccess
+    ? 'Unlimited standard classes available'
+    : `${availableCredits} credit${availableCredits === 1 ? '' : 's'} remaining`;
+  const returnPath = occurrence
+    ? `/book/${params.slug}?occurrence=${occurrence.id}`
+    : `/book/${params.slug}`;
+  const memberBookingDestination = occurrence
+    ? `/member/bookings/new?occurrence=${occurrence.id}`
+    : `/book/next-step?type=class&slug=${encodeURIComponent(params.slug)}`;
   const bookingHref = !session?.user
-    ? `/sign-in?callbackUrl=${encodeURIComponent(returnPath)}`
-    : occurrence
-      ? `/member/bookings/new?occurrence=${occurrence.id}`
-      : `/book/next-step?type=class&slug=${encodeURIComponent(params.slug)}`;
+    ? `/sign-in?callbackUrl=${encodeURIComponent(memberBookingDestination)}`
+    : hasMembershipAccess
+      ? memberBookingDestination
+      : `/memberships?returnTo=${encodeURIComponent(returnPath)}`;
+  const purchaseHref = (productId?: string) => {
+    if (!productId) return '/memberships';
+    const destination = `/member/membership?selected=${encodeURIComponent(productId)}&returnTo=${encodeURIComponent(returnPath)}`;
+    return session?.user
+      ? destination
+      : `/sign-in?callbackUrl=${encodeURIComponent(destination)}`;
+  };
 
   const matchingSlot =
     ownedSchedule.find((slot) => slot.classSlug === params.slug) ?? null;
+  const isWeekly = Boolean(occurrence?.series || matchingSlot);
   const instructor = instructors.find((person) => {
     const className = cls.name.toLowerCase();
     const firstName = person.firstName.toLowerCase();
@@ -73,45 +202,48 @@ export default async function BookingPage({
     );
   });
   const instructorName =
+    occurrence?.instructor?.name ??
     matchingSlot?.instructor ??
     [instructor?.firstName, instructor?.lastName].filter(Boolean).join(' ');
-  const instructorPhoto = matchingSlot?.photo ?? instructor?.photo;
+  const instructorPhoto =
+    occurrence?.instructor?.instructorProfile?.photoUrl ??
+    matchingSlot?.photo ??
+    instructor?.photo;
   const bookingTitle = stripInstructorFromTitle(cls.name);
+  const occurrenceBookingCount = occurrence
+    ? occurrence._count.bookings + occurrence.historicalSignupCount
+    : 0;
+  const soldOut = Boolean(occurrence && occurrenceBookingCount >= occurrence.capacity);
+  const effectiveBookingHref = soldOut && occurrence
+    ? session?.user
+      ? memberBookingDestination
+      : `/sign-in?callbackUrl=${encodeURIComponent(memberBookingDestination)}`
+    : bookingHref;
+  const introProduct = bookingProducts.find(
+    (product) => product.kind === 'INTRO_TRIAL',
+  );
+  const singleClassProduct = bookingProducts.find(
+    (product) => product.kind === 'DROP_IN',
+  );
+  const introPrice = introProduct?.priceCents ?? 700;
+  const singleClassPrice =
+    occurrence?.priceCents ?? singleClassProduct?.priceCents ?? 2500;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-20">
+    <main className="mx-auto max-w-6xl px-6 pb-20 pt-8 md:pt-10">
       <Link
         href="/classes"
-        className="focus-ring mb-10 inline-flex items-center gap-2 text-xs uppercase tracking-widest text-rhyze-cream/60 hover:text-rhyze-coral"
+        className="focus-ring mb-6 inline-flex items-center gap-2 text-xs uppercase tracking-widest text-rhyze-cream/60 hover:text-rhyze-coral"
       >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
         Back to Classes
       </Link>
 
       <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-        <div>
-          <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
-            Class Booking
-          </p>
-          <h1 className="font-display text-6xl leading-none tracking-wider md:text-8xl">
-            {bookingTitle.toUpperCase()}
-          </h1>
-          <p className="mt-4 text-xl italic text-rhyze-gold">{cls.tagline}</p>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            <span className="inline-flex items-center rounded-full border border-white/10 bg-rhyze-charcoal px-4 py-2 text-xs font-bold uppercase tracking-widest text-rhyze-cream/70">
-              {categoryLabel[cls.category]}
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-rhyze-charcoal px-4 py-2 text-xs font-bold uppercase tracking-widest text-rhyze-cream/70">
-              <Clock className="h-3.5 w-3.5" aria-hidden />
-              {cls.duration} min
-            </span>
-          </div>
-
-          <div className="mt-10 space-y-6">
-            {instructorPhoto && (
-              <div className="rounded-3xl border border-white/10 bg-rhyze-charcoal p-6">
-                <div className="grid gap-5 sm:grid-cols-[260px_1fr] sm:items-center">
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-white/10 bg-rhyze-charcoal p-6">
+            <div className={instructorPhoto ? 'grid gap-6 sm:grid-cols-[260px_1fr] sm:items-center' : ''}>
+              {instructorPhoto && (
                   <div className="relative h-72 overflow-hidden rounded-2xl border border-rhyze-gold/35 bg-rhyze-black">
                     <Image
                       src={instructorPhoto}
@@ -121,33 +253,50 @@ export default async function BookingPage({
                       className="object-cover object-top"
                     />
                   </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.3em] text-rhyze-gold">
-                      Instructor
+              )}
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">
+                  Class Booking
+                </p>
+                <h1 className="mt-3 font-display text-5xl leading-none tracking-wider md:text-6xl">
+                  {bookingTitle.toUpperCase()}
+                </h1>
+                <div className="mt-5">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-[0.3em] text-rhyze-gold">
+                    Instructor
+                  </p>
+                  <h2 className="mt-1 font-display text-4xl tracking-wider">
+                    {instructorName || 'Rhyze Instructor'}
+                  </h2>
+                  {instructor?.role && (
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-rhyze-cream/60">
+                      {instructor.role}
                     </p>
-                    <h2 className="mt-2 font-display text-5xl tracking-wider">
-                      {instructorName}
-                    </h2>
-                    {instructor?.role && (
-                      <p className="mt-2 text-sm font-semibold uppercase tracking-widest text-rhyze-cream/60">
-                        {instructor.role}
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
+                <p className="mt-3 text-lg italic text-rhyze-gold">
+                  {cls.tagline}
+                </p>
+                <p className="mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-rhyze-cream/65">
+                  {categoryLabel[cls.category]}
+                  <span aria-hidden>·</span>
+                  <Clock className="h-3.5 w-3.5" aria-hidden />
+                  {cls.duration} min
+                </p>
               </div>
-            )}
+            </div>
+          </div>
 
-            <div className="rounded-3xl border border-white/10 bg-rhyze-charcoal p-6">
+          <div className="rounded-3xl border border-white/10 bg-rhyze-charcoal p-6">
               <h2 className="font-display text-4xl tracking-wider">
                 Class Details
               </h2>
               <p className="mt-3 text-base leading-relaxed text-rhyze-cream/75">
                 {cls.description}
               </p>
-            </div>
+          </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2">
               <div className="rounded-3xl border border-white/10 bg-rhyze-charcoal p-6">
                 <h2 className="mb-4 font-display text-3xl tracking-wider">
                   What To Expect
@@ -175,14 +324,49 @@ export default async function BookingPage({
                   ))}
                 </ul>
               </div>
-            </div>
+          </div>
 
-            <div className="rounded-3xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-6">
+          <div className="rounded-3xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-6">
               <div className="mb-5 inline-flex rounded-2xl border border-rhyze-gold/40 bg-rhyze-black/30 p-4">
                 <Calendar className="h-8 w-8 text-rhyze-gold" aria-hidden />
               </div>
               <h2 className="font-display text-4xl tracking-wider">Schedule</h2>
-              {matchingSlot ? (
+              {occurrence ? (
+                <div className="mt-4 grid gap-3 text-sm text-rhyze-cream/75 sm:grid-cols-2">
+                  <p className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-rhyze-gold" aria-hidden />
+                    {occurrence.startAt.toLocaleString('en-US', {
+                      timeZone: occurrence.timezone,
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-rhyze-gold" aria-hidden />
+                    ${((occurrence.priceCents || 2500) / 100).toFixed(0)}
+                  </p>
+                  {isWeekly && (
+                    <p className="flex items-center gap-2 font-semibold text-rhyze-gold">
+                      <Calendar className="h-4 w-4" aria-hidden />
+                      Weekly recurring class
+                    </p>
+                  )}
+                  {publicBookingCountLabel(
+                    occurrenceBookingCount,
+                    occurrence.capacity,
+                  ) && (
+                    <p className="text-rhyze-gold">
+                      {publicBookingCountLabel(
+                        occurrenceBookingCount,
+                        occurrence.capacity,
+                      )}
+                    </p>
+                  )}
+                </div>
+              ) : matchingSlot ? (
                 <div className="mt-4 grid gap-3 text-sm text-rhyze-cream/75 sm:grid-cols-2">
                   <p className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-rhyze-gold" aria-hidden />
@@ -190,16 +374,24 @@ export default async function BookingPage({
                     {matchingSlot.time}
                   </p>
                   <p className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-rhyze-gold" aria-hidden />
-                    {matchingSlot.room}
-                  </p>
-                  <p className="flex items-center gap-2">
                     <Tag className="h-4 w-4 text-rhyze-gold" aria-hidden />
                     {matchingSlot.price}
                   </p>
-                  <p className="text-rhyze-gold">
-                    {matchingSlot.booked}/{matchingSlot.capacity} booked
+                  <p className="flex items-center gap-2 font-semibold text-rhyze-gold">
+                    <Calendar className="h-4 w-4" aria-hidden />
+                    Weekly recurring class
                   </p>
+                  {publicBookingCountLabel(
+                    matchingSlot.booked,
+                    matchingSlot.capacity,
+                  ) && (
+                    <p className="text-rhyze-gold">
+                      {publicBookingCountLabel(
+                        matchingSlot.booked,
+                        matchingSlot.capacity,
+                      )}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <p className="mt-3 text-sm leading-relaxed text-rhyze-cream/75">
@@ -207,58 +399,116 @@ export default async function BookingPage({
                   appear here once they are added to the live schedule.
                 </p>
               )}
-            </div>
           </div>
         </div>
 
-        <aside className="rounded-3xl border border-white/10 bg-rhyze-charcoal p-6 lg:mt-64">
+        <aside className="h-fit rounded-3xl border border-white/10 bg-rhyze-charcoal p-6 lg:sticky lg:top-28">
           <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-gold">
             Choose How To Book
           </p>
           <div className="space-y-4">
-            {ownedMemberships.slice(0, 3).map((plan) => (
-              <div
-                key={plan.id}
-                className="rounded-2xl border border-white/10 bg-rhyze-black/50 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-display text-2xl tracking-wider">
-                      {plan.name}
-                    </h3>
-                    <p className="text-sm text-rhyze-cream/60">
-                      {plan.credits}
-                    </p>
-                  </div>
-                  <span className="font-display text-3xl text-rhyze-gold">
-                    {plan.price}
-                  </span>
+            <Link
+              href={effectiveBookingHref}
+              className="focus-ring block rounded-2xl border border-rhyze-coral/50 bg-rhyze-coral/10 p-4 transition hover:border-rhyze-coral hover:bg-rhyze-coral/20"
+            >
+              <p className="text-[0.65rem] font-black uppercase tracking-[0.25em] text-rhyze-coral">
+                {session?.user ? 'Your membership' : 'Already have a plan?'}
+              </p>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-2xl tracking-wider">
+                    {soldOut ? 'Join Waiting List' : 'Use Membership Credit'}
+                  </h3>
+                  <p className="mt-1 text-sm text-rhyze-cream/60">
+                    {soldOut
+                      ? 'This class is sold out. Join the five-person waiting list without being charged.'
+                      : !session?.user
+                      ? 'Sign in to check your membership and credits.'
+                      : hasMembershipAccess
+                        ? creditDisplay
+                        : 'No available membership credits. Explore membership options below.'}
+                  </p>
                 </div>
+                <span className="text-2xl text-rhyze-coral" aria-hidden>→</span>
               </div>
-            ))}
-          </div>
+            </Link>
 
-          <div className="mt-6 rounded-2xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-4">
-            <div className="flex items-start gap-3">
-              <ShieldCheck
-                className="mt-1 h-5 w-5 text-rhyze-gold"
-                aria-hidden
-              />
-              <div>
-                <h3 className="font-semibold uppercase tracking-wide">
-                  Waiver status
+            {activeMembership && !hasMembershipAccess && (
+              <div className="rounded-2xl border border-rhyze-orange/50 bg-rhyze-orange/10 p-4">
+                <p className="text-[0.65rem] font-black uppercase tracking-[0.25em] text-rhyze-orange">
+                  Credits used
+                </p>
+                <h3 className="mt-1 font-display text-2xl tracking-wider">
+                  Upgrade To Keep Booking
                 </h3>
-                <p className="mt-1 text-sm text-rhyze-cream/70">
-                  Signed general studio waiver. Membership terms will be
-                  required before recurring billing goes live.
+                <p className="mt-1 text-sm text-rhyze-cream/60">
+                  Your account has 0 credits remaining. Choose a plan below to continue.
                 </p>
               </div>
+            )}
+
+            {!activeMembership && <Link
+              href={purchaseHref(introProduct?.id)}
+              className="focus-ring block rounded-2xl border border-rhyze-gold/45 bg-rhyze-gold/10 p-4 transition hover:border-rhyze-gold hover:bg-rhyze-gold/20"
+            >
+              <p className="text-[0.65rem] font-black uppercase tracking-[0.25em] text-rhyze-gold">
+                First-time clients
+              </p>
+              <div className="mt-1 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-2xl tracking-wider">
+                    Intro Offer 7-Days
+                  </h3>
+                  <p className="mt-1 text-sm text-rhyze-cream/60">
+                    Unlimited standard classes for seven days.
+                  </p>
+                </div>
+                <span className="font-display text-3xl text-rhyze-gold">
+                  ${(introPrice / 100).toFixed(0)}
+                </span>
+              </div>
+            </Link>}
+
+            {!activeMembership && <Link
+              href={purchaseHref(singleClassProduct?.id)}
+              className="focus-ring block rounded-2xl border border-white/15 bg-rhyze-black/50 p-4 transition hover:border-rhyze-orange hover:bg-rhyze-orange/10"
+            >
+              <p className="text-[0.65rem] font-black uppercase tracking-[0.25em] text-rhyze-orange">
+                No membership needed
+              </p>
+              <div className="mt-1 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-2xl tracking-wider">
+                    Single Class
+                  </h3>
+                  <p className="mt-1 text-sm text-rhyze-cream/60">
+                    Purchase one credit for this class, valid for 1 month.
+                  </p>
+                </div>
+                <span className="font-display text-3xl text-rhyze-gold">
+                  ${(singleClassPrice / 100).toFixed(0)}
+                </span>
+              </div>
+            </Link>}
+
+            <div className="space-y-3 border-t border-rhyze-gold/25 pt-5">
+              <div>
+                <p className="text-[0.65rem] font-black uppercase tracking-[0.25em] text-rhyze-gold">
+                  Save With A Membership
+                </p>
+                <p className="mt-1 text-sm text-rhyze-cream/60">
+                  Join for the month and keep moving with Rhyze.
+                </p>
+              </div>
+              <Link
+                href={`/memberships?returnTo=${encodeURIComponent(returnPath)}`}
+                className="focus-ring block rounded-2xl border border-rhyze-gold/45 bg-rhyze-gold/10 px-5 py-4 text-center text-xs font-black uppercase tracking-[0.18em] text-rhyze-gold transition hover:border-rhyze-gold hover:bg-rhyze-gold/20"
+              >
+                Explore Membership Options
+              </Link>
             </div>
           </div>
 
-          <Button href={bookingHref} size="lg" className="mt-6 w-full">
-            Confirm Booking <CheckCircle2 className="h-5 w-5" aria-hidden />
-          </Button>
         </aside>
       </section>
     </main>
