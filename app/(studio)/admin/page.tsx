@@ -28,6 +28,8 @@ import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
 import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { activeMembershipUserWhere } from '@/lib/domain/memberships/active-membership';
+import { buildReconciledRevenueRecords } from '@/lib/admin/reconciled-financials';
+import { RefundedBadge } from '@/components/admin/RefundedBadge';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -213,36 +215,12 @@ export default async function AdminHomePage(
   );
   const directRevenuePaymentRecords = unlinkedPaymentRecords.filter((record) => record.userId);
   const range = resolveAnalyticsRange(searchParams);
-  const allRevenueRecords = [
-    ...transactions.map((item) => ({
-      amountCents: item.amountCents,
-      occurredAt: item.transferredAt,
-      customerId: item.userId,
-      type: item.contentType,
-      source: 'SOMBLE' as const,
-    })),
-    ...nativePurchases.filter((item) => item.amountCents > 0).map((item) => ({
-      amountCents: item.amountCents,
-      occurredAt: item.paidAt || item.createdAt,
-      customerId: item.userId,
-      type: item.product.name,
-      source: 'RHYZE' as const,
-    })),
-    ...activityCommerceOrders.filter((item) => item.amountCents > 0).map((item) => ({
-      amountCents: item.amountCents,
-      occurredAt: item.paidAt || item.createdAt,
-      customerId: item.userId || `guest-order-${item.id}`,
-      type: item.kind.replaceAll('_', ' '),
-      source: 'RHYZE' as const,
-    })),
-    ...directRevenuePaymentRecords.filter((item) => item.amountCents > 0).map((item) => ({
-      amountCents: item.amountCents,
-      occurredAt: item.occurredAt,
-      customerId: item.userId || `guest-stripe-${item.id}`,
-      type: item.kind.replaceAll('_', ' '),
-      source: 'RHYZE' as const,
-    })),
-  ];
+  const allRevenueRecords = buildReconciledRevenueRecords({
+    sombleTransactions: transactions,
+    purchases: nativePurchases,
+    commerceOrders: activityCommerceOrders,
+    paymentRecords: activityPaymentRecords,
+  });
   const directRefundRecords = directRevenuePaymentRecords
     .filter((item) => item.refundedAmountCents > 0)
     .map((item) => ({
@@ -520,8 +498,11 @@ export default async function AdminHomePage(
                   {rangeRefundDetails.map((refund) => (
                     <Link key={refund.id} href={refund.href} className="grid gap-1 border-b border-black/10 py-3 hover:text-rhyze-coral md:grid-cols-[1fr_auto]">
                       <span>
-                        <strong className="block">{refund.name}</strong>
-                        <small>{refund.itemName} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <RefundedBadge />
+                          <strong>{refund.itemName}</strong>
+                        </span>
+                        <small className="mt-1 block">{refund.name} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
                       </span>
                       <strong>{money(refund.amountCents)}</strong>
                     </Link>
@@ -807,8 +788,11 @@ export default async function AdminHomePage(
                 {allRefundDetails.map((refund) => (
                   <Link key={refund.id} href={refund.href} className="grid gap-2 bg-white p-4 hover:bg-rhyze-gold/10 md:grid-cols-[1fr_auto]">
                     <span>
-                      <strong className="block">{refund.name}</strong>
-                      <small className="text-rhyze-black/55">{refund.itemName} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <RefundedBadge />
+                        <strong>{refund.itemName}</strong>
+                      </span>
+                      <small className="mt-1 block text-rhyze-black/55">{refund.name} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
                     </span>
                     <strong>{money(refund.amountCents)}</strong>
                   </Link>

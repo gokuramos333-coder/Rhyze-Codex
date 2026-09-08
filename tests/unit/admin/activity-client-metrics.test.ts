@@ -61,7 +61,7 @@ describe('admin activity feed and client metrics', () => {
     expect(items[0]).toMatchObject({
       at: new Date('2026-07-08T12:00:00Z'),
       name: 'Native Member',
-      detail: 'Refund issued · Elevate · $92.00 returned',
+      detail: 'REFUNDED · Elevate · $92.00 returned',
       href: '/admin/members/u1',
     });
     expect(items[1].detail).toBe('Elevate · $92.00 refunded · net $0.00');

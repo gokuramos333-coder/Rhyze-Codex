@@ -23,7 +23,16 @@ describe('ADMIN financial overview surface', () => {
     expect(source).toContain('title={`Net revenue · ${range.label}`}');
     expect(source).toContain('value: point.netCents');
     expect(source).toContain('Refunds · ${range.label}');
-    expect(source).toContain('...activityCommerceOrders.filter((item) => item.amountCents > 0).map((item) => ({');
+    expect(source).toContain('<RefundedBadge />');
+    expect(source).toContain('buildReconciledRevenueRecords({');
     expect(source).toContain('nativeCommerceGrossRevenueCents');
+  });
+
+  it('labels refunded sales beside the refunded payment source', () => {
+    const source = readFileSync('app/(studio)/admin/payments/page.tsx', 'utf8');
+
+    expect(source).toContain('<th>Status</th><th>Refunded amount</th>');
+    expect(source).toContain('<RefundedBadge />');
+    expect(source).toContain('paymentRecordSource(record)');
   });
 });

@@ -240,7 +240,7 @@ export function buildAdminActivityItems(input: {
         id: `refund-${refund.id}`,
         at: refund.createdAt,
         name: memberName(item.user),
-        detail: `Refund issued · ${item.product.name} · ${money(refund.amountCents)} returned`,
+        detail: `REFUNDED · ${item.product.name} · ${money(refund.amountCents)} returned`,
         href: `/admin/members/${item.user.id}`,
       })),
     ),

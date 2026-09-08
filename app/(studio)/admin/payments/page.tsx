@@ -11,6 +11,7 @@ import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sy
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { formatPaymentDateTime } from '@/lib/admin/payment-date-time';
 import { isVisiblePaymentHistoryPurchase } from '@/lib/payments/payment-history-visibility';
+import { RefundedBadge } from '@/components/admin/RefundedBadge';
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,22 @@ export const revalidate = 0;
 type CommerceOrderRow = Prisma.CommerceOrderGetPayload<{
   include: { user: true; items: true; occurrence: { include: { template: true } } };
 }>;
+type PaymentRecordRow = Prisma.PaymentRecordGetPayload<{
+  include: {
+    user: true;
+    purchase: { include: { product: true } };
+    membership: { include: { product: true } };
+    commerceOrder: { include: { items: true; occurrence: { include: { template: true } } } };
+  };
+}>;
+
+function paymentRecordSource(record: PaymentRecordRow) {
+  return record.membership?.product.name ||
+    record.purchase?.product.name ||
+    record.commerceOrder?.occurrence?.template.name ||
+    record.commerceOrder?.items.map((item) => item.name).join(', ') ||
+    record.kind.replaceAll('_', ' ');
+}
 
 export default async function PaymentsPage() {
   await syncRecentStripePaymentRecords(prisma).catch((error) => {
@@ -115,7 +132,7 @@ export default async function PaymentsPage() {
           <thead><tr className="border-b"><th className="p-4">Customer</th><th>Date</th><th>Source</th><th>Status</th><th>Collected</th><th>Refunded</th><th>Link studio payment</th></tr></thead>
           <tbody>
             {visiblePaymentRecords.map((record) => {
-              const source = record.membership?.product.name || record.purchase?.product.name || record.commerceOrder?.occurrence?.template.name || record.commerceOrder?.items.map((item) => item.name).join(', ') || record.kind.replaceAll('_', ' ');
+              const source = paymentRecordSource(record);
               const customer = record.user?.name || record.customerName || record.customerEmail || record.user?.email || 'Guest checkout';
               return (
                 <tr key={record.id} className="border-b border-black/5">
@@ -167,13 +184,14 @@ export default async function PaymentsPage() {
           <p className="mt-1 text-sm text-rhyze-black/55">Every refunded amount, linked to the customer and original payment.</p>
         </div>
         <table className="w-full min-w-[48rem] text-left text-sm">
-          <thead><tr className="border-b"><th className="p-4">Customer</th><th>Date</th><th>Payment type</th><th>Refunded</th></tr></thead>
+          <thead><tr className="border-b"><th className="p-4">Customer</th><th>Original payment date</th><th>What was refunded</th><th>Status</th><th>Refunded amount</th></tr></thead>
           <tbody>
             {visiblePaymentRecords.filter((record) => record.refundedAmountCents > 0).map((record) => (
               <tr key={record.id} className="border-b border-black/5">
                 <td className="p-4">{record.user ? <Link href={`/admin/members/${record.user.id}#payment-history`} className="font-black hover:text-rhyze-coral">{record.user.name || record.customerName || record.customerEmail || record.user.email}</Link> : record.customerName || record.customerEmail || 'Guest checkout'}</td>
                 <td>{formatPaymentDateTime(record.occurredAt)}</td>
-                <td>{record.kind.replaceAll('_', ' ')}</td>
+                <td className="font-bold">{paymentRecordSource(record)}</td>
+                <td><RefundedBadge /></td>
                 <td className="font-black text-red-800">{money(record.refundedAmountCents)}</td>
               </tr>
             ))}
