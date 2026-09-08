@@ -28,10 +28,7 @@ import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
 import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { activeMembershipUserWhere } from '@/lib/domain/memberships/active-membership';
-import {
-  buildReconciledRevenueRecords,
-  selectStandaloneRevenuePaymentRecords,
-} from '@/lib/admin/reconciled-financials';
+import { buildReconciledRevenueRecords } from '@/lib/admin/reconciled-financials';
 import { RefundedBadge } from '@/components/admin/RefundedBadge';
 
 export const dynamic = 'force-dynamic';
@@ -197,7 +194,7 @@ export default async function AdminHomePage(
     }),
     prisma.paymentRecord.findMany({
       where: { status: { in: ['SUCCEEDED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'DISPUTED'] } },
-      include: { user: true, membership: { select: { activatedAt: true } } },
+      include: { user: true },
       orderBy: { occurredAt: 'desc' },
     }),
     prisma.refund.findMany({
@@ -218,10 +215,6 @@ export default async function AdminHomePage(
   );
   const directRevenuePaymentRecords = unlinkedPaymentRecords.filter(
     (record) => record.userId || record.membershipId,
-  );
-  const standaloneRevenuePaymentRecords = selectStandaloneRevenuePaymentRecords(
-    visiblePaymentRecords,
-    nativePurchases,
   );
   const range = resolveAnalyticsRange(searchParams);
   const allRevenueRecords = buildReconciledRevenueRecords({
@@ -338,9 +331,12 @@ export default async function AdminHomePage(
   const nativeRefundedRevenueCents = nativePurchases.reduce((total, item) => total + item.refundedAmountCents, 0);
   const nativeCommerceGrossRevenueCents = activityCommerceOrders.reduce((total, item) => total + item.amountCents, 0);
   const nativeCommerceRefundedRevenueCents = commerceRefundRecords.reduce((total, item) => total + item.amountCents, 0);
-  const directStripeGrossRevenueCents = standaloneRevenuePaymentRecords.reduce((total, item) => total + item.amountCents, 0);
+  const totalGrossRevenueCents = allRevenueRecords.reduce((total, item) => total + item.amountCents, 0);
+  const directStripeGrossRevenueCents = Math.max(
+    0,
+    totalGrossRevenueCents - sombleTransferRevenueCents - nativeGrossRevenueCents - nativeCommerceGrossRevenueCents,
+  );
   const directStripeRefundedRevenueCents = directRevenuePaymentRecords.reduce((total, item) => total + item.refundedAmountCents, 0);
-  const totalGrossRevenueCents = sombleTransferRevenueCents + nativeGrossRevenueCents + nativeCommerceGrossRevenueCents + directStripeGrossRevenueCents;
   const totalRevenueCents = totalGrossRevenueCents - nativeRefundedRevenueCents - nativeCommerceRefundedRevenueCents - directStripeRefundedRevenueCents;
   const activity = buildAdminActivityItems({
     users: activityUsers,

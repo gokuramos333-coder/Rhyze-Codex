@@ -38,37 +38,31 @@ type StripeRevenueInput = {
   stripeEventId: string;
   stripePaymentIntentId: string | null;
   kind: string;
-  membership?: { activatedAt: Date | null } | null;
 };
 
-const INITIAL_MEMBERSHIP_PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const MATCHED_PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
-function isDistinctMembershipRenewal(
-  record: StripeRevenueInput,
-  purchasesById: Map<string, PurchaseRevenueInput>,
+function purchaseHasCanonicalPaymentRecord(
+  purchase: PurchaseRevenueInput,
+  paymentRecords: StripeRevenueInput[],
 ) {
-  if (record.kind !== 'MEMBERSHIP_RENEWAL' || !record.purchaseId) return false;
-  const originalPurchase = purchasesById.get(record.purchaseId);
-  const initialPaymentAt = record.membership?.activatedAt ||
-    originalPurchase?.paidAt ||
-    originalPurchase?.createdAt;
-  if (!initialPaymentAt) return true;
-  return Math.abs(record.occurredAt.getTime() - initialPaymentAt.getTime()) >
-    INITIAL_MEMBERSHIP_PAYMENT_WINDOW_MS;
+  if (!purchase.id) return false;
+  const purchasePaidAt = purchase.paidAt || purchase.createdAt;
+  return paymentRecords.some((record) =>
+    record.purchaseId === purchase.id &&
+    (
+      record.kind !== 'MEMBERSHIP_RENEWAL' ||
+      Math.abs(record.occurredAt.getTime() - purchasePaidAt.getTime()) <= MATCHED_PAYMENT_WINDOW_MS
+    ),
+  );
 }
 
-export function selectStandaloneRevenuePaymentRecords<T extends StripeRevenueInput>(
+export function selectVerifiedRevenuePaymentRecords<T extends StripeRevenueInput>(
   records: T[],
-  purchases: PurchaseRevenueInput[],
 ) {
-  const purchasesById = new Map(
-    purchases.flatMap((purchase) => purchase.id ? [[purchase.id, purchase] as const] : []),
-  );
   return records.filter(
     (record) =>
-      (record.userId || record.membershipId) &&
-      !record.commerceOrderId &&
-      (!record.purchaseId || isDistinctMembershipRenewal(record, purchasesById)) &&
+      (record.userId || record.purchaseId || record.membershipId || record.commerceOrderId) &&
       record.amountCents > 0,
   );
 }
@@ -83,9 +77,24 @@ export function buildReconciledRevenueRecords(input: {
     input.paymentRecords,
     input.sombleTransactions,
   );
-  const standaloneMemberPayments = selectStandaloneRevenuePaymentRecords(
+  const verifiedPaymentRecords = selectVerifiedRevenuePaymentRecords(
     visiblePaymentRecords,
-    input.purchases,
+  );
+  const fallbackPurchases = input.purchases.filter(
+    (purchase) => purchase.amountCents > 0 &&
+      !purchaseHasCanonicalPaymentRecord(purchase, verifiedPaymentRecords),
+  );
+  const representedCommerceOrderIds = new Set(
+    verifiedPaymentRecords.flatMap((record) => record.commerceOrderId ? [record.commerceOrderId] : []),
+  );
+  const fallbackCommerceOrders = input.commerceOrders.filter(
+    (order) => order.amountCents > 0 && !representedCommerceOrderIds.has(order.id),
+  );
+  const purchasesById = new Map(
+    input.purchases.flatMap((purchase) => purchase.id ? [[purchase.id, purchase] as const] : []),
+  );
+  const commerceOrdersById = new Map(
+    input.commerceOrders.map((order) => [order.id, order] as const),
   );
 
   return [
@@ -96,25 +105,30 @@ export function buildReconciledRevenueRecords(input: {
       type: item.contentType,
       source: 'SOMBLE' as const,
     })),
-    ...input.purchases.filter((item) => item.amountCents > 0).map((item) => ({
+    ...fallbackPurchases.map((item) => ({
       amountCents: item.amountCents,
       occurredAt: item.paidAt || item.createdAt,
       customerId: item.userId,
       type: item.product.name,
       source: 'RHYZE' as const,
     })),
-    ...input.commerceOrders.filter((item) => item.amountCents > 0).map((item) => ({
+    ...fallbackCommerceOrders.map((item) => ({
       amountCents: item.amountCents,
       occurredAt: item.paidAt || item.createdAt,
       customerId: item.userId || `guest-order-${item.id}`,
       type: item.kind.replaceAll('_', ' '),
       source: 'RHYZE' as const,
     })),
-    ...standaloneMemberPayments.map((item) => ({
+    ...verifiedPaymentRecords.map((item) => ({
       amountCents: item.amountCents,
       occurredAt: item.occurredAt,
-      customerId: item.userId || `membership-${item.membershipId}`,
-      type: item.kind.replaceAll('_', ' '),
+      customerId: item.userId ||
+        (item.membershipId ? `membership-${item.membershipId}` : null) ||
+        (item.purchaseId ? `purchase-${item.purchaseId}` : null) ||
+        `commerce-${item.commerceOrderId}`,
+      type: (item.purchaseId ? purchasesById.get(item.purchaseId)?.product.name : null) ||
+        (item.commerceOrderId ? commerceOrdersById.get(item.commerceOrderId)?.kind.replaceAll('_', ' ') : null) ||
+        item.kind.replaceAll('_', ' '),
       source: 'RHYZE' as const,
     })),
   ];
