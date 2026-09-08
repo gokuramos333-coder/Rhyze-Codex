@@ -75,6 +75,7 @@ describe('reconciled ADMIN revenue', () => {
           stripeEventId: 'evt_renewal',
           stripePaymentIntentId: 'pi_renewal',
           kind: 'MEMBERSHIP_RENEWAL',
+          membership: { activatedAt: new Date('2026-08-03T14:00:00.000Z') },
         },
         {
           id: 'unlinked-guest',
@@ -140,6 +141,7 @@ describe('reconciled ADMIN revenue', () => {
         stripeEventId: 'evt_initial_membership',
         stripePaymentIntentId: 'pi_initial_membership',
         kind: 'MEMBERSHIP_RENEWAL',
+        membership: { activatedAt: paidAt },
       }],
     });
 

@@ -38,6 +38,7 @@ type StripeRevenueInput = {
   stripeEventId: string;
   stripePaymentIntentId: string | null;
   kind: string;
+  membership?: { activatedAt: Date | null } | null;
 };
 
 const INITIAL_MEMBERSHIP_PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1_000;
@@ -48,9 +49,11 @@ function isDistinctMembershipRenewal(
 ) {
   if (record.kind !== 'MEMBERSHIP_RENEWAL' || !record.purchaseId) return false;
   const originalPurchase = purchasesById.get(record.purchaseId);
-  if (!originalPurchase) return true;
-  const originalPaidAt = originalPurchase.paidAt || originalPurchase.createdAt;
-  return Math.abs(record.occurredAt.getTime() - originalPaidAt.getTime()) >
+  const initialPaymentAt = record.membership?.activatedAt ||
+    originalPurchase?.paidAt ||
+    originalPurchase?.createdAt;
+  if (!initialPaymentAt) return true;
+  return Math.abs(record.occurredAt.getTime() - initialPaymentAt.getTime()) >
     INITIAL_MEMBERSHIP_PAYMENT_WINDOW_MS;
 }
 

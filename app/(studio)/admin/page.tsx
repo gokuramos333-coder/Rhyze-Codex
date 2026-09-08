@@ -197,7 +197,7 @@ export default async function AdminHomePage(
     }),
     prisma.paymentRecord.findMany({
       where: { status: { in: ['SUCCEEDED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'DISPUTED'] } },
-      include: { user: true },
+      include: { user: true, membership: { select: { activatedAt: true } } },
       orderBy: { occurredAt: 'desc' },
     }),
     prisma.refund.findMany({
