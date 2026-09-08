@@ -5,6 +5,7 @@ node_modules
 
 # next
 .next
+.next-build
 out
 build
 next-env.d.ts
@@ -38,3 +39,6 @@ public/uploads/
 
 # Local Netlify folder
 .netlify
+
+# Local automation credentials
+.hermes/

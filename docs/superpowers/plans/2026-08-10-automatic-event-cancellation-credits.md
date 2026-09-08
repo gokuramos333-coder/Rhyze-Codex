@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Automatically issue event-only credits for cancellations made more than six hours before an event, expire them at the end of the following calendar month, and display class and event balances separately.
+**Goal:** Automatically issue event-only credits for cancellations made more than six hours before an event, expire them exactly 30 days after cancellation, and display class and event balances separately.
 
 **Architecture:** Keep the existing transactional cancellation workflow and idempotent credit ledger. Add pure domain helpers for event expiry and balance classification, then use them in cancellation and profile pages. Update the guarded Gracie correction utility to reconcile existing data safely.
 
@@ -12,7 +12,7 @@
 
 - Event cancellations must use a six-hour eligibility cutoff.
 - Event-only credits cannot book standard classes.
-- Event-only credits expire at the end of the following calendar month in America/New_York.
+- Event-only credits expire exactly 30 days after the cancellation timestamp.
 - Credit issuance must be automatic and idempotent.
 - Do not deploy until the user explicitly requests deployment.
 
@@ -97,4 +97,3 @@
 - [ ] Run `npm run typecheck`.
 - [ ] Run `npm run build`.
 - [ ] Report the local preview routes and note that deployment has not occurred.
-

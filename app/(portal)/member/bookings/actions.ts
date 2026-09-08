@@ -5,13 +5,20 @@ import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import {
-  cancellationOutcome,
   complimentaryStandardAccessCanBook,
   creditAccountCanBook,
+  eventCreditCanBook,
   instructorAugustStandardClassAccess,
   standardSingleClassCreditCanBook,
   waitlistAvailability,
+  EVENT_CREDIT_LABEL_PREFIX,
 } from '@/lib/domain/bookings/booking-rules';
+import {
+  cancellationCreditDecision,
+  eventCancellationCreditTerms,
+  eventCancellationCreditKey,
+  eventCancellationCreditLabel,
+} from '@/lib/domain/bookings/cancellation-credit';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import {
   evaluateIntroTrialBooking,
@@ -20,6 +27,15 @@ import {
 import { bookingWaiverDestination } from '@/lib/domain/waivers/acceptance';
 import { availableMembershipCredits } from '@/lib/domain/credits/membership-renewal';
 import { notifyAdminBookingCancellation } from '@/lib/notifications/admin-booking-cancellations';
+import { bookingAccessType, bookingPolicySnapshotWithAccess } from '@/lib/domain/bookings/booking-access';
+import {
+  accessTypeForProductKind,
+  cancellationPolicyDecision,
+} from '@/lib/domain/bookings/cancellation-policy';
+import {
+  chargeAttendanceFee,
+  refundAttendanceFee,
+} from '@/lib/payments/attendance-fee';
 
 function emailDate(value: Date) {
   return value.toLocaleDateString('en-US', {
@@ -131,6 +147,38 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       return 'waitlist';
     }
 
+    const trial = await tx.membership.findFirst({
+      where: {
+        userId: user.id,
+        status: { in: ['TRIALING', 'ACTIVE'] },
+        product: { kind: 'INTRO_TRIAL' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const firstTrialBooking = trial && !trial.activatedAt
+      ? await tx.booking.findFirst({
+          where: {
+            userId: user.id,
+            status: { in: ['CONFIRMED', 'ATTENDED'] },
+            occurrence: { template: { isEvent: false } },
+            policySnapshot: { path: ['accessType'], equals: 'INTRO_TRIAL' },
+          },
+          include: { occurrence: { select: { startAt: true } } },
+          orderBy: { occurrence: { startAt: 'asc' } },
+        })
+      : null;
+    const trialActivationAt = trial?.activatedAt ?? firstTrialBooking?.occurrence.startAt ?? null;
+    const trialAccess = trial
+      ? evaluateIntroTrialBooking({
+          activatedAt: trialActivationAt,
+          occurrenceStartsAt: occurrence.startAt,
+          now: new Date(),
+          isEvent: occurrence.template.isEvent,
+        })
+      : null;
+    if (trial && trialAccess && !trialAccess.allowed && trialAccess.reason === 'expired') {
+      await tx.membership.update({ where: { id: trial.id }, data: { status: 'EXPIRED' } });
+    }
     const accounts = await tx.creditAccount.findMany({
       where: {
         userId: user.id,
@@ -151,7 +199,18 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     const account = accounts.find(
       (item) => {
         const productKind = item.sourcePurchase?.product.kind ?? null;
+        const isEventCredit = eventCreditCanBook({
+          label: item.label,
+          sourceProductKind: productKind,
+          isEvent: occurrence.template.isEvent,
+          className: occurrence.template.name,
+          instructorName: occurrence.instructor?.name,
+        });
+        const validEventAccess = occurrence.template.isEvent
+          ? isEventCredit
+          : !item.label.startsWith(EVENT_CREDIT_LABEL_PREFIX);
         const isSingleClassCredit = productKind === 'DROP_IN';
+        const validIntroTrialCredit = productKind !== 'INTRO_TRIAL' || trialAccess?.allowed === true;
         const productAllowsOccurrence = complimentaryStandardAccessCanBook({
           customPlanType: item.sourcePurchase?.product.customPlanType,
           isEvent: occurrence.template.isEvent,
@@ -166,8 +225,10 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         });
         return (
           productAllowsOccurrence &&
+          validEventAccess &&
           creditAccountCanBook({ membershipStatus: item.sourcePurchase?.membership?.status ?? null }) &&
           validSingleClassCredit &&
+          validIntroTrialCredit &&
           (item.isUnlimited ||
             availableMembershipCredits({
               entries: item.entries,
@@ -176,25 +237,6 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         );
       },
     );
-    const trial = await tx.membership.findFirst({
-      where: {
-        userId: user.id,
-        status: { in: ['TRIALING', 'ACTIVE'] },
-        product: { kind: 'INTRO_TRIAL' },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    const trialAccess = trial
-      ? evaluateIntroTrialBooking({
-          activatedAt: trial.activatedAt,
-          occurrenceStartsAt: occurrence.startAt,
-          now: new Date(),
-          isEvent: occurrence.template.isEvent,
-        })
-      : null;
-    if (trial && trialAccess && !trialAccess.allowed && trialAccess.reason === 'expired') {
-      await tx.membership.update({ where: { id: trial.id }, data: { status: 'EXPIRED' } });
-    }
     const instructorAugustAccess = instructorAugustStandardClassAccess({
       role: user.role,
       occurrenceStartsAt: occurrence.startAt,
@@ -206,10 +248,23 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       if (trialAccess?.reason === 'outside-window' || trialAccess?.reason === 'expired') return 'trial-window';
       return 'access';
     }
+    const accessProductKind = account?.sourcePurchase?.product.kind
+      ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null);
+    const accessType = instructorAugustAccess
+      ? 'COMPLIMENTARY'
+      : accessTypeForProductKind(accessProductKind);
     const booking = await tx.booking.create({
-      data: { occurrenceId, userId: user.id },
+      data: {
+        occurrenceId,
+        userId: user.id,
+        policySnapshot: bookingPolicySnapshotWithAccess({
+          currentSnapshot: null,
+          accessType,
+          accessProductKind,
+        }),
+      },
     });
-    if (!account && trial && trialAccess?.allowed && !trial.activatedAt) {
+    if (trial && trialAccess?.allowed && !trial.activatedAt) {
       await tx.membership.update({
         where: { id: trial.id },
         data: {
@@ -217,6 +272,13 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           currentPeriodStart: trialAccess.activatesAt,
           currentPeriodEnd: trialAccess.expiresAt,
           status: 'TRIALING',
+        },
+      });
+      await tx.creditAccount.updateMany({
+        where: { sourcePurchaseId: trial.purchaseId },
+        data: {
+          validFrom: trialAccess.activatesAt,
+          validUntil: trialAccess.expiresAt,
         },
       });
       await queueEmail(tx, {
@@ -257,6 +319,8 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       template: 'CLASS_REMINDER',
       payload: {
         name: user.name || 'Rhyzer',
+        bookingId: booking.id,
+        occurrenceId: occurrence.id,
         className: occurrence.template.name,
         instructorName: occurrence.instructor?.name || 'Rhyze instructor',
         classDate: emailDate(occurrence.startAt),
@@ -264,6 +328,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         bookingsUrl: '/member/bookings',
       },
       scheduledFor: new Date(occurrence.startAt.getTime() - 24 * 60 * 60 * 1000),
+      dedupeKey: `class-reminder:${booking.id}:${occurrence.id}`,
     });
     if (account && !account.isUnlimited) {
       await tx.creditLedgerEntry.create({
@@ -290,21 +355,146 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
 export async function cancelBookingAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
   const bookingId = String(formData.get('bookingId') || '');
-  await prisma.$transaction(async (tx) => {
+  const bookingForPolicy = await prisma.booking.findFirst({
+    where: { id: bookingId, userId: user.id, status: 'CONFIRMED' },
+    include: {
+      occurrence: { include: { template: true } },
+      user: {
+        select: {
+          stripeCustomerId: true,
+          memberships: {
+            where: { status: { in: ['ACTIVE', 'TRIALING'] } },
+            select: { product: { select: { kind: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!bookingForPolicy) redirect('/member/bookings');
+  const reservationForPolicy = await prisma.creditLedgerEntry.findFirst({
+    where: { bookingId, type: 'RESERVE' },
+    include: {
+      creditAccount: {
+        include: {
+          sourcePurchase: { select: { product: { select: { kind: true } } } },
+        },
+      },
+    },
+  });
+  const accessType = bookingAccessType({
+    policySnapshot: bookingForPolicy.policySnapshot,
+    bookingSource: bookingForPolicy.source,
+    reservedProductKind:
+      reservationForPolicy?.creditAccount.sourcePurchase?.product.kind ?? null,
+    activeProductKinds: bookingForPolicy.user.memberships.map(
+      (membership) => membership.product.kind,
+    ),
+  });
+  const decision = cancellationPolicyDecision({
+    startAt: bookingForPolicy.occurrence.startAt,
+    requestedAt: new Date(),
+    accessType,
+    isEvent: bookingForPolicy.occurrence.template.isEvent,
+    hasReservedCredit: Boolean(reservationForPolicy),
+  });
+  if (decision.action === 'RESCHEDULE') {
+    redirect(`/member/bookings/reschedule?booking=${bookingId}`);
+  }
+
+  const feeResult = decision.feeCents > 0
+    ? await chargeAttendanceFee({
+        bookingId,
+        userId: user.id,
+        stripeCustomerId: bookingForPolicy.user.stripeCustomerId,
+        feeType: decision.window === 'TRANSFER' ? 'TRANSFER' : 'LATE_CANCELLATION',
+        amountCents: decision.feeCents,
+        idempotencyKey: `late-cancel-fee-${bookingId}`,
+      })
+    : null;
+
+  let transactionOutcome: { creditReturned: boolean } | undefined;
+  try {
+    transactionOutcome = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, userId: user.id, status: 'CONFIRMED' },
       include: { occurrence: { include: { template: true } } },
     });
     if (!booking) return;
-    const outcome = cancellationOutcome(
-      booking.occurrence.startAt,
-      new Date(),
-      120,
-    );
+    const cancelledAt = new Date();
     await tx.booking.update({
       where: { id: booking.id },
-      data: { status: outcome.status, cancelledAt: new Date() },
+      data: { status: decision.status, cancelledAt },
     });
+    await tx.emailMessage.updateMany({
+      where: {
+        dedupeKey: `class-reminder:${booking.id}:${booking.occurrenceId}`,
+        template: 'CLASS_REMINDER',
+        status: { in: ['QUEUED', 'PROCESSING'] },
+      },
+      data: { status: 'CANCELLED' },
+    });
+    const reservation = await tx.creditLedgerEntry.findFirst({
+      where: { bookingId: booking.id, type: 'RESERVE' },
+    });
+    const creditDecision = cancellationCreditDecision({
+      isEvent: booking.occurrence.template.isEvent,
+      restoreCredit: decision.restoreCredit,
+      hasReservation: Boolean(reservation),
+    });
+    let creditReturned = false;
+    let creditResult = accessType === 'STANDARD'
+      ? 'This cancellation falls inside the late-cancel window, so the credit was not returned.'
+      : 'The booking was marked as a late cancellation.';
+    if (reservation && creditDecision === 'RELEASE_RESERVATION') {
+      await tx.creditLedgerEntry.create({
+        data: {
+          creditAccountId: reservation.creditAccountId,
+          bookingId: booking.id,
+          type: 'RELEASE',
+          quantity: 1,
+          reason: 'Booking cancelled',
+        },
+      });
+      creditReturned = true;
+      creditResult = booking.occurrence.template.isEvent
+        ? 'Your event credit was returned to your account.'
+        : 'Your class credit was returned to your account.';
+    } else if (creditDecision === 'CREATE_EVENT_CREDIT') {
+      const sourceReturnKey = eventCancellationCreditKey(booking.id);
+      const existingCredit = await tx.creditLedgerEntry.findUnique({
+        where: { sourceReturnKey },
+        select: { id: true },
+      });
+      const terms = eventCancellationCreditTerms(cancelledAt);
+      if (!existingCredit) {
+        const account = await tx.creditAccount.create({
+          data: {
+            userId: user.id,
+            label: eventCancellationCreditLabel(booking.occurrence.template.name),
+            validFrom: terms.validFrom,
+            validUntil: terms.validUntil,
+          },
+        });
+        await tx.creditLedgerEntry.create({
+          data: {
+            creditAccountId: account.id,
+            bookingId: booking.id,
+            sourceReturnKey,
+            type: 'GRANT',
+            quantity: terms.quantity,
+            reason: 'Early event cancellation replacement credit',
+          },
+        });
+      }
+      creditReturned = true;
+      creditResult = `One event-only credit was added to your account and expires ${terms.validUntil.toLocaleDateString('en-US', { timeZone: 'America/New_York' })}.`;
+    }
+    if (feeResult?.status === 'SUCCEEDED') {
+      creditResult += ` A $${(decision.feeCents / 100).toFixed(0)} ${decision.window === 'TRANSFER' ? 'transfer' : 'late-cancellation'} fee was charged to your saved payment method.`;
+    } else if (feeResult?.status === 'FAILED') {
+      creditResult += ' The cancellation fee could not be charged; please update your saved payment method or contact the studio.';
+    }
     await queueEmail(tx, {
       userId: user.id,
       to: user.email,
@@ -315,27 +505,10 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
         className: booking.occurrence.template.name,
         classDate: emailDate(booking.occurrence.startAt),
         classTime: emailTime(booking.occurrence.startAt),
-        creditResult: outcome.restoreCredit
-          ? 'Your class credit was returned to your account.'
-          : 'This cancellation falls inside the late-cancel window, so the credit was not returned.',
+        creditResult,
         bookingsUrl: '/member/bookings',
       },
     });
-    const reservation = await tx.creditLedgerEntry.findFirst({
-      where: { bookingId: booking.id, type: 'RESERVE' },
-    });
-    const creditReturned = Boolean(reservation && outcome.restoreCredit);
-    if (reservation && outcome.restoreCredit) {
-      await tx.creditLedgerEntry.create({
-        data: {
-          creditAccountId: reservation.creditAccountId,
-          bookingId: booking.id,
-          type: 'RELEASE',
-          quantity: 1,
-          reason: 'Booking cancelled',
-        },
-      });
-    }
     await notifyAdminBookingCancellation(tx, {
       bookingId: booking.id,
       memberId: user.id,
@@ -345,10 +518,10 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       className: booking.occurrence.template.name,
       classDate: emailDate(booking.occurrence.startAt),
       classTime: emailTime(booking.occurrence.startAt),
-      status: outcome.status,
+      status: decision.status,
       creditReturned,
     });
-    if (outcome.status === 'CANCELLED') {
+    if (decision.status === 'CANCELLED') {
       const next = await tx.waitlistEntry.findFirst({
         where: { occurrenceId: booking.occurrenceId, status: 'WAITING' },
         include: { user: true },
@@ -369,7 +542,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
             sourcePurchase: {
               include: {
                 membership: { select: { status: true } },
-                product: { select: { includedCredits: true, customPlanType: true } },
+                product: { select: { includedCredits: true, kind: true, customPlanType: true } },
               },
             },
           },
@@ -408,8 +581,19 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
             })
           : null;
         if (accountHasAccess || trialAccess?.allowed) {
+          const promotedAccessProductKind = account?.sourcePurchase?.product.kind
+            ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null);
           const promoted = await tx.booking.create({
-            data: { occurrenceId: booking.occurrenceId, userId: next.userId, source: 'WAITLIST' },
+            data: {
+              occurrenceId: booking.occurrenceId,
+              userId: next.userId,
+              source: 'WAITLIST',
+              policySnapshot: bookingPolicySnapshotWithAccess({
+                currentSnapshot: null,
+                accessType: accessTypeForProductKind(promotedAccessProductKind),
+                accessProductKind: promotedAccessProductKind,
+              }),
+            },
           });
           if (accountHasAccess && account && !account.isUnlimited) {
             await tx.creditLedgerEntry.create({
@@ -424,6 +608,13 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
                 currentPeriodStart: trialAccess.activatesAt,
                 currentPeriodEnd: trialAccess.expiresAt,
                 status: 'TRIALING',
+              },
+            });
+            await tx.creditAccount.updateMany({
+              where: { sourcePurchaseId: trial.purchaseId },
+              data: {
+                validFrom: trialAccess.activatesAt,
+                validUntil: trialAccess.expiresAt,
               },
             });
             await queueEmail(tx, {
@@ -478,8 +669,38 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
         }
       }
     }
-  });
+    return { creditReturned };
+    });
+  } catch (error) {
+    if (feeResult?.status === 'SUCCEEDED') {
+      await refundAttendanceFee({
+        paymentIntentId: feeResult.paymentIntentId,
+        amountCents: decision.feeCents,
+        idempotencyKey: `refund-late-cancel-fee-${bookingId}`,
+      }).catch((refundError) => {
+        console.error('Late-cancellation fee refund failed', {
+          bookingId,
+          paymentIntentId: feeResult.paymentIntentId,
+          message: refundError instanceof Error ? refundError.message : 'Unknown refund error',
+        });
+      });
+    }
+    throw error;
+  }
   revalidatePath('/member/bookings');
+  revalidatePath('/schedule');
+  if (feeResult?.status === 'SUCCEEDED') {
+    redirect('/member/bookings?result=late-cancel-charged');
+  }
+  if (feeResult?.status === 'FAILED') {
+    redirect('/member/bookings?result=late-cancel-payment');
+  }
+  if (decision.status === 'LATE_CANCELLED') {
+    redirect('/member/bookings?result=late-cancel-credit');
+  }
+  redirect(transactionOutcome?.creditReturned
+    ? '/member/bookings?result=cancelled-credit'
+    : '/member/bookings?result=cancelled');
 }
 
 export async function leaveWaitlistAction(formData: FormData): Promise<void> {

@@ -32,11 +32,12 @@ async function publishWaiverAction(formData: FormData) {
   redirect('/admin/waivers?saved=1');
 }
 
-export default async function AdminWaiversPage({
-  searchParams,
-}: {
-  searchParams: { saved?: string; error?: string };
-}) {
+export default async function AdminWaiversPage(
+  props: {
+    searchParams: Promise<{ saved?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const versions = await prisma.waiverVersion.findMany({ orderBy: { version: 'desc' } });
   return (
     <>

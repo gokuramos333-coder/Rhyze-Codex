@@ -13,7 +13,7 @@ async function main() {
       address: '75 NJ-15, Building J, Lafayette Township, NJ 07848',
       rooms: {
         create: [
-          { id: 'seed-room-main-floor', name: 'Main Floor', capacity: 24 },
+          { id: 'seed-room-main-floor', name: 'Main Floor', capacity: 25 },
           { id: 'seed-room-studio-b', name: 'Studio B', capacity: 16 },
         ],
       },
@@ -42,10 +42,10 @@ async function main() {
   const studioB = location.rooms.find((room) => room.name === 'Studio B')!;
 
   const vanessa = await prisma.user.upsert({
-    where: { email: 'vanessa@rhyze.local' },
-    update: { role: Role.INSTRUCTOR },
+    where: { email: 'vanessa@rhyzefit.com' },
+    update: { name: 'Vanessa Ramos' },
     create: {
-      email: 'vanessa@rhyze.local',
+      email: 'vanessa@rhyzefit.com',
       name: 'Vanessa Ramos',
       role: Role.INSTRUCTOR,
       status: 'INVITED',
@@ -58,13 +58,17 @@ async function main() {
     },
   });
   const adrianna = await prisma.user.upsert({
-    where: { email: 'adrianna@rhyze.local' },
-    update: { role: Role.INSTRUCTOR },
-    create: {
-      email: 'adrianna@rhyze.local',
-      name: 'Adrianna',
+    where: { email: 'adrianna-jones@rhyze.local' },
+    update: {
+      name: 'Adrianna Jones',
       role: Role.INSTRUCTOR,
-      status: 'INVITED',
+      status: 'ACTIVE',
+    },
+    create: {
+      email: 'adrianna-jones@rhyze.local',
+      name: 'Adrianna Jones',
+      role: Role.INSTRUCTOR,
+      status: 'ACTIVE',
       instructorProfile: {
         create: {
           photoUrl: '/founders/instructor-adriana.jpg',
@@ -75,37 +79,37 @@ async function main() {
   });
 
   const rhyzeUp = await prisma.classTemplate.upsert({
-    where: { slug: 'rhyze-up' },
+    where: { slug: 'rhyze-up-vanessa' },
     update: {},
     create: {
       categoryId: categoryBySlug.dance.id,
-      name: 'Rhyze Up',
-      slug: 'rhyze-up',
+      name: 'Rhyze Up with Vanessa',
+      slug: 'rhyze-up-vanessa',
       description:
         'A music-led dance-cardio class built for energy, confidence, and community.',
       imageUrl: '/founders/classes.jpg',
       durationMinutes: 50,
       intensity: 'HIGH',
-      defaultCapacity: 24,
-      dropInPriceCents: 2800,
+      defaultCapacity: 25,
+      dropInPriceCents: 2500,
       tags: ['dance-cardio', 'all-levels'],
       equipment: [],
     },
   });
   const pilates = await prisma.classTemplate.upsert({
-    where: { slug: 'pilates-pulse' },
+    where: { slug: 'pilates-pulse-adrianna' },
     update: {},
     create: {
       categoryId: categoryBySlug['yoga-pilates'].id,
-      name: 'Pilates Pulse',
-      slug: 'pilates-pulse',
+      name: 'Pilates Pulse with Adrianna',
+      slug: 'pilates-pulse-adrianna',
       description:
         'A functional Pilates flow focused on strength, stability, mobility, and intelligent alignment.',
       imageUrl: '/founders/pillar-yoga.jpeg',
       durationMinutes: 50,
       intensity: 'MODERATE',
-      defaultCapacity: 16,
-      dropInPriceCents: 2600,
+      defaultCapacity: 25,
+      dropInPriceCents: 2500,
       tags: ['pilates', 'core', 'all-levels'],
       equipment: ['Mat'],
     },
@@ -122,8 +126,8 @@ async function main() {
         roomId: studioB.id,
         startAt: new Date('2026-08-03T14:00:00.000Z'),
         endAt: new Date('2026-08-03T14:50:00.000Z'),
-        capacity: 16,
-        priceCents: 2600,
+        capacity: 25,
+        priceCents: 2500,
       },
     }),
     prisma.classOccurrence.upsert({
@@ -134,10 +138,10 @@ async function main() {
         templateId: rhyzeUp.id,
         instructorId: vanessa.id,
         roomId: mainFloor.id,
-        startAt: new Date('2026-08-05T22:30:00.000Z'),
-        endAt: new Date('2026-08-05T23:20:00.000Z'),
-        capacity: 24,
-        priceCents: 2800,
+        startAt: new Date('2026-08-04T23:10:00.000Z'),
+        endAt: new Date('2026-08-05T00:00:00.000Z'),
+        capacity: 25,
+        priceCents: 2500,
       },
     }),
   ]);
@@ -146,12 +150,23 @@ async function main() {
     [
       { slug: 'intro-trial', name: 'Intro Trial', description: 'Two weeks to explore the Rhyze class lineup.', kind: 'INTRO_TRIAL' as const, priceCents: 4900, includedCredits: 4, trialDays: 14 },
       { slug: 'monthly-unlimited', name: 'Monthly Unlimited', description: 'Unlimited eligible studio classes every month.', kind: 'MONTHLY_UNLIMITED' as const, priceCents: 16900, billingInterval: 'MONTHLY' as const, isUnlimited: true },
-      { slug: 'eight-class-pack', name: '8 Class Pack', description: 'Eight flexible class credits for your schedule.', kind: 'CLASS_PACK' as const, priceCents: 17600, includedCredits: 8 },
-      { slug: 'drop-in', name: 'Drop-in', description: 'One class credit for any eligible class.', kind: 'DROP_IN' as const, priceCents: 2800, includedCredits: 1 },
+      {
+        slug: 'eight-class-pack',
+        name: '8-Class Pack',
+        description: 'Includes 8 standard class credits valid for 3 months. Auto-renews every 3 months unless cancelled at least 14 days before renewal. Unused credits expire at the end of each 3-month period.',
+        kind: 'CLASS_PACK' as const,
+        priceCents: 17900,
+        billingInterval: 'MONTHLY' as const,
+        includedCredits: 8,
+        alwaysAvailable: false,
+        availabilityStart: new Date('2026-09-01T04:00:00.000Z'),
+        customPlanType: 'QUARTERLY_8_CLASS_PACK',
+      },
+      { slug: 'drop-in', name: 'Drop-in', description: 'One class credit for any eligible class.', kind: 'DROP_IN' as const, priceCents: 2500, includedCredits: 1 },
     ].map((product) =>
       prisma.product.upsert({
         where: { slug: product.slug },
-        update: {},
+        update: product,
         create: { billingInterval: 'ONE_TIME', eligibleCategoryIds: [], ...product },
       }),
     ),

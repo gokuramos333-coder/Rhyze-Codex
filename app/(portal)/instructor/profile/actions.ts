@@ -7,6 +7,27 @@ import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { putPrivateDocument } from '@/lib/storage/object-storage';
 import { parseOptionalExpiration } from '@/lib/domain/credentials/credential-upload';
+import { birthdayDateFromMonthDay } from '@/lib/domain/birthdays/birthday-reminders';
+
+export async function updateInstructorBirthdayAction(formData: FormData) {
+  const user = await requireArea('instructor');
+  let dateOfBirth: Date;
+  try {
+    dateOfBirth = birthdayDateFromMonthDay(
+      Number(formData.get('birthdayMonth')),
+      Number(formData.get('birthdayDay')),
+    );
+  } catch {
+    redirect('/instructor/profile?error=birthday');
+  }
+  await prisma.memberProfile.upsert({
+    where: { userId: user.id },
+    update: { dateOfBirth },
+    create: { userId: user.id, dateOfBirth },
+  });
+  revalidatePath('/instructor/profile');
+  redirect('/instructor/profile?saved=birthday');
+}
 
 export async function uploadCredentialAction(formData: FormData) {
   const user = await requireArea('instructor');

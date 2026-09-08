@@ -25,7 +25,12 @@ export async function POST(request: Request) {
         to: credential.instructor.email,
         subject: kind === 'EXPIRED' ? `Your Rhyze ${credential.type} document expired` : `Your Rhyze ${credential.type} document expires soon`,
         template: `CREDENTIAL_${kind}`,
-        payload: { credentialId: credential.id, expiresAt: credential.expiresAt.toISOString() },
+        payload: {
+          name: credential.instructor.name || 'Instructor',
+          credentialName: credential.type === 'CPR' ? 'CPR certification' : 'instructor insurance',
+          expirationDate: credential.expiresAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric' }),
+          profileUrl: '/instructor/profile',
+        },
         dedupeKey,
       },
     });
@@ -40,7 +45,18 @@ export async function POST(request: Request) {
     await prisma.emailMessage.upsert({
       where: { dedupeKey },
       update: {},
-      create: { userId: application.userId, to: application.user.email, subject: 'Your Rhyze instructor documents are missing', template: 'INSTRUCTOR_DOCUMENTS_MISSING', payload: {}, dedupeKey },
+      create: {
+        userId: application.userId,
+        to: application.user.email,
+        subject: 'Your Rhyze instructor documents are missing',
+        template: 'INSTRUCTOR_DOCUMENTS_MISSING',
+        payload: {
+          name: application.user.name || 'Instructor',
+          missingDocuments: 'Instructor insurance and CPR certification',
+          profileUrl: '/instructor/profile',
+        },
+        dedupeKey,
+      },
     });
   }
   return NextResponse.json({ queued, missing: missingApplications.length });

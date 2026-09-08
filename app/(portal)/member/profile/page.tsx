@@ -1,25 +1,36 @@
 import { ProfileField } from '@/components/domain/accounts/ProfileField';
+import { BirthdayFields } from '@/components/domain/accounts/BirthdayFields';
 import Image from 'next/image';
+import Link from 'next/link';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import {
+  changePasswordAction,
   removeProfilePhotoAction,
   updateProfilePhotoAction,
   updateNotificationPreferencesAction,
   updateProfileAction,
 } from '../actions';
-import { AgreementProfileCard } from '@/components/domain/accounts/AgreementProfileCard';
+import { ProfileSecurityForm } from '@/components/domain/accounts/ProfileSecurityForm';
+import { giftedVipAccessNote } from '@/lib/domain/memberships/gifted-vip';
 
-export default async function MemberProfilePage({
-  searchParams,
-}: {
-  searchParams: { error?: string; saved?: string };
-}) {
+export default async function MemberProfilePage(
+  props: {
+    searchParams: Promise<{ error?: string; saved?: string; securityError?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireArea('member');
-  const [profile, preferences] = await Promise.all([
+  const [profile, preferences, currentMembership] = await Promise.all([
     prisma.memberProfile.findUnique({ where: { userId: user.id } }),
     prisma.notificationPreference.findUnique({ where: { userId: user.id } }),
+    prisma.membership.findFirst({
+      where: { userId: user.id, status: { in: ['ACTIVE', 'TRIALING', 'PAUSED', 'PAST_DUE'] } },
+      include: { product: true },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
+  const giftedVipNote = giftedVipAccessNote(currentMembership?.product.slug);
 
   return (
     <>
@@ -49,6 +60,15 @@ export default async function MemberProfilePage({
         support you when it matters.
       </p>
 
+      <Link href="/member/membership" className="mt-6 block border-t-4 border-rhyze-coral bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-lg">
+        <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">Current membership</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <strong className="font-display text-4xl tracking-wider">{currentMembership?.product.name || 'NO ACTIVE PLAN'}</strong>
+          <span className="bg-orange-50 px-3 py-2 text-xs font-black uppercase tracking-widest">{currentMembership?.status.replaceAll('_', ' ') || 'View options'}</span>
+        </div>
+        {giftedVipNote && <p className="mt-3 text-sm font-black text-rhyze-coral">{giftedVipNote}</p>}
+      </Link>
+
       {searchParams.saved && (
         <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 text-sm font-bold">
           Changes saved.
@@ -57,6 +77,18 @@ export default async function MemberProfilePage({
       {searchParams.error && (
         <p className="mt-6 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-4 text-sm font-bold">
           Enter both emergency-contact fields and check the remaining details.
+        </p>
+      )}
+
+      {searchParams.securityError && (
+        <p className="mt-6 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-4 text-sm font-bold">
+          {searchParams.securityError === 'current_password'
+            ? 'The current password is incorrect.'
+            : searchParams.securityError === 'mismatch'
+              ? 'The new passwords do not match.'
+              : searchParams.securityError === 'new_password'
+                ? 'Use at least 9 characters with an uppercase letter, number, and symbol.'
+                : 'Your password could not be changed here. Use Forgot password or contact management.'}
         </p>
       )}
 
@@ -76,6 +108,7 @@ export default async function MemberProfilePage({
           defaultValue={profile?.phone}
           autoComplete="tel"
         />
+        <BirthdayFields value={profile?.dateOfBirth} />
         <ProfileField
           label="Address"
           name="addressLine1"
@@ -123,7 +156,7 @@ export default async function MemberProfilePage({
         </button>
       </form>
 
-      <AgreementProfileCard userId={user.id} returnTo="/member/profile" />
+      <ProfileSecurityForm email={user.email} action={changePasswordAction} />
 
       <form
         action={updateNotificationPreferencesAction}

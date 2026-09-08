@@ -33,7 +33,7 @@ function dollars(payload: EmailPayload, key = 'amount', fallback = '$92.00') {
   return typeof value === 'string' && value ? value : fallback;
 }
 
-const member = { name: 'Gui', memberUrl: '/member', membershipUrl: '/memberships' };
+const member = { name: 'Sample Member', memberUrl: '/member', membershipUrl: '/memberships' };
 const booking = {
   ...member,
   className: 'Pilates Pulse',
@@ -49,9 +49,29 @@ export const emailTemplateCatalog = {
     subject: () => 'Welcome to Rhyze Fitness', sample: member,
     present: (p) => ({ eyebrow: 'Welcome to the tribe', headline: 'Your Rhyze starts here', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`, paragraphs: ['Your account is ready. You can now book classes, follow your credits, manage your membership, and stay connected with the studio in one place.', 'We are so glad you are here.'], cta: { label: 'Open My Rhyze', href: text(p, 'memberUrl', '/member') }, closing: 'Please cancel in advance if your plans change. No-shows and late cancellations may result in automatic charges under the Rhyze cancellation policy. If you have questions, review the policy or reach out to us.' }),
   },
+  PROFILE_COMPLETION_REMINDER: {
+    label: 'Profile completion and waiver reminder', category: 'Accounts', trigger: 'When management asks existing members to complete required profile and waiver details',
+    subject: () => 'Please update your Rhyze profile and waivers', sample: { ...member, profileUrl: '/member/profile', waiverUrl: '/member/waiver' },
+    present: (p) => ({
+      eyebrow: 'Account update needed',
+      headline: 'Complete your Rhyze profile',
+      greeting: `Hi ${text(p, 'name', 'Rhyzer')},`,
+      paragraphs: [
+        'Please update your My Rhyze account with your full first and last name, email, cell phone, and birthday month and day so management can send your free standard class.',
+        'Please also read and accept the required Rhyze waiver and cancellation policies before taking class. This is crucial for everyone’s safety and studio liability protection.',
+        'If your information is already complete, please open your profile and waiver page to confirm everything is current.',
+      ],
+      facts: [
+        { label: 'Profile', value: text(p, 'profileUrl', '/member/profile') },
+        { label: 'Waiver', value: text(p, 'waiverUrl', '/member/waiver') },
+      ],
+      cta: { label: 'Update profile', href: text(p, 'profileUrl', '/member/profile') },
+      closing: `Waivers and the cancellation policy must be accepted before booking or taking class. You can review the waiver here: ${text(p, 'waiverUrl', '/member/waiver')}`,
+    }),
+  },
   ACCOUNT_ACTIVATION: {
     label: 'Imported member account activation', category: 'Accounts', trigger: 'When an imported Somble member is invited to activate My Rhyze',
-    subject: () => 'Your new My Rhyze Fitness account is ready!', sample: { name: 'Gui', activationUrl: '/claim-account/sample-token' },
+    subject: () => 'Your new My Rhyze Fitness account is ready!', sample: { name: 'Sample Member', activationUrl: '/claim-account/sample-token' },
     present: (p) => ({
       eyebrow: 'Your upgraded My Rhyze',
       headline: 'Your new account is ready',
@@ -90,6 +110,16 @@ export const emailTemplateCatalog = {
     subject: (p) => `New Rhyze signup: ${text(p, 'memberName', 'New member')}`, sample: { memberName: 'Gui Ramos', memberEmail: 'gui@example.com', memberPhone: '(908) 555-0123', adminUrl: '/admin/members' },
     present: (p) => ({ eyebrow: 'Management update', headline: 'A new Rhyzer joined', paragraphs: [`${text(p, 'memberName', 'A new member')} just created an account.`], facts: [{ label: 'Email', value: text(p, 'memberEmail', 'Not provided') }, { label: 'Phone', value: text(p, 'memberPhone', 'Not provided') }], cta: { label: 'View member', href: text(p, 'adminUrl', '/admin/members') } }),
   },
+  BIRTHDAY_MONTHLY_DIGEST: {
+    label: 'Monthly birthday digest', category: 'Messages', trigger: 'On the first day of a month when active members or instructors have birthdays that month',
+    subject: (p) => `${text(p, 'monthName', 'Upcoming')} birthdays at Rhyze`, sample: { monthName: 'September', birthdayList: 'September 8 — Sample Member (Member); September 21 — Sample Instructor (Instructor)' },
+    present: (p) => ({ eyebrow: 'Management birthday calendar', headline: `${text(p, 'monthName', 'Upcoming')} birthdays`, paragraphs: ['Here are the active Rhyze member and instructor birthdays for this month so management has time to plan a celebration.'], callout: { title: 'Birthday list', body: text(p, 'birthdayList', 'No birthdays listed') }, cta: { label: 'Open Admin members', href: '/admin/members' } }),
+  },
+  BIRTHDAY_WEEK_AHEAD: {
+    label: 'Birthday one-week reminder', category: 'Messages', trigger: 'Exactly seven days before an active member or instructor birthday',
+    subject: (p) => `Birthday in one week: ${text(p, 'birthdayList', 'Rhyze member')}`, sample: { birthdayDate: 'September 8', birthdayList: 'Sample Member (Member)' },
+    present: (p) => ({ eyebrow: 'Birthday reminder', headline: 'A Rhyze birthday is one week away', paragraphs: ['This reminder is being sent one week ahead so management has time to plan.'], facts: [{ label: 'Birthday', value: text(p, 'birthdayDate', 'One week from today') }], callout: { title: 'Who to celebrate', body: text(p, 'birthdayList', 'Rhyze member') }, cta: { label: 'Open Admin members', href: '/admin/members' } }),
+  },
   BOOKING_CONFIRMATION: {
     label: 'Booking confirmation', category: 'Bookings', trigger: 'Immediately after a confirmed class booking',
     subject: (p) => `You’re booked for ${text(p, 'className', 'your Rhyze class')}`, sample: booking,
@@ -108,7 +138,7 @@ export const emailTemplateCatalog = {
   ATTENDANCE_NO_SHOW: {
     label: 'No-show follow-up', category: 'Bookings', trigger: 'After staff marks a booked member as a no-show',
     subject: (p) => `We missed you at ${text(p, 'className', 'class')}`,
-    sample: { ...booking, chargeSummary: '$5 no-show fee charged to your saved payment method.', policyUrl: '/policies#cancellation' },
+    sample: { ...booking, chargeSummary: '$10 no-show fee charged to your saved payment method.', policyUrl: '/policies#cancellation' },
     present: (p) => ({ eyebrow: 'Attendance update', headline: 'We missed you in class', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`, paragraphs: [`We missed you at ${text(p, 'className', 'your scheduled Rhyze class')} on ${text(p, 'classDate', 'your class date')} at ${text(p, 'classTime', 'class time')}.`, text(p, 'chargeSummary', 'A no-show fee may apply according to the Rhyze cancellation policy.'), 'We know life happens. If your plans change, please cancel in advance through My Rhyze so another Rhyzer has a chance to take the spot. Late cancellations and no-shows can result in automatic charges according to the Rhyze cancellation policy.'], cta: { label: 'View bookings', href: text(p, 'bookingsUrl', '/member/bookings') }, closing: `Questions? Review the Rhyze cancellation policy at ${text(p, 'policyUrl', '/policies#cancellation')} or reach out to us.` }),
   },
   ADMIN_BOOKING_CANCELLED: {
@@ -150,8 +180,20 @@ export const emailTemplateCatalog = {
   },
   CLASS_CANCELLED: {
     label: 'Class cancelled', category: 'Bookings', trigger: 'When management or an instructor cancels a class',
-    subject: (p) => `${text(p, 'className', 'Your Rhyze class')} was cancelled`, sample: { ...booking, reason: 'The studio is closing because of unsafe weather conditions.', creditResult: 'Your credit has been returned automatically.' },
-    present: (p) => ({ eyebrow: 'Schedule change', headline: 'This class has been cancelled', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`, paragraphs: [`We need to cancel ${text(p, 'className', 'your upcoming class')}.`, text(p, 'reason', 'Open My Rhyze for the latest update.'), text(p, 'creditResult', 'Your eligible credit will be returned automatically.')], cta: { label: 'Choose another class', href: '/classes' } }),
+    subject: (p) => `${text(p, 'className', 'Your Rhyze class')} was cancelled`, sample: { ...booking, reason: 'The studio needs to cancel this class due to low enrollment.', creditResult: 'Your credit has been returned automatically.' },
+    present: (p) => ({
+      eyebrow: 'Schedule change',
+      headline: 'This class has been cancelled',
+      greeting: `Hi ${text(p, 'name', 'Rhyzer')},`,
+      paragraphs: [
+        `We need to cancel ${text(p, 'className', 'your upcoming class')} on ${text(p, 'classDate', 'the scheduled date')} at ${text(p, 'classTime', 'the scheduled time')}.`,
+        'We apologize for the inconvenience and appreciate your understanding.',
+        text(p, 'reason', 'Open My Rhyze for the latest update.'),
+        text(p, 'creditResult', 'Your eligible credit will be returned automatically.'),
+        'We hope to see you in another class soon.',
+      ],
+      cta: { label: 'Choose another class', href: '/classes' },
+    }),
   },
   MEMBERSHIP_PURCHASE_CONFIRMATION: {
     label: 'Membership purchase', category: 'Memberships & payments', trigger: 'After Stripe confirms a membership purchase',
@@ -227,6 +269,22 @@ export const emailTemplateCatalog = {
     label: 'Instructor approval request', category: 'Instructors', trigger: 'When someone signs up with the instructor code',
     subject: (p) => `Instructor approval needed: ${text(p, 'applicantName', 'New applicant')}`, sample: { applicantName: 'Nicole Finley', applicantEmail: 'nicole@example.com', adminPath: '/admin/instructors' },
     present: (p) => ({ eyebrow: 'Management review', headline: 'A new instructor is waiting', paragraphs: [`${text(p, 'applicantName', 'A new applicant')} used the Rhyze instructor code and needs approval.`], facts: [{ label: 'Email', value: text(p, 'applicantEmail', 'Not provided') }], cta: { label: 'Review application', href: text(p, 'adminPath', '/admin/instructors') } }),
+  },
+  INSTRUCTOR_WELCOME_INVITE: {
+    label: 'Instructor welcome invitation', category: 'Instructors', trigger: 'When management manually invites a new or existing member to join the instructor team',
+    subject: () => 'Welcome to the Rhyze Tribe team', sample: { name: 'Avery', instructorCode: 'RZTRIBE2026', activationUrl: '/member/instructor-access' },
+    present: (p) => ({
+      eyebrow: 'Welcome to the Rhyze Tribe team',
+      headline: 'Your instructor invitation is ready',
+      greeting: `Hi ${text(p, 'name', 'Instructor')},`,
+      paragraphs: [
+        'Management created your Rhyze instructor invitation. Open the link below, sign in or activate your account, and enter the instructor access code.',
+        'After you submit the code, management will review and approve your access before the instructor portal opens.',
+      ],
+      facts: [{ label: 'Instructor access code', value: text(p, 'instructorCode', 'Contact management') }],
+      cta: { label: 'Activate instructor invitation', href: text(p, 'activationUrl', '/member/instructor-access') },
+      closing: 'Welcome to the team. We are excited to have you join the Rhyze Tribe!',
+    }),
   },
   INSTRUCTOR_APPROVED: {
     label: 'Instructor approved', category: 'Instructors', trigger: 'After management approves an instructor application',

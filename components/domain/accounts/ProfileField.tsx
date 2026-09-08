@@ -3,11 +3,13 @@ export function ProfileField({
   name,
   defaultValue,
   autoComplete,
+  type = 'text',
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   autoComplete?: string;
+  type?: string;
 }) {
   return (
     <label className="grid gap-2">
@@ -15,6 +17,7 @@ export function ProfileField({
         {label}
       </span>
       <input
+        type={type}
         name={name}
         defaultValue={defaultValue || ''}
         autoComplete={autoComplete}

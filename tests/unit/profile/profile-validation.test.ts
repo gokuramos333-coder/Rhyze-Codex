@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { profileSchema } from '@/lib/validation/profile';
 
 describe('member profile validation', () => {
-  it('normalizes optional blank fields to null', () => {
+  it('normalizes optional blank fields and stores only birthday month and day', () => {
     const result = profileSchema.parse({
       preferredName: ' Maya ',
       phone: ' ',
+      birthdayMonth: '4',
+      birthdayDay: '12',
       emergencyContactName: '',
       emergencyContactPhone: '',
     });
@@ -13,6 +15,7 @@ describe('member profile validation', () => {
     expect(result).toEqual({
       preferredName: 'Maya',
       phone: null,
+      dateOfBirth: new Date('2000-04-12T12:00:00.000Z'),
       emergencyContactName: null,
       emergencyContactPhone: null,
     });
@@ -22,6 +25,8 @@ describe('member profile validation', () => {
     const result = profileSchema.safeParse({
       preferredName: '',
       phone: '',
+      birthdayMonth: '4',
+      birthdayDay: '12',
       emergencyContactName: 'Jordan Collins',
       emergencyContactPhone: '',
     });

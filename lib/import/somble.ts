@@ -19,12 +19,55 @@ export type SombleTransactionInput = {
   paymentId: string;
 };
 
+export type SombleAttendeeInput = {
+  name: string;
+  email: string;
+  accessType: string;
+  checkedIn: boolean;
+};
+
+export type GroupedSombleAttendee = {
+  attendee: SombleAttendeeInput;
+  guests: string[];
+};
+
+export type SombleMembershipInput = {
+  planName: string;
+  supporterName: string;
+  supporterEmail: string;
+  paymentStructure: string;
+  paymentStructureAmount: number | string;
+  creditsRemaining: number | null;
+  status: string;
+  paymentAmountCents: number;
+  accessMethod: string;
+  purchasedAt: Date;
+  expiresAt: Date | null;
+  pausedAt: Date | null;
+  unsubscribedAt: Date | null;
+};
+
 export type SombleImportSummary = {
   clientCount: number;
   transactionCount: number;
   transferredRevenueCents: number;
   revenueByType: Record<string, number>;
 };
+
+export type SombleMembershipStatus =
+  | 'ACTIVE'
+  | 'PAUSED'
+  | 'PAST_DUE'
+  | 'CANCELLED'
+  | 'EXPIRED';
+
+type SombleProductDefaultsInput = Pick<
+  SombleMembershipInput,
+  | 'planName'
+  | 'paymentStructure'
+  | 'paymentStructureAmount'
+  | 'paymentAmountCents'
+>;
 
 function parseCsv(csv: string): Record<string, string>[] {
   const rows: string[][] = [];
@@ -168,6 +211,205 @@ export function parseSombleTransactions(
       paymentId,
     };
   });
+}
+
+export function parseSombleAttendees(csv: string): SombleAttendeeInput[] {
+  const rows = parseCsv(csv.replace(/^\uFEFF/, ''));
+  requireColumns(rows, [
+    'display_name',
+    'email_address',
+    'access_type',
+    'checked_in_status',
+  ]);
+
+  const emails = new Set<string>();
+  return rows.map((row) => {
+    const email = row.email_address.trim().toLowerCase();
+    const name = row.display_name.trim().replace(/\s+/g, ' ');
+    if (!email) throw new Error('Attendee email cannot be blank');
+    if (emails.has(email)) {
+      throw new Error(`Duplicate attendee email: ${email}`);
+    }
+    emails.add(email);
+    return {
+      name,
+      email,
+      accessType: row.access_type.trim().toLowerCase(),
+      checkedIn: row.checked_in_status.trim().toLowerCase() === 'true',
+    };
+  });
+}
+
+export function groupSombleAttendees(
+  attendees: SombleAttendeeInput[],
+): GroupedSombleAttendee[] {
+  const grouped = new Map<string, GroupedSombleAttendee>();
+  for (const attendee of attendees) {
+    const existing = grouped.get(attendee.email);
+    if (!existing) {
+      grouped.set(attendee.email, { attendee, guests: [] });
+    } else {
+      existing.guests.push(attendee.name);
+    }
+  }
+  return [...grouped.values()];
+}
+
+export function parseSombleMemberships(csv: string): SombleMembershipInput[] {
+  const rows = parseCsv(csv.replace(/^\uFEFF/, ''));
+  requireColumns(rows, [
+    'membership_name',
+    'supporter_name',
+    'supporter_email',
+    'payment_structure',
+    'payment_structure_amount',
+    'credits_remaining',
+    'status',
+    'payment_amount',
+    'access_method',
+    'purchase_date',
+    'expiration_date',
+    'pause_date',
+    'unsubscribe_date',
+  ]);
+
+  return rows.map((row) => {
+    const supporterEmail = row.supporter_email.trim().toLowerCase();
+    if (!supporterEmail) throw new Error('Membership email cannot be blank');
+
+    const creditsRemaining = row.credits_remaining.trim()
+      ? Number.parseInt(row.credits_remaining, 10)
+      : null;
+    if (
+      creditsRemaining !== null &&
+      (!Number.isSafeInteger(creditsRemaining) || creditsRemaining < 0)
+    ) {
+      throw new Error(`Invalid credits_remaining: ${row.credits_remaining}`);
+    }
+
+    const paymentAmountCents = Math.round(Number(row.payment_amount) * 100);
+    if (!Number.isSafeInteger(paymentAmountCents) || paymentAmountCents < 0) {
+      throw new Error(`Invalid payment_amount: ${row.payment_amount}`);
+    }
+
+    const paymentStructure = row.payment_structure.trim().toLowerCase();
+    const paymentStructureAmount =
+      paymentStructure === 'credits'
+        ? Number(row.payment_structure_amount)
+        : row.payment_structure_amount.trim().toLowerCase();
+    if (
+      paymentStructure === 'credits' &&
+      (typeof paymentStructureAmount !== 'number' ||
+        !Number.isFinite(paymentStructureAmount) ||
+        paymentStructureAmount < 0)
+    ) {
+      throw new Error(
+        `Invalid payment_structure_amount: ${row.payment_structure_amount}`,
+      );
+    }
+    if (paymentStructure !== 'credits' && !paymentStructureAmount) {
+      throw new Error('Invalid payment_structure_amount: (blank)');
+    }
+
+    return {
+      planName: row.membership_name.trim(),
+      supporterName: row.supporter_name.trim().replace(/\s+/g, ' '),
+      supporterEmail,
+      paymentStructure,
+      paymentStructureAmount,
+      creditsRemaining,
+      status: row.status.trim().toLowerCase(),
+      paymentAmountCents,
+      accessMethod: row.access_method.trim().toLowerCase(),
+      purchasedAt: requiredDate(row.purchase_date, 'purchase_date'),
+      expiresAt: optionalDate(row.expiration_date),
+      pausedAt: optionalDate(row.pause_date),
+      unsubscribedAt: optionalDate(row.unsubscribe_date),
+    };
+  });
+}
+
+export function sombleMembershipStatus(
+  status: string,
+): SombleMembershipStatus {
+  switch (status.trim().toLowerCase()) {
+    case 'active':
+      return 'ACTIVE';
+    case 'paused':
+      return 'PAUSED';
+    case 'past_due':
+    case 'past-due':
+      return 'PAST_DUE';
+    case 'cancelled':
+    case 'canceled':
+      return 'CANCELLED';
+    case 'inactive':
+    case 'expired':
+      return 'EXPIRED';
+    default:
+      throw new Error(`Unsupported Somble membership status: ${status}`);
+  }
+}
+
+export function sombleProductDefaults(input: SombleProductDefaultsInput) {
+  const normalizedName = input.planName.trim().toLowerCase();
+  const creditBased = input.paymentStructure === 'credits';
+  const trial = normalizedName.includes('intro') || normalizedName.includes('trial');
+  const vip = normalizedName.includes('vip');
+  const promisedMonthlyCredits = normalizedName.includes('og rhyze tribe')
+    ? 8
+    : normalizedName === 'ritual'
+      ? 8
+      : normalizedName === 'elevate'
+        ? 4
+        : null;
+  const isUnlimited = vip || trial;
+  return {
+    slug: `somble-${normalizedName
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')}`,
+    description: 'Legacy Somble plan preserved for transferred members.',
+    kind: trial
+      ? ('INTRO_TRIAL' as const)
+      : vip
+        ? ('VIP' as const)
+        : creditBased
+          ? ('CLASS_PACK' as const)
+          : ('LIMITED_MEMBERSHIP' as const),
+    priceCents: input.paymentAmountCents,
+    billingInterval: creditBased
+      ? ('ONE_TIME' as const)
+      : input.paymentStructureAmount === 'yearly'
+        ? ('YEARLY' as const)
+        : ('MONTHLY' as const),
+    includedCredits: isUnlimited
+      ? null
+      : promisedMonthlyCredits ??
+        (creditBased && typeof input.paymentStructureAmount === 'number'
+        ? input.paymentStructureAmount
+        : null),
+    isUnlimited,
+    isPublic: false,
+    isActive: false,
+    alwaysAvailable: false,
+  };
+}
+
+export function sombleImportedCreditEntitlement(input: {
+  creditsRemaining: number | null;
+  includedCredits: number | null;
+  isUnlimited: boolean;
+}) {
+  if (input.isUnlimited) {
+    return { shouldCreate: true, isUnlimited: true, balance: null } as const;
+  }
+
+  const balance = input.creditsRemaining ?? input.includedCredits;
+  return {
+    shouldCreate: balance !== null,
+    isUnlimited: false,
+    balance,
+  } as const;
 }
 
 export function summarizeSombleImport(

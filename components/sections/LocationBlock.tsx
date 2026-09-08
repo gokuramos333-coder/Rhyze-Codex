@@ -8,7 +8,7 @@ export function LocationBlock() {
 
   return (
     <section className="mx-auto max-w-7xl px-6 py-24">
-      <div className="mb-10 text-center">
+      <div className="mb-10 text-left md:text-center">
         <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
           Find Us
         </p>
@@ -32,6 +32,7 @@ export function LocationBlock() {
               <div>
                 <p className="font-semibold">{site.address.line1}</p>
                 <p className="text-rhyze-cream/70">{site.address.line2}</p>
+                <p className="text-rhyze-cream/70">{site.address.line3}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -47,9 +48,12 @@ export function LocationBlock() {
               <Clock className="mt-1 h-4 w-4 shrink-0 text-rhyze-coral" />
               <div>
                 {site.hours.map((h) => (
-                  <p key={h.days} className="flex gap-3">
-                    <span className="w-20 text-rhyze-cream/60">{h.days}</span>
-                    <span>{h.hours}</span>
+                  <p
+                    key={h.days}
+                    className="grid grid-cols-[4.5rem_auto] gap-x-3"
+                  >
+                    <span className="text-rhyze-cream/60">{h.days}</span>
+                    <span className="whitespace-nowrap">{h.hours}</span>
                   </p>
                 ))}
               </div>

@@ -7,12 +7,13 @@ import { requireActiveUser, requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { returnedCreditTerms } from '@/lib/domain/credits/returned-credit';
 import { queueEmail } from '@/lib/notifications/email-queue';
-import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
+import { chargeAttendanceFee, refundAttendanceFee } from '@/lib/payments/attendance-fee';
 import {
   attendanceToggle,
   type InstructorAttendanceStatus,
 } from '@/lib/domain/bookings/attendance-toggle';
 import { noShowFeeDecision } from '@/lib/domain/bookings/booking-rules';
+import { bookingAccessType } from '@/lib/domain/bookings/booking-access';
 import { hasPermission } from '@/lib/auth/permissions';
 
 const validStatuses = new Set<AttendanceStatus>([
@@ -26,50 +27,6 @@ function attendanceRosterPath(actorRole: string, occurrenceId: string, result: s
     ? `/instructor/classes/${occurrenceId}/roster`
     : `/admin/schedule/${occurrenceId}/roster`;
   return `${basePath}?result=${result}`;
-}
-
-async function chargeNoShowFee(input: {
-  bookingId: string;
-  userId: string;
-  stripeCustomerId: string | null;
-  amountCents: number;
-}) {
-  if (input.amountCents <= 0 || !stripeIsConfigured() || !input.stripeCustomerId) return null;
-  const stripe = getStripe();
-  const customer = await stripe.customers.retrieve(input.stripeCustomerId);
-  if (customer.deleted || !customer.invoice_settings.default_payment_method) return null;
-  const paymentMethod =
-    typeof customer.invoice_settings.default_payment_method === 'string'
-      ? customer.invoice_settings.default_payment_method
-      : customer.invoice_settings.default_payment_method.id;
-  const payment = await stripe.paymentIntents.create(
-    {
-      amount: input.amountCents,
-      currency: 'usd',
-      customer: input.stripeCustomerId,
-      payment_method: paymentMethod,
-      confirm: true,
-      off_session: true,
-      description: 'Rhyze no-show fee',
-      metadata: { bookingId: input.bookingId, feeType: 'NO_SHOW', amountCents: String(input.amountCents) },
-    },
-    { idempotencyKey: `no-show-fee-${input.bookingId}` },
-  );
-  await prisma.paymentRecord.upsert({
-    where: { stripeEventId: `no-show-fee:${payment.id}` },
-    update: {},
-    create: {
-      userId: input.userId,
-      kind: 'TRANSFER_FEE',
-      status: 'SUCCEEDED',
-      amountCents: input.amountCents,
-      stripeEventId: `no-show-fee:${payment.id}`,
-      stripeCustomerId: input.stripeCustomerId,
-      stripePaymentIntentId: payment.id,
-      occurredAt: new Date(),
-    },
-  });
-  return payment.id;
 }
 
 export async function markAttendanceAction(formData: FormData): Promise<void> {
@@ -110,59 +67,127 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
 
   const transition = attendanceToggle(booking.attendance?.status || null, status);
   let noShowFee: ReturnType<typeof noShowFeeDecision> | null = null;
-  let noShowPaymentIntentId: string | null = null;
+  let noShowFeeResult: Awaited<ReturnType<typeof chargeAttendanceFee>> | null = null;
   if (status === 'NO_SHOW' && transition.action !== 'CLEAR') {
-    const previousNoShowCount = await prisma.attendanceRecord.count({
-      where: {
-        userId: booking.userId,
-        status: 'NO_SHOW',
-        bookingId: { not: booking.id },
-      },
+    const [previousNoShowCount, reservation] = await Promise.all([
+      prisma.attendanceRecord.count({
+        where: {
+          userId: booking.userId,
+          status: 'NO_SHOW',
+          bookingId: { not: booking.id },
+        },
+      }),
+      prisma.creditLedgerEntry.findFirst({
+        where: { bookingId: booking.id, type: 'RESERVE' },
+        include: {
+          creditAccount: {
+            include: {
+              sourcePurchase: {
+                select: { product: { select: { kind: true } } },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+    const accessType = bookingAccessType({
+      policySnapshot: booking.policySnapshot,
+      bookingSource: booking.source,
+      reservedProductKind:
+        reservation?.creditAccount.sourcePurchase?.product.kind ?? null,
+      activeProductKinds: booking.user.memberships.map(
+        (membership) => membership.product.kind,
+      ),
     });
     noShowFee = noShowFeeDecision({
       activeMemberships: booking.user.memberships,
       previousNoShowCount,
+      bookingSource: booking.source,
+      accessType,
     });
-    noShowPaymentIntentId = await chargeNoShowFee({
-      bookingId: booking.id,
-      userId: booking.userId,
-      stripeCustomerId: booking.user.stripeCustomerId,
-      amountCents: noShowFee.amountCents,
-    }).catch(() => null);
-  }
-
-  await prisma.$transaction(async (tx) => {
-    if (transition.action === 'CLEAR') {
-      await tx.attendanceRecord.deleteMany({
-        where: { occurrenceId, userId: booking.userId },
-      });
-    } else {
-      await tx.attendanceRecord.upsert({
-        where: { occurrenceId_userId: { occurrenceId, userId: booking.userId } },
-        update: {
-          status,
-          markedById: actor.id,
-          checkedInAt: status === 'CHECKED_IN' ? new Date() : null,
-        },
-        create: {
-          occurrenceId,
-          bookingId,
-          userId: booking.userId,
-          status,
-          markedById: actor.id,
-          checkedInAt: status === 'CHECKED_IN' ? new Date() : null,
-        },
+    if (noShowFee.amountCents > 0) {
+      noShowFeeResult = await chargeAttendanceFee({
+        bookingId: booking.id,
+        userId: booking.userId,
+        stripeCustomerId: booking.user.stripeCustomerId,
+        feeType: 'NO_SHOW',
+        amountCents: noShowFee.amountCents,
+        idempotencyKey: `no-show-fee-${booking.id}`,
       });
     }
-    await tx.booking.update({
-      where: { id: booking.id },
-      data: {
-        status: transition.bookingStatus,
-        cancelledAt:
-          transition.attendanceStatus === 'LATE_CANCELLED' ? new Date() : null,
+  }
+
+  if (
+    booking.attendance?.status === 'NO_SHOW' &&
+    (transition.action === 'CLEAR' || status !== 'NO_SHOW')
+  ) {
+    const chargedNoShow = await prisma.paymentRecord.findFirst({
+      where: {
+        bookingId: booking.id,
+        kind: 'NO_SHOW_FEE',
+        status: 'SUCCEEDED',
+        stripePaymentIntentId: { not: null },
       },
+      orderBy: { occurredAt: 'desc' },
     });
-  });
+    if (chargedNoShow?.stripePaymentIntentId) {
+      await refundAttendanceFee({
+        paymentIntentId: chargedNoShow.stripePaymentIntentId,
+        amountCents: chargedNoShow.amountCents,
+        idempotencyKey: `refund-no-show-fee-${booking.id}`,
+      });
+    }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (transition.action === 'CLEAR') {
+        await tx.attendanceRecord.deleteMany({
+          where: { occurrenceId, userId: booking.userId },
+        });
+      } else {
+        await tx.attendanceRecord.upsert({
+          where: { occurrenceId_userId: { occurrenceId, userId: booking.userId } },
+          update: {
+            status,
+            markedById: actor.id,
+            checkedInAt: status === 'CHECKED_IN' ? new Date() : null,
+          },
+          create: {
+            occurrenceId,
+            bookingId,
+            userId: booking.userId,
+            status,
+            markedById: actor.id,
+            checkedInAt: status === 'CHECKED_IN' ? new Date() : null,
+          },
+        });
+      }
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: transition.bookingStatus,
+          cancelledAt:
+            transition.attendanceStatus === 'LATE_CANCELLED' ? new Date() : null,
+        },
+      });
+    });
+  } catch (error) {
+    if (noShowFeeResult?.status === 'SUCCEEDED' && noShowFee) {
+      await refundAttendanceFee({
+        paymentIntentId: noShowFeeResult.paymentIntentId,
+        amountCents: noShowFee.amountCents,
+        idempotencyKey: `refund-no-show-fee-failed-attendance-${booking.id}`,
+      }).catch((refundError) => {
+        console.error('No-show fee compensation refund failed', {
+          bookingId: booking.id,
+          paymentIntentId: noShowFeeResult.paymentIntentId,
+          message: refundError instanceof Error ? refundError.message : 'Unknown refund error',
+        });
+      });
+    }
+    throw error;
+  }
 
   if (status === 'NO_SHOW' && transition.action !== 'CLEAR') {
     await queueEmail(prisma, {
@@ -186,9 +211,9 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
           minute: '2-digit',
         }),
         chargeSummary: noShowFee?.amountCents
-          ? noShowPaymentIntentId
-            ? `${noShowFee.amountCents === 1_000 ? '$10' : '$5'} no-show fee charged to your saved payment method.`
-            : `${noShowFee.amountCents === 1_000 ? '$10' : '$5'} no-show fee may apply according to the Rhyze cancellation policy.`
+          ? noShowFeeResult?.status === 'SUCCEEDED'
+            ? `$${(noShowFee.amountCents / 100).toFixed(0)} no-show fee charged to your saved payment method.`
+            : `$${(noShowFee.amountCents / 100).toFixed(0)} no-show fee could not be charged. Please update your saved payment method or contact the studio.`
           : 'No fee was charged for this no-show.',
         policyUrl: '/policies#cancellation',
         bookingsUrl: '/member/bookings',

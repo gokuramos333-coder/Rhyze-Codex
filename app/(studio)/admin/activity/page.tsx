@@ -1,8 +1,32 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db/prisma';
+import { buildAdminActivityItems } from '@/lib/admin/activity-client-metrics';
 
 export default async function AdminActivityPage() {
-  const [transactions, profiles] = await Promise.all([
+  const [users, purchases, memberships, commerceOrders, transactions, profiles] = await Promise.all([
+    prisma.user.findMany({
+      where: { NOT: { email: { endsWith: '@rhyze.local' } } },
+      select: { id: true, name: true, email: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.purchase.findMany({
+      where: { status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
+      include: { user: true, product: true, refunds: true },
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    }),
+    prisma.membership.findMany({
+      include: { user: true, product: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.commerceOrder.findMany({
+      where: { status: { in: ['PAID', 'FULFILLMENT_REVIEW', 'REFUNDED'] } },
+      include: { user: true, items: true },
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    }),
     prisma.sombleTransaction.findMany({
       include: { user: true },
       orderBy: { transferredAt: 'desc' },
@@ -14,22 +38,14 @@ export default async function AdminActivityPage() {
       take: 100,
     }),
   ]);
-  const items = [
-    ...transactions.map((item) => ({
-      id: `sale-${item.id}`,
-      at: item.transferredAt,
-      name: item.user.name || item.supporterName,
-      detail: `${item.contentType} · $${(item.amountCents / 100).toFixed(2)} transferred`,
-      href: '/admin/payments',
-    })),
-    ...profiles.map((item) => ({
-      id: `join-${item.id}`,
-      at: item.sourceJoinedAt,
-      name: item.user.name || item.user.email,
-      detail: `Joined through Somble · ${item.sourceStatus}`,
-      href: `/admin/members?q=${encodeURIComponent(item.user.email)}`,
-    })),
-  ].sort((a, b) => b.at.getTime() - a.at.getTime());
+  const items = buildAdminActivityItems({
+    users,
+    purchases,
+    memberships,
+    commerceOrders,
+    sombleTransactions: transactions,
+    sombleProfiles: profiles,
+  }).slice(0, 200);
 
   return (
     <>

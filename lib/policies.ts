@@ -6,7 +6,7 @@ export type PolicySection = {
   list?: string[];
 };
 
-export const AGREEMENT_EFFECTIVE_LABEL = 'July 2026';
+export const AGREEMENT_EFFECTIVE_LABEL = 'August 21, 2026';
 
 export const policySections: PolicySection[] = [
   {
@@ -20,13 +20,15 @@ export const policySections: PolicySection[] = [
     title: 'Cancellation for Classes',
     subtitle: 'Transfers, late cancels, and no-shows',
     list: [
-      'Contact Rhyze through the website messaging chat to request a transfer to another class within 2 weeks of the original class date.',
-      'Cancellations made more than 6 hours before class start time are eligible for transfer without a fee.',
-      'Cancellations made within 6 hours of class start time are eligible for transfer with a $10 transfer fee.',
-      'Cancellations made 2 hours or less before class start time are not eligible for transfer and will be marked as a late cancel or no-show.',
-      'All cancellations must be submitted through the website before class. If a booked client does not cancel through the website and is marked as a no-show, an automatic no-show charge may apply: $5 for membership holders and standard clients, and $10 for clients on the $7 for 7 days trial subscription.',
-      'The official cancellation window is 6 hours before class start time. Transfer requests received after this window may not be honored.',
-      'Transfer fees are waived for VIP Access membership holders only.',
+      'Submit every cancellation through My Bookings. A confirmation will show the exact credit and fee outcome before anything changes.',
+      'More than 6 hours before a standard class: cancel with no fee. A reserved class credit is returned to the member account.',
+      'More than 2 hours through 6 hours before class: OG Rhyze Tribe, Elevate, Ritual, class-pack, and single-class clients may reschedule to an eligible class within 14 days for a $5 transfer fee. The saved card is charged only after the new class is selected and confirmed.',
+      'More than 2 hours through 6 hours before class: VIP clients may reschedule within 14 days with no transfer fee. Intro-trial clients receive a firm attendance reminder but no fee in this window.',
+      '2 hours or less before class: standard membership, class-pack, and single-class clients lose the reserved credit and are charged a $10 late-cancellation fee to the saved payment method.',
+      '2 hours or less before class: intro-trial and VIP clients are charged a $10 late-cancellation fee to the saved payment method.',
+      'No-shows are charged automatically to the saved payment method: $10 for standard clients, $10 for intro-trial clients, and $10 for VIP clients.',
+      'Complimentary owner and staff bookings are never charged an automatic attendance fee.',
+      'Specialty event cancellations made more than 6 hours before the event automatically receive one event-only booking credit. The credit can be used for any eligible event, regardless of price, for 30 days from the cancellation date. Event credits cannot be used for standard classes.',
     ],
   },
   {
@@ -45,7 +47,7 @@ export const policySections: PolicySection[] = [
     title: 'Refunds and Membership Cancellation',
     list: [
       'Classes, events, and workshops are non-refundable except where required by law or when Rhyze expressly approves a refund.',
-      'Special events, collaboration classes, and workshops are non-transferable unless otherwise stated.',
+      'Special events, collaboration classes, and workshops are non-refundable. When cancelled more than 6 hours before the event, the member automatically receives one event-only booking credit, valid for 30 days from the cancellation date, instead of a cash refund.',
       'Any statutory cancellation rights control over conflicting studio wording. Eligible New Jersey health-club contracts may include specific cancellation, relocation, disability, closure, and online termination rights described in the applicable membership agreement.',
     ],
   },

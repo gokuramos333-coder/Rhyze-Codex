@@ -1,0 +1,2 @@
+ALTER TABLE "InstructorProfile"
+ADD COLUMN "displayOrder" INTEGER NOT NULL DEFAULT 0;

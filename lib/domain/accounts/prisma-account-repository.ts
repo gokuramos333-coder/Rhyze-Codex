@@ -10,30 +10,29 @@ export const prismaAccountRepository: AccountRepository = {
   },
   createMember(input) {
     return prisma.$transaction(async (tx) => {
-      const referral = input.referralCode
-        ? await tx.referralCode.findFirst({ where: { code: input.referralCode, isActive: true } })
-        : null;
       const user = await tx.user.create({
         data: {
           email: input.email,
           name: input.name,
           passwordHash: input.passwordHash,
-          memberProfile: { create: { phone: input.phone } },
+          memberProfile: { create: { phone: input.phone, dateOfBirth: input.dateOfBirth } },
           notificationPreference: { create: { marketingEmail: true } },
-          instructorApplication: input.createInstructorApplication ? { create: { status: 'PENDING' } } : undefined,
-          referralAttribution: referral ? { create: { referralCodeId: referral.id } } : undefined,
+          waiverAcceptances: {
+            create: {
+              waiverVersionId: input.waiverVersionId,
+              signedDate: new Date(),
+              mediaConsent: input.mediaConsent,
+              ipAddress: input.ipAddress,
+              userAgent: input.userAgent,
+            },
+          },
         },
         select: {
           id: true,
           email: true,
-          instructorApplication: { select: { id: true } },
         },
       });
-      return {
-        id: user.id,
-        email: user.email,
-        instructorApplicationId: user.instructorApplication?.id || null,
-      };
+      return user;
     });
   },
 };

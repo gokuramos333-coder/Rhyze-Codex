@@ -8,18 +8,19 @@ const errorMessages: Record<string, string> = {
   password:
     'Use 9 or more characters with an uppercase letter, number, and symbol.',
   instructor: 'That instructor access code is not valid.',
+  agreement: 'Accept the current studio policies and waiver to create your account.',
 };
 
-export default function SignUpPage({
-  searchParams,
-}: {
-  searchParams: {
-    error?: string;
-    ref?: string;
-    callbackUrl?: string;
-    plan?: string;
-  };
-}) {
+export default async function SignUpPage(
+  props: {
+    searchParams: Promise<{
+      error?: string;
+      callbackUrl?: string;
+      plan?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const error = searchParams.error
     ? errorMessages[searchParams.error]
     : undefined;
@@ -59,10 +60,7 @@ export default function SignUpPage({
           {error}
         </p>
       )}
-      <SignUpForm
-        defaultReferral={searchParams.ref || ''}
-        callbackUrl={callbackUrl}
-      />
+      <SignUpForm callbackUrl={callbackUrl} />
     </AuthFrame>
   );
 }

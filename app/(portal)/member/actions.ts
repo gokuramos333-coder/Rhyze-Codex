@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import {
   parseAgreementAcceptance,
   parseSignedDate,
+  waiverCompletionDestination,
 } from '@/lib/domain/waivers/acceptance';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -14,12 +15,54 @@ import {
   profileSchema,
 } from '@/lib/validation/profile';
 import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
+import {
+  changePassword,
+  PasswordChangeError,
+} from '@/lib/domain/accounts/password-change-service';
+import { prismaPasswordChangeRepository } from '@/lib/domain/accounts/prisma-password-change-repository';
+import { queueEmail } from '@/lib/notifications/email-queue';
+
+export async function changePasswordAction(formData: FormData): Promise<void> {
+  const user = await requireArea('member');
+  try {
+    await changePassword(
+      {
+        userId: user.id,
+        currentPassword: String(formData.get('currentPassword') || ''),
+        newPassword: String(formData.get('newPassword') || ''),
+        passwordConfirmation: String(formData.get('passwordConfirmation') || ''),
+      },
+      prismaPasswordChangeRepository,
+    );
+  } catch (error) {
+    const code = error instanceof PasswordChangeError ? error.code.toLowerCase() : 'account';
+    redirect(`/member/profile?securityError=${code}`);
+  }
+
+  try {
+    await queueEmail(prisma, {
+      userId: user.id,
+      to: user.email,
+      subject: 'Your Rhyze password was changed',
+      template: 'PASSWORD_CHANGED',
+      payload: { name: user.name || 'Rhyzer', contactUrl: '/contact' },
+      dedupeKey: `password-changed:${user.id}:${Date.now()}`,
+    });
+  } catch (error) {
+    console.error('Password changed, but the confirmation email could not be queued.', error);
+  }
+
+  revalidatePath('/member/profile');
+  redirect('/member/profile?saved=security');
+}
 
 export async function updateProfileAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
   const parsed = profileSchema.safeParse({
     preferredName: formData.get('preferredName'),
     phone: formData.get('phone'),
+    birthdayMonth: formData.get('birthdayMonth'),
+    birthdayDay: formData.get('birthdayDay'),
     addressLine1: formData.get('addressLine1'),
     addressLine2: formData.get('addressLine2'),
     city: formData.get('city'),
@@ -58,7 +101,19 @@ export async function updateProfilePhotoAction(formData: FormData): Promise<void
   let photoUrl: string;
   try { photoUrl = await putPublicImage(file); } catch { redirect('/member/profile?error=photo'); }
   const current = await prisma.memberProfile.findUnique({ where: { userId: user.id }, select: { photoUrl: true } });
-  await prisma.memberProfile.upsert({ where: { userId: user.id }, update: { photoUrl }, create: { userId: user.id, photoUrl } });
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { image: photoUrl } }),
+    prisma.memberProfile.upsert({ where: { userId: user.id }, update: { photoUrl }, create: { userId: user.id, photoUrl } }),
+    prisma.auditLog.create({
+      data: {
+        actorId: user.id,
+        action: 'member.profile-photo.updated',
+        entityType: 'MemberProfile',
+        entityId: user.id,
+        after: { photoUrl },
+      },
+    }),
+  ]);
   await deleteObject(current?.photoUrl || null);
   revalidatePath('/member/profile');
   redirect('/member/profile?saved=photo');
@@ -67,7 +122,14 @@ export async function updateProfilePhotoAction(formData: FormData): Promise<void
 export async function removeProfilePhotoAction(): Promise<void> {
   const user = await requireArea('member');
   const current = await prisma.memberProfile.findUnique({ where: { userId: user.id }, select: { photoUrl: true } });
-  await prisma.memberProfile.updateMany({ where: { userId: user.id }, data: { photoUrl: null } });
+  if (current?.photoUrl) {
+    await prisma.$transaction([
+      prisma.user.updateMany({ where: { id: user.id, image: current.photoUrl }, data: { image: null } }),
+      prisma.memberProfile.updateMany({ where: { userId: user.id }, data: { photoUrl: null } }),
+    ]);
+  } else {
+    await prisma.memberProfile.updateMany({ where: { userId: user.id }, data: { photoUrl: null } });
+  }
   await deleteObject(current?.photoUrl || null);
   revalidatePath('/member/profile');
 }
@@ -117,7 +179,7 @@ export async function acceptWaiverAction(formData: FormData): Promise<void> {
 
   if (!waiver) redirect('/member/waiver?error=version');
 
-  const requestHeaders = headers();
+  const requestHeaders = await headers();
   const forwardedFor = requestHeaders.get('x-forwarded-for');
   const ipAddress = forwardedFor?.split(',')[0]?.trim() || null;
   const userAgent = requestHeaders.get('user-agent');
@@ -156,9 +218,5 @@ export async function acceptWaiverAction(formData: FormData): Promise<void> {
   revalidatePath('/member/profile');
   revalidatePath('/instructor/profile');
   const redirectTo = String(formData.get('redirectTo') || '');
-  redirect(
-    redirectTo === '/member/profile' || redirectTo === '/instructor/profile'
-      ? `${redirectTo}?saved=agreement`
-      : '/member/waiver?saved=1',
-  );
+  redirect(waiverCompletionDestination(redirectTo));
 }

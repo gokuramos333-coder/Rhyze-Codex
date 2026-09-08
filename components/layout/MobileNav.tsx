@@ -7,9 +7,23 @@ import { useEffect } from 'react';
 import { primaryNav } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 
-type Props = { open: boolean; onClose: () => void; showAdmin?: boolean };
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  showAdmin?: boolean;
+  portalHref?: string;
+  portalLabel?: string;
+  unreadCount?: number;
+};
 
-export function MobileNav({ open, onClose, showAdmin = false }: Props) {
+export function MobileNav({
+  open,
+  onClose,
+  showAdmin = false,
+  portalHref = '/sign-in',
+  portalLabel = 'Log In',
+  unreadCount = 0,
+}: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -41,7 +55,7 @@ export function MobileNav({ open, onClose, showAdmin = false }: Props) {
             onClick={onClose}
           />
           <motion.div
-            className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col bg-rhyze-charcoal p-6"
+            className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col overflow-y-auto bg-rhyze-charcoal p-6"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
@@ -72,13 +86,14 @@ export function MobileNav({ open, onClose, showAdmin = false }: Props) {
                   {item.label}
                 </Link>
               ))}
-              <Link
-                href="/sign-in"
-                onClick={onClose}
-                className="focus-ring mt-2 rounded-md px-3 py-4 text-base uppercase tracking-wide text-rhyze-cream/70 hover:text-rhyze-coral"
-              >
-                Member Portal
-              </Link>
+              <Button href={portalHref} size="lg" onClick={onClose} className="mt-4 w-full">
+                {portalLabel}
+                {unreadCount > 0 && (
+                  <span className="grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black leading-none text-white" aria-label={`${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </Button>
               {showAdmin && (
                 <Link
                   href="/admin"
@@ -89,7 +104,7 @@ export function MobileNav({ open, onClose, showAdmin = false }: Props) {
                 </Link>
               )}
             </nav>
-            <Button href="/join" size="lg" className="w-full">
+            <Button href="/join" size="lg" onClick={onClose} className="mt-3 w-full">
               Join Now
             </Button>
           </motion.div>

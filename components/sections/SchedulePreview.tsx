@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { WeeklyCalendar } from '@/components/sections/WeeklyCalendar';
+import { loadPublicScheduleSlots } from '@/lib/domain/schedule/public-schedule-query';
 
-export function SchedulePreview() {
+export async function SchedulePreview() {
+  const slots = await loadPublicScheduleSlots();
   return (
     <section className="border-y border-white/5 bg-rhyze-charcoal/30 py-24">
       <div className="mx-auto max-w-7xl px-6">
@@ -20,15 +22,15 @@ export function SchedulePreview() {
             </p>
           </div>
           <Link
-            href="/schedule"
+            href="/classes#schedule"
             className="focus-ring inline-flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-rhyze-cream/75 hover:border-rhyze-coral hover:text-rhyze-coral"
           >
-            View Full Schedule
+            View Classes & Schedule
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>
 
-        <WeeklyCalendar compact />
+        <WeeklyCalendar slots={slots} compact />
       </div>
     </section>
   );

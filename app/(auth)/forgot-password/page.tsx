@@ -2,11 +2,12 @@ import Link from 'next/link';
 import { AuthField, AuthFrame } from '@/components/domain/accounts/AuthFrame';
 import { forgotPasswordAction } from '../actions';
 
-export default function ForgotPasswordPage({
-  searchParams,
-}: {
-  searchParams: { error?: string; sent?: string };
-}) {
+export default async function ForgotPasswordPage(
+  props: {
+    searchParams: Promise<{ error?: string; sent?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   return (
     <AuthFrame
       eyebrow="Account recovery"

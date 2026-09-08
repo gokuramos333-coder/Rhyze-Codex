@@ -8,11 +8,15 @@ describe('no-show attendance fees', () => {
       'utf8',
     );
 
-    expect(action).toContain('chargeNoShowFee');
-    expect(action).toContain('amount: input.amountCents');
-    expect(action).toContain('Rhyze no-show fee');
-    expect(action).toContain('no-show-fee-${input.bookingId}');
+    expect(action).toContain('chargeAttendanceFee');
+    expect(action).toContain("feeType: 'NO_SHOW'");
+    expect(action).toContain('no-show-fee-${booking.id}');
     expect(action).toContain('noShowFeeDecision');
+    expect(action).toContain('bookingAccessType');
+    expect(action).toContain('policySnapshot: booking.policySnapshot');
+    expect(action).toContain('refundAttendanceFee');
+    expect(action).toContain('refund-no-show-fee-failed-attendance-${booking.id}');
+    expect(action).not.toContain("kind: 'TRANSFER_FEE'");
   });
 
   it('redirects back to the right roster with a saved result after attendance changes', () => {

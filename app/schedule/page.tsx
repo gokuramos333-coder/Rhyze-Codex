@@ -1,45 +1,32 @@
 import Link from 'next/link';
-import { prisma } from '@/lib/db/prisma';
+import { WeeklyCalendar } from '@/components/sections/WeeklyCalendar';
+import {
+  loadPublicScheduleFilterOptions,
+  loadPublicScheduleSlots,
+} from '@/lib/domain/schedule/public-schedule-query';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PublicSchedulePage({
-  searchParams,
-}: {
-  searchParams: { category?: string; instructor?: string };
-}) {
-  const [occurrences, categories, instructors] = await Promise.all([
-    prisma.classOccurrence.findMany({
-      where: {
-        status: 'SCHEDULED',
-        template: {
-          isActive: true,
-          archivedAt: null,
-          ...(searchParams.category
-            ? { category: { slug: searchParams.category } }
-            : {}),
-        },
-        ...(searchParams.instructor
-          ? { instructorId: searchParams.instructor }
-          : {}),
-      },
-      include: {
-        template: { include: { category: true } },
-        instructor: true,
-        room: { include: { location: true } },
-      },
-      orderBy: { startAt: 'asc' },
-      take: 60,
+export default async function PublicSchedulePage(
+  props: {
+    searchParams: Promise<{
+      category?: string;
+      instructor?: string;
+      class?: string;
+      date?: string;
+      view?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const from = new Date();
+  const [slots, filterOptions] = await Promise.all([
+    loadPublicScheduleSlots(from, {
+      classSlug: searchParams.class,
+      categorySlug: searchParams.category,
+      instructorId: searchParams.instructor,
     }),
-    prisma.classCategory.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.user.findMany({
-      where: { role: 'INSTRUCTOR' },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
+    loadPublicScheduleFilterOptions(from),
   ]);
 
   return (
@@ -53,8 +40,8 @@ export default async function PublicSchedulePage({
             FIND YOUR RHYTHM
           </h1>
           <p className="mt-4 max-w-2xl text-rhyze-cream/65">
-            Filter upcoming classes, see the room and price, then open the
-            class to reserve your place.
+            Filter upcoming classes, see the price, then open the class to
+            reserve your place.
           </p>
         </div>
         <Link
@@ -66,25 +53,42 @@ export default async function PublicSchedulePage({
       </div>
 
       <form className="mt-10 grid gap-3 border border-white/10 bg-rhyze-charcoal p-4 md:grid-cols-[1fr_1fr_auto]">
+        {searchParams.class && (
+          <input type="hidden" name="class" value={searchParams.class} />
+        )}
+        {searchParams.date && (
+          <input type="hidden" name="date" value={searchParams.date} />
+        )}
+        {searchParams.view && (
+          <input type="hidden" name="view" value={searchParams.view} />
+        )}
+        <label className="sr-only" htmlFor="schedule-category">
+          Class type
+        </label>
         <select
+          id="schedule-category"
           name="category"
           defaultValue={searchParams.category || ''}
           className="min-h-12 bg-rhyze-black px-4 text-sm text-rhyze-cream"
         >
           <option value="">All class types</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.slug}>
+          {filterOptions.categories.map((category) => (
+            <option key={category.slug} value={category.slug}>
               {category.name}
             </option>
           ))}
         </select>
+        <label className="sr-only" htmlFor="schedule-instructor">
+          Instructor
+        </label>
         <select
+          id="schedule-instructor"
           name="instructor"
           defaultValue={searchParams.instructor || ''}
           className="min-h-12 bg-rhyze-black px-4 text-sm text-rhyze-cream"
         >
           <option value="">All instructors</option>
-          {instructors.map((instructor) => (
+          {filterOptions.instructors.map((instructor) => (
             <option key={instructor.id} value={instructor.id}>
               {instructor.name}
             </option>
@@ -95,71 +99,33 @@ export default async function PublicSchedulePage({
         </button>
       </form>
 
-      <div className="mt-8 grid gap-4">
-        {occurrences.map((occurrence) => (
-          <article
-            key={occurrence.id}
-            className="grid gap-5 border-l-4 border-rhyze-coral bg-rhyze-charcoal p-5 md:grid-cols-[10rem_1fr_auto] md:items-center"
+      {(searchParams.class ||
+        searchParams.category ||
+        searchParams.instructor) && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border border-rhyze-gold/20 bg-rhyze-gold/10 px-4 py-3 text-sm">
+          <p className="font-bold text-rhyze-gold">
+            Showing {slots.length} matching upcoming class
+            {slots.length === 1 ? '' : 'es'}.
+          </p>
+          <Link
+            href="/schedule"
+            className="focus-ring rounded text-xs font-black uppercase tracking-widest text-rhyze-orange"
           >
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
-                {occurrence.startAt.toLocaleDateString('en-US', {
-                  timeZone: occurrence.timezone,
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </p>
-              <p className="mt-2 font-display text-3xl tracking-wider">
-                {occurrence.startAt.toLocaleTimeString('en-US', {
-                  timeZone: occurrence.timezone,
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest text-rhyze-orange">
-                {occurrence.template.category.name}
-              </p>
-              <h2 className="mt-1 font-display text-4xl tracking-wider">
-                {occurrence.template.name}
-              </h2>
-              <p className="mt-2 text-sm text-rhyze-cream/60">
-                {occurrence.instructor?.name || 'Instructor to be announced'} ·{' '}
-                {occurrence.room?.name || 'Room to be announced'} ·{' '}
-                {occurrence.template.durationMinutes} min
-              </p>
-            </div>
-            <div className="md:text-right">
-              <p className="font-display text-3xl text-rhyze-gold">
-                ${((occurrence.priceCents || 0) / 100).toFixed(0)}
-              </p>
-              <p className="text-xs text-rhyze-cream/45">
-                {occurrence.capacity} total spots
-              </p>
-              <Link
-                href={`/schedule/${occurrence.id}`}
-                className="focus-ring mt-3 inline-block bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase tracking-widest text-rhyze-black"
-              >
-                View class
-              </Link>
-            </div>
-          </article>
-        ))}
-        {occurrences.length === 0 && (
-          <div className="border border-dashed border-white/20 p-10 text-center">
-            <h2 className="font-display text-4xl tracking-wider">
-              NO MATCHING CLASSES
-            </h2>
-            <Link
-              href="/schedule"
-              className="mt-4 inline-block font-bold text-rhyze-orange"
-            >
-              Clear filters
-            </Link>
-          </div>
-        )}
+            Clear filters
+          </Link>
+        </div>
+      )}
+
+      <div className="mt-8">
+        <WeeklyCalendar
+          slots={slots}
+          initialDateKey={searchParams.date}
+          initialView={
+            searchParams.view === 'weekly' || searchParams.view === 'monthly'
+              ? searchParams.view
+              : 'daily'
+          }
+        />
       </div>
     </main>
   );

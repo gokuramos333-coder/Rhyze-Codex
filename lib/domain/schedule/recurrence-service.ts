@@ -30,30 +30,6 @@ function parseLocalDateTime(value: string): LocalDateTime {
   };
 }
 
-function partsInTimeZone(date: Date, timezone: string): LocalDateTime {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((part) => part.type === type)?.value);
-
-  return {
-    year: value('year'),
-    month: value('month'),
-    day: value('day'),
-    hour: value('hour'),
-    minute: value('minute'),
-    second: value('second'),
-  };
-}
-
 function asUtcMilliseconds(value: LocalDateTime): number {
   return Date.UTC(
     value.year,
@@ -65,16 +41,51 @@ function asUtcMilliseconds(value: LocalDateTime): number {
   );
 }
 
-function zonedLocalToUtc(local: LocalDateTime, timezone: string): Date {
-  const target = asUtcMilliseconds(local);
-  let candidate = target;
+function datePartsInTimeZone(date: Date, timezone: string): LocalDateTime {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value || 0);
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const rendered = partsInTimeZone(new Date(candidate), timezone);
-    candidate += target - asUtcMilliseconds(rendered);
+  return {
+    year: value('year'),
+    month: value('month'),
+    day: value('day'),
+    hour: value('hour'),
+    minute: value('minute'),
+    second: value('second'),
+  };
+}
+
+export function zonedLocalDateTimeToDate(
+  value: string,
+  timezone: string,
+): Date {
+  const local = parseLocalDateTime(value);
+  const targetMilliseconds = asUtcMilliseconds(local);
+  let instantMilliseconds = targetMilliseconds;
+
+  // Reconcile the wall-clock parts against the requested IANA timezone. A
+  // second pass handles dates on the opposite side of a daylight-saving shift.
+  for (let pass = 0; pass < 3; pass += 1) {
+    const displayed = datePartsInTimeZone(
+      new Date(instantMilliseconds),
+      timezone,
+    );
+    const correction = targetMilliseconds - asUtcMilliseconds(displayed);
+    if (correction === 0) break;
+    instantMilliseconds += correction;
   }
 
-  return new Date(candidate);
+  return new Date(instantMilliseconds);
 }
 
 export function expandWeeklyRecurrence({
@@ -99,17 +110,12 @@ export function expandWeeklyRecurrence({
         start.second,
       ),
     );
+    const localValue = [
+      localDate.getUTCFullYear(),
+      String(localDate.getUTCMonth() + 1).padStart(2, '0'),
+      String(localDate.getUTCDate()).padStart(2, '0'),
+    ].join('-') + `T${String(localDate.getUTCHours()).padStart(2, '0')}:${String(localDate.getUTCMinutes()).padStart(2, '0')}:${String(localDate.getUTCSeconds()).padStart(2, '0')}`;
 
-    return zonedLocalToUtc(
-      {
-        year: localDate.getUTCFullYear(),
-        month: localDate.getUTCMonth() + 1,
-        day: localDate.getUTCDate(),
-        hour: localDate.getUTCHours(),
-        minute: localDate.getUTCMinutes(),
-        second: localDate.getUTCSeconds(),
-      },
-      timezone,
-    );
+    return zonedLocalDateTimeToDate(localValue, timezone);
   });
 }

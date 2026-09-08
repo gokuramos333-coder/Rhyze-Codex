@@ -26,6 +26,7 @@ export const prismaPasswordResetRepository: PasswordResetRepository = {
         userId: true,
         expiresAt: true,
         usedAt: true,
+        createdAt: true,
       },
     });
   },
@@ -33,12 +34,16 @@ export const prismaPasswordResetRepository: PasswordResetRepository = {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: input.userId },
-        data: { passwordHash: input.passwordHash },
+        data: {
+          passwordHash: input.passwordHash,
+          credentialsUpdatedAt: input.usedAt,
+        },
       }),
       prisma.passwordResetToken.update({
         where: { id: input.tokenId },
         data: { usedAt: input.usedAt },
       }),
+      prisma.session.deleteMany({ where: { userId: input.userId } }),
       prisma.auditLog.create({
         data: {
           actorId: input.userId,

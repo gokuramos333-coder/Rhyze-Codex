@@ -1,4 +1,11 @@
 import { PrismaClient } from '@prisma/client';
+import { resolveDatabaseUrl } from '@/lib/db/database-url';
+
+const databaseUrl = resolveDatabaseUrl({
+  DATABASE_URL: process.env.DATABASE_URL,
+  NETLIFY_DB_URL: process.env.NETLIFY_DB_URL,
+  NETLIFY_DATABASE_URL: process.env.NETLIFY_DATABASE_URL,
+});
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -7,6 +14,7 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
+    ...(databaseUrl ? { datasourceUrl: databaseUrl } : {}),
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
 

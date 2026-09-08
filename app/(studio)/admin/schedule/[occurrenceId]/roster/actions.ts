@@ -7,6 +7,8 @@ import { prisma } from '@/lib/db/prisma';
 import {
   complimentaryStandardAccessCanBook,
   creditAccountCanBook,
+  EVENT_CREDIT_LABEL_PREFIX,
+  eventCreditCanBook,
   standardSingleClassCreditCanBook,
 } from '@/lib/domain/bookings/booking-rules';
 import { availableMembershipCredits } from '@/lib/domain/credits/membership-renewal';
@@ -34,7 +36,7 @@ export async function addMemberToClassAction(formData: FormData) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
     const occurrence = await tx.classOccurrence.findUnique({
       where: { id: occurrenceId },
-      include: { template: true },
+      include: { template: true, instructor: true },
     });
     if (!occurrence || occurrence.status !== 'SCHEDULED') return 'unavailable';
 
@@ -90,6 +92,16 @@ export async function addMemberToClassAction(formData: FormData) {
     });
     const creditAccount = accounts.find((account) => {
       const productKind = account.sourcePurchase?.product.kind ?? null;
+      const isEventCredit = eventCreditCanBook({
+        label: account.label,
+        sourceProductKind: productKind,
+        isEvent: occurrence.template.isEvent,
+        className: occurrence.template.name,
+        instructorName: occurrence.instructor?.name ?? occurrence.instructor?.email,
+      });
+      const validEventAccess = occurrence.template.isEvent
+        ? isEventCredit
+        : !account.label.startsWith(EVENT_CREDIT_LABEL_PREFIX);
       const productAllowsOccurrence = complimentaryStandardAccessCanBook({
         customPlanType: account.sourcePurchase?.product.customPlanType,
         isEvent: occurrence.template.isEvent,
@@ -100,9 +112,11 @@ export async function addMemberToClassAction(formData: FormData) {
         paidAt: account.sourcePurchase?.paidAt,
         occurrenceStartsAt: occurrence.startAt,
         isEvent: occurrence.template.isEvent,
+        validUntil: account.validUntil,
       });
       return (
         productAllowsOccurrence &&
+        validEventAccess &&
         creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
         validSingleClassCredit &&
         (account.isUnlimited || creditBalance(

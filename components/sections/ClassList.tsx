@@ -6,6 +6,17 @@ import { Clock, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/cn';
 import { categoryLabel, classes, type ClassCategory } from '@/lib/classes';
+import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
+
+export type PublicClassData = {
+  slug: string;
+  name: string;
+  category: ClassCategory;
+  duration: number;
+  tagline: string;
+  description: string;
+  whatToExpect: string[];
+};
 
 type CatFilter = 'all' | ClassCategory;
 
@@ -28,7 +39,7 @@ function getCategoryFromHash(): CatFilter {
   return hashToCategory[window.location.hash] ?? 'all';
 }
 
-export function ClassList() {
+export function ClassList({ catalog = classes }: { catalog?: PublicClassData[] }) {
   const [cat, setCat] = useState<CatFilter>('all');
 
   useEffect(() => {
@@ -39,8 +50,8 @@ export function ClassList() {
   }, []);
 
   const filtered = useMemo(
-    () => classes.filter((c) => cat === 'all' || c.category === cat),
-    [cat],
+    () => catalog.filter((c) => cat === 'all' || c.category === cat),
+    [cat, catalog],
   );
 
   return (
@@ -88,6 +99,7 @@ export function ClassList() {
                 <Clock className="mr-1 h-3 w-3" aria-hidden />
                 {c.duration} min
               </Badge>
+              <NewProgramBadge slug={c.slug} />
             </div>
             <h3 className="mb-2 text-2xl font-black leading-tight tracking-normal text-rhyze-cream">
               {c.name}
@@ -106,10 +118,10 @@ export function ClassList() {
             </ul>
             <div className="mt-auto">
               <Link
-                href={`/book/${c.slug}`}
+                href={`/schedule?class=${encodeURIComponent(c.slug)}`}
                 className="focus-ring inline-flex w-full items-center justify-center gap-1 rounded-full bg-rhyze-gradient px-4 py-2 text-xs font-bold uppercase tracking-widest text-rhyze-black hover:shadow-glow"
               >
-                Book <ArrowRight className="h-3 w-3" aria-hidden />
+                View schedule <ArrowRight className="h-3 w-3" aria-hidden />
               </Link>
             </div>
           </article>

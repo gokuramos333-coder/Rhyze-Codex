@@ -10,7 +10,7 @@ Automatically return one event-only booking credit when a member cancels an even
 - Event cancellations made six hours or less before the event start are `LATE_CANCELLED` and receive no event credit.
 - A returned event credit can book any eligible Rhyze event regardless of the original or replacement event price.
 - A returned event credit cannot book a standard class.
-- A newly issued event credit is valid immediately and expires at the end of the following calendar month in `America/New_York`.
+- A newly issued event credit is valid immediately and expires exactly 30 days after the cancellation timestamp.
 - Re-cancelling an event that was booked with an existing event credit releases that same reservation; it does not extend the credit's original expiration date.
 - Issuance is idempotent per cancelled booking through the existing `event-cancellation:<bookingId>` return key.
 - The member cancellation email states whether the event credit was returned and gives its expiration date.
@@ -37,6 +37,5 @@ Automatically return one event-only booking credit when a member cancels an even
 
 ## Verification
 
-- Unit tests cover the exact six-hour boundary, end-of-following-month calculation across month/year boundaries, event/class credit separation, and idempotent correction behavior where practical.
+- Unit tests cover the exact six-hour boundary, the 30-day calculation across month/year boundaries, event/class credit separation, and idempotent correction behavior where practical.
 - Run focused Vitest tests, the full test suite, TypeScript typecheck, and the production build.
-

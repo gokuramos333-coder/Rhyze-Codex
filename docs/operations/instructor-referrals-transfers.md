@@ -22,7 +22,6 @@ Instructor roster, transfer, messaging, cancellation, schedule, credential, refe
 - Private downloads are authorized for the owning instructor or owner/admin/manager.
 - Admin reviews credentials from `/admin/instructors/[userId]`.
 - Call `POST /api/jobs/credentials` with `Authorization: Bearer $JOB_SECRET` daily.
-- Call `POST /api/jobs/waiver-reminders` with `Authorization: Bearer $JOB_SECRET` hourly. It queues one reminder after 24 hours and one reminder for each confirmed class beginning within 24 hours when the current agreement is still unsigned.
 - Missing reminders run after 48 hours; expiration reminders run 30, 7, and 1 day before expiry and after expiry.
 
 ## Referrals and commissions
@@ -58,6 +57,6 @@ Instructor roster, transfer, messaging, cancellation, schedule, credential, refe
 - Configure PostgreSQL backups and apply all Prisma migrations.
 - Configure Stripe secret/webhook keys and ensure Checkout creates reusable customer payment methods.
 - Configure a verified Resend sending domain, `EMAIL_FROM`, and scheduled email worker.
-- Configure `JOB_SECRET`, the hourly waiver-reminder job, and daily credential/email jobs.
+- Configure `JOB_SECRET` and the scheduled credential and email jobs.
 - Replace development file storage with an S3-compatible adapter and private signed URLs.
 - Test webhook replay, refund reversal, transfer charge decline, and cross-instructor authorization in staging.

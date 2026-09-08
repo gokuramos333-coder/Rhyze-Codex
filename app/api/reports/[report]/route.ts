@@ -6,7 +6,8 @@ function csvCell(value: unknown) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`;
 }
 
-export async function GET(_request: Request, { params }: { params: { report: string } }) {
+export async function GET(_request: Request, props: { params: Promise<{ report: string }> }) {
+  const params = await props.params;
   await requireApprovedOwner();
   let rows: unknown[][] = [];
   if (params.report === 'attendance') {

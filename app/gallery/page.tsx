@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function GalleryPage() {
   return (
     <main className="mx-auto max-w-7xl px-6 py-20">
-      <section className="mb-14 text-center">
+      <section className="mb-14 text-left md:text-center">
         <p className="mb-4 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
           The Floor, In Pictures
         </p>

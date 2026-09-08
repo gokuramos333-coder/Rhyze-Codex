@@ -49,7 +49,7 @@ export function Footer() {
             className="h-24 w-auto"
           />
           <p className="mt-6 max-w-xs text-sm leading-relaxed text-rhyze-cream/70">
-            A boutique dance, yoga, and HIIT studio opening in Lafayette, NJ.
+            A boutique dance, yoga, and HIIT studio now open in Lafayette, NJ.
             Elevate your energy. Rhyze together.
           </p>
           <div className="mt-7 flex gap-3">
@@ -120,11 +120,14 @@ export function Footer() {
                 {site.phone}
               </a>
             </p>
-            <div className="grid gap-1 pt-1 text-rhyze-gold">
+            <div className="grid w-fit gap-1 pt-1 text-rhyze-gold">
               {site.hours.map((h) => (
-                <div key={h.days} className="flex justify-between gap-5">
+                <div
+                  key={h.days}
+                  className="grid grid-cols-[4.5rem_auto] gap-x-3"
+                >
                   <span>{h.days}</span>
-                  <span>{h.hours}</span>
+                  <span className="whitespace-nowrap">{h.hours}</span>
                 </div>
               ))}
               <p className="pt-2 text-rhyze-gold">

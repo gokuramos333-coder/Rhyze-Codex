@@ -11,6 +11,7 @@ export type ResetTokenRecord = {
   userId: string;
   expiresAt: Date;
   usedAt: Date | null;
+  createdAt: Date;
 };
 
 export type PasswordResetRepository = {
@@ -53,7 +54,7 @@ export async function resetPassword(
   password: string,
   repository: PasswordResetRepository,
   now = new Date(),
-): Promise<void> {
+): Promise<{ userId: string }> {
   const validation = validatePassword(password);
   if (!validation.valid) {
     throw new InvalidPasswordError(validation.errors);
@@ -70,4 +71,6 @@ export async function resetPassword(
     passwordHash: await hashPassword(password),
     usedAt: now,
   });
+
+  return { userId: token.userId };
 }

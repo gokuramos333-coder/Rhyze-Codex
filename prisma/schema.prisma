@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -90,6 +91,39 @@ enum PurchaseStatus {
   PARTIALLY_REFUNDED
 }
 
+enum CommerceOrderKind {
+  MERCHANDISE
+  EVENT
+}
+
+enum CommerceOrderStatus {
+  PENDING
+  PAID
+  PAYMENT_FAILED
+  FULFILLMENT_REVIEW
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
+enum PaymentRecordKind {
+  PRODUCT_PURCHASE
+  MEMBERSHIP_RENEWAL
+  MERCHANDISE
+  EVENT
+  TRANSFER_FEE
+  LATE_CANCELLATION_FEE
+  NO_SHOW_FEE
+}
+
+enum PaymentRecordStatus {
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
 enum MembershipStatus {
   TRIALING
   ACTIVE
@@ -99,12 +133,29 @@ enum MembershipStatus {
   EXPIRED
 }
 
+enum MembershipChangeRequestType {
+  CHANGE
+  CANCEL
+}
+
+enum MembershipChangeRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
 enum EmailStatus {
   QUEUED
   PROCESSING
   SENT
+  RECEIVED
   FAILED
   CANCELLED
+}
+
+enum EmailDirection {
+  OUTBOUND
+  INBOUND
 }
 
 enum CampaignStatus {
@@ -146,51 +197,60 @@ enum TransferStatus {
 }
 
 model User {
-  id               String     @id @default(cuid())
-  name             String?
-  email            String     @unique
-  emailVerified    DateTime?
-  image            String?
-  passwordHash     String?
-  role             Role       @default(MEMBER)
-  status           UserStatus @default(ACTIVE)
-  lastLoginAt      DateTime?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  stripeCustomerId String?    @unique
+  id                   String     @id @default(cuid())
+  name                 String?
+  email                String     @unique
+  emailVerified        DateTime?
+  image                String?
+  passwordHash         String?
+  credentialsUpdatedAt DateTime?
+  role                 Role       @default(MEMBER)
+  status               UserStatus @default(ACTIVE)
+  lastLoginAt          DateTime?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  stripeCustomerId     String?    @unique
 
-  accounts               Account[]
-  sessions               Session[]
-  authenticators         Authenticator[]
-  memberProfile          MemberProfile?
-  instructorProfile      InstructorProfile?
-  notificationPreference NotificationPreference?
-  passwordResetTokens    PasswordResetToken[]
-  waiverAcceptances      WaiverAcceptance[]
-  auditLogs              AuditLog[]              @relation("AuditActor")
-  classOccurrences       ClassOccurrence[]       @relation("OccurrenceInstructor")
-  classSeries            ClassSeries[]           @relation("SeriesInstructor")
-  bookings               Booking[]
-  waitlistEntries        WaitlistEntry[]
-  attendanceRecords      AttendanceRecord[]      @relation("AttendanceMember")
-  attendanceMarked       AttendanceRecord[]      @relation("AttendanceMarker")
-  creditAccounts         CreditAccount[]
-  purchases              Purchase[]
-  memberships            Membership[]
-  emailMessages          EmailMessage[]
-  campaignsCreated       EmailCampaign[]         @relation("CampaignCreator")
-  instructorApplication  InstructorApplication?  @relation("InstructorApplicant")
-  instructorReviews      InstructorApplication[] @relation("InstructorReviewer")
-  referralCodes          ReferralCode[]          @relation("ReferralInstructor")
-  instructorCredentials  InstructorCredential[]  @relation("CredentialInstructor")
-  credentialReviews      InstructorCredential[]  @relation("CredentialReviewer")
-  referralAttribution    ReferralAttribution?    @relation("ReferredCustomer")
-  instructorCommissions  ReferralCommission[]    @relation("CommissionInstructor")
-  referralCommission     ReferralCommission?     @relation("CommissionCustomer")
-  inAppNotifications     InAppNotification[]
-  classMessagesAuthored  ClassMessage[]          @relation("ClassMessageInstructor")
-  sombleClientProfile    SombleClientProfile?
-  sombleTransactions     SombleTransaction[]
+  accounts                 Account[]
+  sessions                 Session[]
+  authenticators           Authenticator[]
+  memberProfile            MemberProfile?
+  instructorProfile        InstructorProfile?
+  notificationPreference   NotificationPreference?
+  passwordResetTokens      PasswordResetToken[]
+  accountClaimTokens       AccountClaimToken[]
+  waiverAcceptances        WaiverAcceptance[]
+  auditLogs                AuditLog[]                  @relation("AuditActor")
+  classOccurrences         ClassOccurrence[]           @relation("OccurrenceInstructor")
+  classSeries              ClassSeries[]               @relation("SeriesInstructor")
+  bookings                 Booking[]
+  waitlistEntries          WaitlistEntry[]
+  attendanceRecords        AttendanceRecord[]          @relation("AttendanceMember")
+  attendanceMarked         AttendanceRecord[]          @relation("AttendanceMarker")
+  creditAccounts           CreditAccount[]
+  purchases                Purchase[]
+  memberships              Membership[]
+  membershipChangeRequests MembershipChangeRequest[]   @relation("MembershipChangeMember")
+  membershipChangeReviews  MembershipChangeRequest[]   @relation("MembershipChangeReviewer")
+  membershipFreezesCreated MembershipFreeze[]          @relation("MembershipFreezeCreator")
+  commerceOrders           CommerceOrder[]
+  paymentRecords           PaymentRecord[]
+  emailMessages            EmailMessage[]
+  campaignsCreated         EmailCampaign[]             @relation("CampaignCreator")
+  instructorApplication    InstructorApplication?      @relation("InstructorApplicant")
+  instructorReviews        InstructorApplication[]     @relation("InstructorReviewer")
+  referralCodes            ReferralCode[]              @relation("ReferralInstructor")
+  instructorCredentials    InstructorCredential[]      @relation("CredentialInstructor")
+  credentialReviews        InstructorCredential[]      @relation("CredentialReviewer")
+  referralAttribution      ReferralAttribution?        @relation("ReferredCustomer")
+  instructorCommissions    ReferralCommission[]        @relation("CommissionInstructor")
+  referralCommission       ReferralCommission?         @relation("CommissionCustomer")
+  inAppNotifications       InAppNotification[]
+  memberConversation       MemberConversation?         @relation("ConversationMember")
+  conversationMessages     MemberConversationMessage[] @relation("ConversationSender")
+  classMessagesAuthored    ClassMessage[]              @relation("ClassMessageInstructor")
+  sombleClientProfile      SombleClientProfile?
+  sombleTransactions       SombleTransaction[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -226,6 +286,7 @@ model ClassTemplate {
   equipment          String[]
   cancellationPolicy String?
   isActive           Boolean        @default(true)
+  isEvent            Boolean        @default(false)
   archivedAt         DateTime?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -236,6 +297,18 @@ model ClassTemplate {
 
   @@index([categoryId, isActive])
   @@index([archivedAt])
+}
+
+model ClassGalleryImage {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  altText   String
+  position  Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, position])
 }
 
 model Location {
@@ -291,23 +364,30 @@ model ClassSeries {
 }
 
 model ClassOccurrence {
-  id                 String           @id @default(cuid())
-  templateId         String
-  seriesId           String?
-  instructorId       String?
-  roomId             String?
-  startAt            DateTime
-  endAt              DateTime
-  timezone           String           @default("America/New_York")
-  capacity           Int
-  priceCents         Int?
-  status             OccurrenceStatus @default(SCHEDULED)
-  publicNotes        String?
-  internalNotes      String?
-  cancellationReason String?
-  cancelledAt        DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  id                    String           @id @default(cuid())
+  templateId            String
+  seriesId              String?
+  instructorId          String?
+  roomId                String?
+  startAt               DateTime
+  endAt                 DateTime
+  timezone              String           @default("America/New_York")
+  capacity              Int
+  priceCents            Int?
+  status                OccurrenceStatus @default(SCHEDULED)
+  publicNotes           String?
+  internalNotes         String?
+  titleOverride         String?
+  substituteInstructorName String?
+  isSubstitute          Boolean          @default(false)
+  cancellationReason    String?
+  historicalSignupCount Int              @default(0)
+  instructorPayMethod   String           @default("STANDARD_CLASS_RATE")
+  instructorPayCents    Int?
+  instructorPayNote     String?
+  cancelledAt           DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   template          ClassTemplate      @relation(fields: [templateId], references: [id], onDelete: Restrict)
   series            ClassSeries?       @relation(fields: [seriesId], references: [id], onDelete: SetNull)
@@ -317,6 +397,7 @@ model ClassOccurrence {
   waitlistEntries   WaitlistEntry[]
   attendanceRecords AttendanceRecord[]
   classMessages     ClassMessage[]
+  commerceOrders    CommerceOrder[]
 
   @@index([startAt, status])
   @@index([instructorId, startAt, endAt])
@@ -357,6 +438,39 @@ model InAppNotification {
   @@index([userId, readAt, createdAt])
 }
 
+model MemberConversation {
+  id        String   @id @default(cuid())
+  memberId  String   @unique
+  subject   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  member   User                        @relation("ConversationMember", fields: [memberId], references: [id], onDelete: Cascade)
+  messages MemberConversationMessage[]
+
+  @@index([updatedAt])
+}
+
+model MemberConversationMessage {
+  id               String    @id @default(cuid())
+  conversationId   String
+  senderId         String
+  subject          String?
+  body             String
+  memberReadAt     DateTime?
+  managementReadAt DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  conversation MemberConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User               @relation("ConversationSender", fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([conversationId, memberReadAt])
+  @@index([conversationId, managementReadAt])
+}
+
 model Booking {
   id             String        @id @default(cuid())
   occurrenceId   String
@@ -372,6 +486,7 @@ model Booking {
   occurrence ClassOccurrence   @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
   user       User              @relation(fields: [userId], references: [id], onDelete: Restrict)
   attendance AttendanceRecord?
+  paymentRecords PaymentRecord[]
 
   @@unique([occurrenceId, userId])
   @@index([userId, status, bookedAt])
@@ -436,29 +551,33 @@ model AttendanceRecord {
 }
 
 model CreditAccount {
-  id          String    @id @default(cuid())
-  userId      String
-  label       String
-  isUnlimited Boolean   @default(false)
-  validFrom   DateTime  @default(now())
-  validUntil  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  userId           String
+  sourcePurchaseId String?   @unique
+  label            String
+  isUnlimited      Boolean   @default(false)
+  validFrom        DateTime  @default(now())
+  validUntil       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  user    User                @relation(fields: [userId], references: [id], onDelete: Restrict)
-  entries CreditLedgerEntry[]
+  user           User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sourcePurchase Purchase?           @relation(fields: [sourcePurchaseId], references: [id], onDelete: SetNull)
+  entries        CreditLedgerEntry[]
 
   @@index([userId, validUntil])
 }
 
 model CreditLedgerEntry {
-  id              String          @id @default(cuid())
-  creditAccountId String
-  bookingId       String?
-  type            CreditEntryType
-  quantity        Int
-  reason          String?
-  createdAt       DateTime        @default(now())
+  id                    String          @id @default(cuid())
+  creditAccountId       String
+  bookingId             String?
+  sourceStripeInvoiceId String?         @unique
+  sourceReturnKey       String?         @unique
+  type                  CreditEntryType
+  quantity              Int
+  reason                String?
+  createdAt             DateTime        @default(now())
 
   creditAccount CreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
 
@@ -481,12 +600,18 @@ model Product {
   cancellationPolicy  String?
   isPublic            Boolean         @default(true)
   isActive            Boolean         @default(true)
+  availabilityStart   DateTime?
+  availabilityEnd     DateTime?
+  alwaysAvailable     Boolean         @default(true)
+  displayOrder        Int             @default(0)
+  customPlanType      String?
   stripePriceId       String?         @unique
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
-  purchases   Purchase[]
-  memberships Membership[]
+  purchases                  Purchase[]
+  memberships                Membership[]
+  requestedMembershipChanges MembershipChangeRequest[] @relation("RequestedMembershipProduct")
 
   @@index([isActive, isPublic, kind])
 }
@@ -504,6 +629,8 @@ model Purchase {
   failedAt                DateTime?
   refundedAmountCents     Int            @default(0)
   discountCents           Int            @default(0)
+  policyAcceptedAt        DateTime?
+  policyAcceptance        Json?
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
@@ -514,6 +641,8 @@ model Purchase {
   membership         Membership?
   discountRedemption DiscountRedemption?
   referralCommission ReferralCommission?
+  paymentRecords     PaymentRecord[]
+  creditAccount      CreditAccount?
 
   @@index([userId, status, createdAt])
   @@index([status, createdAt])
@@ -528,15 +657,142 @@ model Membership {
   stripeSubscriptionId String?          @unique
   currentPeriodStart   DateTime
   currentPeriodEnd     DateTime?
+  activatedAt          DateTime?
   cancelAtPeriodEnd    Boolean          @default(false)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  product  Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
-  purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  user           User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product        Product                   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  purchase       Purchase?                 @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  paymentRecords PaymentRecord[]
+  changeRequests MembershipChangeRequest[]
+  freezes        MembershipFreeze[]
 
   @@index([userId, status, currentPeriodEnd])
+}
+
+model MembershipFreeze {
+  id           String    @id @default(cuid())
+  membershipId String
+  createdById  String
+  startAt      DateTime
+  endAt        DateTime
+  activatedAt  DateTime?
+  resumedAt    DateTime?
+  cancelledAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("MembershipFreezeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([membershipId, startAt, endAt])
+  @@index([startAt, endAt, cancelledAt])
+}
+
+model MembershipChangeRequest {
+  id                 String                        @id @default(cuid())
+  userId             String
+  membershipId       String
+  type               MembershipChangeRequestType
+  requestedProductId String?
+  memberNote         String?
+  status             MembershipChangeRequestStatus @default(PENDING)
+  reviewedById       String?
+  reviewNote         String?
+  reviewedAt         DateTime?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  user             User       @relation("MembershipChangeMember", fields: [userId], references: [id], onDelete: Restrict)
+  membership       Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  requestedProduct Product?   @relation("RequestedMembershipProduct", fields: [requestedProductId], references: [id], onDelete: SetNull)
+  reviewedBy       User?      @relation("MembershipChangeReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt])
+  @@index([membershipId, status])
+}
+
+model CommerceOrder {
+  id                      String              @id @default(cuid())
+  userId                  String?
+  occurrenceId            String?
+  kind                    CommerceOrderKind
+  status                  CommerceOrderStatus @default(PENDING)
+  amountCents             Int
+  currency                String              @default("usd")
+  customerName            String?
+  customerEmail           String?
+  stripeCheckoutSessionId String?             @unique
+  stripePaymentIntentId   String?             @unique
+  paidAt                  DateTime?
+  failedAt                DateTime?
+  refundedAmountCents     Int                 @default(0)
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  user           User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  occurrence     ClassOccurrence?    @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  items          CommerceOrderItem[]
+  paymentRecords PaymentRecord[]
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([occurrenceId, status])
+}
+
+model CommerceOrderItem {
+  id               String  @id @default(cuid())
+  orderId          String
+  productReference String
+  name             String
+  description      String?
+  variant          String?
+  imageUrl         String?
+  unitAmountCents  Int
+  quantity         Int
+
+  order CommerceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model PaymentRecord {
+  id                      String              @id @default(cuid())
+  userId                  String?
+  purchaseId              String?
+  membershipId            String?
+  commerceOrderId         String?
+  bookingId               String?
+  kind                    PaymentRecordKind
+  status                  PaymentRecordStatus
+  amountCents             Int
+  refundedAmountCents     Int                 @default(0)
+  currency                String              @default("usd")
+  customerName            String?
+  customerEmail           String?
+  stripeEventId           String              @unique
+  stripeCustomerId        String?
+  stripeCheckoutSessionId String?             @unique
+  stripePaymentIntentId   String?             @unique
+  stripeInvoiceId         String?             @unique
+  stripeSubscriptionId    String?
+  receiptUrl              String?
+  occurredAt              DateTime            @default(now())
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  purchase      Purchase?      @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  membership    Membership?    @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  commerceOrder CommerceOrder? @relation(fields: [commerceOrderId], references: [id], onDelete: SetNull)
+  booking       Booking?       @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([status, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([bookingId, occurredAt])
+  @@index([stripeSubscriptionId, occurredAt])
 }
 
 model Invoice {
@@ -577,26 +833,87 @@ model StripeEvent {
 }
 
 model EmailMessage {
-  id           String      @id @default(cuid())
+  id           String         @id @default(cuid())
   userId       String?
+  direction    EmailDirection @default(OUTBOUND)
+  from         String?
   to           String
+  toList       String[]       @default([])
+  cc           String[]       @default([])
+  bcc          String[]       @default([])
+  replyTo      String[]       @default([])
   subject      String
   template     String
   payload      Json
-  status       EmailStatus @default(QUEUED)
-  scheduledFor DateTime    @default(now())
+  textBody     String?
+  htmlBody     String?
+  headers      Json?
+  messageId    String?
+  threadId     String?
+  status       EmailStatus    @default(QUEUED)
+  scheduledFor DateTime       @default(now())
   sentAt       DateTime?
-  providerId   String?
-  attempts     Int         @default(0)
+  receivedAt   DateTime?
+  providerId   String?        @unique
+  attempts     Int            @default(0)
   lastError    String?
-  dedupeKey    String?     @unique
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  dedupeKey    String?        @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attachments EmailAttachment[]
 
   @@index([status, scheduledFor])
   @@index([userId, createdAt])
+  @@index([direction, createdAt])
+  @@index([threadId, createdAt])
+}
+
+model EmailAttachment {
+  id                 String   @id @default(cuid())
+  emailMessageId     String
+  resendAttachmentId String?
+  filename           String
+  contentType        String
+  contentDisposition String?
+  contentId          String?
+  size               Int
+  content            Bytes
+  createdAt          DateTime @default(now())
+
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([emailMessageId, resendAttachmentId])
+  @@index([emailMessageId, createdAt])
+}
+
+model ResendWebhookEvent {
+  id            String    @id
+  type          String
+  resendEmailId String?
+  payload       Json
+  processingAt  DateTime?
+  processedAt   DateTime?
+  error         String?
+  createdAt     DateTime  @default(now())
+
+  @@index([type, createdAt])
+  @@index([resendEmailId, createdAt])
+}
+
+model EmailTemplateReview {
+  id              String   @id @default(cuid())
+  template        String   @unique
+  revision        String
+  copyOverride    Json?
+  approvedAt      DateTime @default(now())
+  approvedById    String
+  approvedByEmail String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([approvedAt])
 }
 
 model EmailCampaign {
@@ -702,14 +1019,18 @@ model MemberProfile {
 }
 
 model InstructorProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  bio               String?
-  photoUrl          String?
-  isActive          Boolean  @default(true)
-  canEditOwnProfile Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  bio                     String?
+  photoUrl                String?
+  isActive                Boolean  @default(true)
+  canEditOwnProfile       Boolean  @default(false)
+  displayOrder            Int      @default(0)
+  standardClassRateCents  Int?     @default(4000)
+  specialtyEventRateCents Int?
+  specialtyEventRateText  String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -824,6 +1145,19 @@ model NotificationPreference {
 }
 
 model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model AccountClaimToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique

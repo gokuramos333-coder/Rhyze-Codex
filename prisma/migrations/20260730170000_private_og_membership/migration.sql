@@ -1,0 +1,53 @@
+INSERT INTO "Product" (
+  "id",
+  "name",
+  "slug",
+  "description",
+  "kind",
+  "priceCents",
+  "billingInterval",
+  "includedCredits",
+  "isUnlimited",
+  "eligibleCategoryIds",
+  "cancellationPolicy",
+  "isPublic",
+  "isActive",
+  "alwaysAvailable",
+  "displayOrder",
+  "createdAt",
+  "updatedAt"
+)
+VALUES (
+  'rhyze-og-tribe-private-2026',
+  'OG Rhyze Tribe',
+  'og-rhyze-tribe-2026',
+  E'8 standard class credits per month\nAuto-renews monthly\nSpecialty events and workshops excluded\nUnique member promo code for 15% off Rhyze merchandise\nCredits do not roll over',
+  'LIMITED_MEMBERSHIP',
+  9200,
+  'MONTHLY',
+  8,
+  false,
+  ARRAY[]::TEXT[],
+  'Membership changes and cancellations require management review and at least 14 days notice before the next billing date.',
+  false,
+  true,
+  true,
+  90,
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+)
+ON CONFLICT ("slug") DO UPDATE SET
+  "name" = EXCLUDED."name",
+  "description" = EXCLUDED."description",
+  "kind" = EXCLUDED."kind",
+  "priceCents" = EXCLUDED."priceCents",
+  "billingInterval" = EXCLUDED."billingInterval",
+  "includedCredits" = EXCLUDED."includedCredits",
+  "isUnlimited" = EXCLUDED."isUnlimited",
+  "cancellationPolicy" = EXCLUDED."cancellationPolicy",
+  "isPublic" = false,
+  "isActive" = true,
+  "alwaysAvailable" = true,
+  "displayOrder" = EXCLUDED."displayOrder",
+  "updatedAt" = CURRENT_TIMESTAMP;
+

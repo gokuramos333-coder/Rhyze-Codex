@@ -19,6 +19,7 @@ import { ownedSchedule } from '@/lib/rhyze-platform';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db/prisma';
+import { occurrenceInstructorName, occurrenceLocalTimeZone, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 
 export const metadata: Metadata = {
   title: 'Book on Rhyze',
@@ -59,7 +60,7 @@ export default async function BookingPage(
       },
       orderBy: { startAt: 'asc' },
       include: {
-        template: { select: { isEvent: true, durationMinutes: true } },
+        template: { select: { isEvent: true, durationMinutes: true, name: true } },
         instructor: { include: { instructorProfile: true } },
         series: { select: { recurrenceRule: true } },
         _count: {
@@ -202,14 +203,14 @@ export default async function BookingPage(
     );
   });
   const instructorName =
-    occurrence?.instructor?.name ??
+    occurrence ? occurrenceInstructorName(occurrence) :
     matchingSlot?.instructor ??
     [instructor?.firstName, instructor?.lastName].filter(Boolean).join(' ');
   const instructorPhoto =
     occurrence?.instructor?.instructorProfile?.photoUrl ??
     matchingSlot?.photo ??
     instructor?.photo;
-  const bookingTitle = stripInstructorFromTitle(cls.name);
+  const bookingTitle = occurrence ? occurrenceTitle(occurrence) : stripInstructorFromTitle(cls.name);
   const occurrenceBookingCount = occurrence
     ? occurrence._count.bookings + occurrence.historicalSignupCount
     : 0;
@@ -265,8 +266,13 @@ export default async function BookingPage(
                   <p className="text-[0.65rem] font-bold uppercase tracking-[0.3em] text-rhyze-gold">
                     Instructor
                   </p>
-                  <h2 className="mt-1 font-display text-4xl tracking-wider">
-                    {instructorName || 'Rhyze Instructor'}
+                  <h2 className="mt-1 flex flex-wrap items-center gap-2 font-display text-4xl tracking-wider">
+                    <span>{instructorName || 'Rhyze Instructor'}</span>
+                    {occurrence?.isSubstitute && (
+                      <span className="rounded-sm bg-rhyze-coral px-1.5 py-0.5 text-[0.55rem] font-black uppercase tracking-widest text-white">
+                        SUB
+                      </span>
+                    )}
                   </h2>
                   {instructor?.role && (
                     <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-rhyze-cream/60">
@@ -336,7 +342,7 @@ export default async function BookingPage(
                   <p className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-rhyze-gold" aria-hidden />
                     {occurrence.startAt.toLocaleString('en-US', {
-                      timeZone: occurrence.timezone,
+                      timeZone: occurrenceLocalTimeZone(),
                       weekday: 'short',
                       month: 'short',
                       day: 'numeric',

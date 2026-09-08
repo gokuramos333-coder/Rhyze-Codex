@@ -33,9 +33,16 @@ back to npm for this build because pnpm wasn't on the dev machine.
 
 ## Environment Variables
 
-None required for local development. When real integrations land (booking,
-checkout, email), keys go in `.env.local`, don't commit that file; see
-`.gitignore`.
+Local development defaults to local file storage. Production uploads require
+durable S3-compatible object storage; keys go in `.env.local` or the hosting
+provider's encrypted environment settings and must never be committed.
+
+Set `STORAGE_DRIVER=s3` together with `STORAGE_S3_BUCKET`,
+`STORAGE_S3_REGION`, `STORAGE_S3_ACCESS_KEY_ID`, and
+`STORAGE_S3_SECRET_ACCESS_KEY`. Set `STORAGE_S3_ENDPOINT` for Cloudflare R2 or
+another S3-compatible provider. Instructor/member photos are served through
+the public media route. Insurance and CPR documents remain private and are
+downloaded only through the authenticated credentials route.
 
 ## Project Layout
 
@@ -89,8 +96,9 @@ paths (`/founders/whoever.jpg`).
 2. Import the repo into Vercel.
 3. Framework preset: **Next.js** (auto-detected).
 4. Root directory: repo root.
-5. Environment variables: none at launch. Add integration keys later under
-   **Project → Settings → Environment Variables**.
+5. Add the production environment variables from `.env.example` under
+   **Project → Settings → Environment Variables**. Stripe, email, storage, auth,
+   and database secrets are required for their corresponding live features.
 6. On merge to `main`, Vercel rebuilds and deploys.
 
 OG image, sitemap, and robots are generated automatically by Next at build
@@ -105,6 +113,21 @@ time, no extra config.
 - Metadata set per page via `generateMetadata` / exported `metadata`
 - Dynamic OG image at `/opengraph-image`, dynamic favicon at `/icon`
 
+## Stripe activation
+
+Stripe Checkout, Billing, Customer Portal, signed webhooks, refunds, event
+tickets, and merchandise orders are implemented. Keep test keys in local and
+preview environments until the full test purchase/refund checklist passes.
+
+1. Add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to the environment.
+2. Optionally add `STRIPE_PORTAL_CONFIGURATION_ID` for a branded portal setup.
+3. Register `https://YOUR_DOMAIN/api/stripe/webhook` in Stripe with the events
+   handled in `lib/payments/webhook-processor.ts`.
+4. Run `npm run stripe:sync-catalog` to create/reuse Stripe products and prices
+   and save the resulting Price IDs to Rhyze products.
+5. Complete a test-mode membership, class/event, merchandise, failed-renewal,
+   cancellation, and refund flow before replacing test keys with live keys.
+
 ## Outstanding TODOs (integration work)
 
 Each TODO is live in the codebase, grep for `TODO` to find them:
@@ -113,8 +136,6 @@ Each TODO is live in the codebase, grep for `TODO` to find them:
 - **Booking system** (Mindbody / Arketa / Momence TBD), `/book/[slug]` is a
   "Coming Soon" placeholder; `JoinForm` submit currently logs and shows a
   success state
-- **Checkout integration**, Shopify or Stripe, `components/sections/CartDrawer.tsx`
-  checkout modal stub
 - **Sign In / member portal**, `app/signin/page.tsx` placeholder
 - **Newsletter capture**, Mailchimp or Klaviyo, `app/api/newsletter/route.ts`
   currently only logs to the console

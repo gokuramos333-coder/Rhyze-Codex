@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { Music, Heart, Flame } from 'lucide-react';
+import { Music, Heart, Flame, PartyPopper } from 'lucide-react';
 
 const pillars = [
   {
@@ -30,12 +30,21 @@ const pillars = [
     image: '/founders/pillar-strength.jpeg',
     tint: 'from-rhyze-gold/30',
   },
+  {
+    Icon: PartyPopper,
+    title: 'EVENT CHOREOGRAPHY',
+    sub: 'Make the moment move',
+    body: 'Custom choreography and private dance experiences for quinceañeras, Sweet 16s, youth events, birthdays, bachelorettes, and milestone celebrations.',
+    href: '/event-choreography',
+    image: '/founders/event-choreography-card.png',
+    tint: 'from-rhyze-coral/35',
+  },
 ];
 
 export function ThreePillars() {
   return (
     <section className="mx-auto max-w-7xl px-6 py-24">
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {pillars.map(({ Icon, title, sub, body, href, image, tint }) => (
           <Link
             key={title}
@@ -46,7 +55,7 @@ export function ThreePillars() {
               src={image}
               alt=""
               fill
-              sizes="(min-width: 768px) 33vw, 100vw"
+              sizes="(min-width: 1280px) 25vw, (min-width: 768px) 50vw, 100vw"
               className="opacity-28 group-hover:opacity-38 absolute inset-0 object-cover transition duration-500 group-hover:scale-105"
             />
             <div className="pointer-events-none absolute inset-0 bg-rhyze-black/70" />

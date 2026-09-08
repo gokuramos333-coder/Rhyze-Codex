@@ -1,0 +1,48 @@
+INSERT INTO "Product" (
+  "id",
+  "name",
+  "slug",
+  "description",
+  "kind",
+  "priceCents",
+  "billingInterval",
+  "includedCredits",
+  "isUnlimited",
+  "eligibleCategoryIds",
+  "isPublic",
+  "isActive",
+  "alwaysAvailable",
+  "displayOrder",
+  "createdAt",
+  "updatedAt"
+)
+VALUES (
+  'rhyze-standard-drop-in-2026',
+  'Single Class',
+  'drop-in',
+  'One standard class credit for any eligible Rhyze class.',
+  'DROP_IN',
+  2800,
+  'ONE_TIME',
+  1,
+  false,
+  ARRAY[]::TEXT[],
+  true,
+  true,
+  true,
+  40,
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+)
+ON CONFLICT ("slug") DO UPDATE SET
+  "name" = 'Single Class',
+  "description" = 'One standard class credit for any eligible Rhyze class.',
+  "kind" = 'DROP_IN',
+  "priceCents" = 2800,
+  "billingInterval" = 'ONE_TIME',
+  "includedCredits" = 1,
+  "isUnlimited" = false,
+  "isPublic" = true,
+  "isActive" = true,
+  "alwaysAvailable" = true,
+  "updatedAt" = CURRENT_TIMESTAMP;

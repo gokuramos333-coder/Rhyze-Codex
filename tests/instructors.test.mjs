@@ -10,7 +10,7 @@ const expected = [
   ['tricia-johnsen', 'Tricia', 'Johnsen'],
   ['adrianna-jones', 'Adrianna', 'Jones'],
   ['julie-reese', 'Julie', 'Reese'],
-  ['jessica-blundetto', 'Jessica', 'Blundetto'],
+  ['nicole-finley', 'Nicole', 'Finley'],
   ['rachel', 'Rachel', ''],
   ['mackenzie-heffernan', 'Mackenzie', 'Heffernan'],
   ['carla-hotrock', 'Carla', 'Hotrock'],
@@ -45,7 +45,7 @@ test('new instructor headings match the approved copy', () => {
     bySlug['julie-reese'].descriptor,
     'FUNCTIONAL FITNESS & CONDITIONING',
   );
-  assert.equal(bySlug['jessica-blundetto'].role, 'DANCE FIT / HEELS');
+  assert.equal(bySlug['nicole-finley'].role, 'HEELS 101 / HYPNOTIC HEELS');
   assert.equal(bySlug['rachel'].role, 'SOUL LINE-DANCING');
   assert.equal(
     bySlug['mackenzie-heffernan'].role,
@@ -55,15 +55,19 @@ test('new instructor headings match the approved copy', () => {
   assert.equal(bySlug['carla-hotrock'].role, 'CORE-WERK');
 });
 
-test('updated instructor bios include approved additions and third-person voice', () => {
+test('updated instructor bios include approved additions', () => {
   const bySlug = Object.fromEntries(
     instructors.map((instructor) => [instructor.slug, instructor]),
   );
 
   assert.match(bySlug['adrianna-jones'].bio, /yoga and Pilates/);
   assert.match(bySlug['adrianna-jones'].specialties.join(' '), /Pilates/);
-  assert.match(bySlug['jessica-blundetto'].bio, /Jessica brings over 30 years/);
-  assert.doesNotMatch(bySlug['jessica-blundetto'].bio, /\b(I|I’m|I'm|My)\b/);
+  assert.match(bySlug['nicole-finley'].bio, /Dance has been my absolute world/);
+  assert.match(bySlug['nicole-finley'].bio, /Being a mom to my little girls/);
+  assert.deepEqual(bySlug['nicole-finley'].specialties, [
+    'Heels 101',
+    'Hypnotic Heels',
+  ]);
   assert.match(bySlug['rachel'].bio, /Soul Line-Dancing/);
   assert.match(bySlug['rachel'].bio, /connection, rhythm, and pure joy/);
   assert.match(bySlug['mackenzie-heffernan'].bio, /PRETTY GIRLS SWEAT/);
@@ -109,8 +113,8 @@ test('replacement instructor photos match the approved files', () => {
   const expectedHashes = {
     '/founders/instructor-carla.jpg':
       '91792ec220824b16a4f6739ef6c044431a8765cc5ae2d45389fdab8284fb7cb6',
-    '/founders/instructor-jessica.jpg':
-      'afa21cc9716154eb333c063e84e3b0c76f725531111dee704e1ccac5abc8e4c8',
+    '/founders/instructor-nicole-finley.png':
+      'f6566eb730d6817386debbeb2ded422556fe8e5e9a2eb3dba5b0acfd721f822d',
     '/founders/instructor-julie.jpg':
       '1615a6efe0c7355f818fb76951354267b296262fa531fd0088a72593f8d27596',
     '/founders/instructor-tricia.jpg':

@@ -6,14 +6,16 @@ import {
 } from '@/lib/domain/accounts/account-service';
 
 function repository(existingEmail?: string): AccountRepository & {
-  created: Array<{ email: string; name: string; phone: string; passwordHash: string; createInstructorApplication: boolean }>;
+  created: Array<{ email: string; name: string; phone: string; dateOfBirth: Date; passwordHash: string; waiverVersionId: string; mediaConsent: boolean }>;
 } {
   const created: Array<{
     email: string;
     name: string;
     phone: string;
+    dateOfBirth: Date;
     passwordHash: string;
-    createInstructorApplication: boolean;
+    waiverVersionId: string;
+    mediaConsent: boolean;
   }> = [];
 
   return {
@@ -26,9 +28,6 @@ function repository(existingEmail?: string): AccountRepository & {
       return {
         id: 'new-member',
         email: input.email,
-        instructorApplicationId: input.createInstructorApplication
-          ? 'application-1'
-          : null,
       };
     },
   };
@@ -43,6 +42,9 @@ describe('createAccount', () => {
         name: '  Maya Collins ',
         email: ' MAYA@Example.COM ',
         phone: '973-555-0101',
+        dateOfBirth: new Date('1990-04-12T12:00:00.000Z'),
+        waiverAccepted: true,
+        waiverVersionId: 'waiver-current',
         password: 'Rhyze!StrongPass2026',
       },
       repo,
@@ -51,7 +53,6 @@ describe('createAccount', () => {
     expect(account).toEqual({
       id: 'new-member',
       email: 'maya@example.com',
-      instructorApplicationId: null,
     });
     expect(repo.created).toHaveLength(1);
     expect(repo.created[0].name).toBe('Maya Collins');
@@ -68,6 +69,9 @@ describe('createAccount', () => {
           name: 'Maya Collins',
           email: 'MAYA@example.com',
           phone: '973-555-0101',
+          dateOfBirth: new Date('1990-04-12T12:00:00.000Z'),
+          waiverAccepted: true,
+          waiverVersionId: 'waiver-current',
           password: 'Rhyze!StrongPass2026',
         },
         repo,
@@ -84,11 +88,33 @@ describe('createAccount', () => {
           name: 'Maya Collins',
           email: 'maya@example.com',
           phone: '973-555-0101',
+          dateOfBirth: new Date('1990-04-12T12:00:00.000Z'),
+          waiverAccepted: true,
+          waiverVersionId: 'waiver-current',
           password: 'weak',
         },
         repo,
       ),
     ).rejects.toThrow('Use at least 9 characters.');
     expect(repo.created).toHaveLength(0);
+  });
+
+  it('never creates an instructor application from the public member signup', async () => {
+    const repo = repository();
+
+    await createAccount(
+      {
+        name: 'Maya Collins',
+        email: 'maya@example.com',
+        phone: '973-555-0101',
+        dateOfBirth: new Date('1990-04-12T12:00:00.000Z'),
+        waiverAccepted: true,
+        waiverVersionId: 'waiver-current',
+        password: 'Rhyze!StrongPass2026',
+      },
+      repo,
+    );
+
+    expect(repo.created[0]).not.toHaveProperty('createInstructorApplication');
   });
 });

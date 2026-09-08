@@ -14,4 +14,14 @@ describe('member portal navigation', () => {
       expect.objectContaining({ href: '/instructor' }),
     );
   });
+
+  it('puts Profile after Home, Billing last, and omits Waiver', () => {
+    const navigation = memberNavigationForRole('MEMBER');
+    expect(navigation.slice(0, 2).map((item) => item.label)).toEqual([
+      'Home',
+      'Profile',
+    ]);
+    expect(navigation.at(-1)?.label).toBe('Billing');
+    expect(navigation.some((item) => item.label === 'Waiver')).toBe(false);
+  });
 });

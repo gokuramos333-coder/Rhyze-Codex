@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { queueEmail } from '@/lib/notifications/email-queue';
+
+function appUrl(path: string) {
+  const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://rhyzefit.com';
+  return new URL(path, origin).toString();
+}
 
 export async function POST(request: Request) {
   if (
@@ -9,94 +15,56 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const now = new Date();
   const activeWaiver = await prisma.waiverVersion.findFirst({
     where: { isActive: true, requiresSign: true },
+    select: { id: true },
     orderBy: { effectiveAt: 'desc' },
-    select: { id: true, version: true },
   });
-  if (!activeWaiver) {
-    return NextResponse.json({ queued: 0, status: 'No active agreement.' });
+
+  const members = await prisma.user.findMany({
+    where: {
+      role: 'MEMBER',
+      email: { not: '' },
+      OR: [
+        { name: null },
+        { name: { not: { contains: ' ' } } },
+        { memberProfile: null },
+        { memberProfile: { phone: null } },
+        { memberProfile: { dateOfBirth: null } },
+        ...(activeWaiver
+          ? [{ waiverAcceptances: { none: { waiverVersionId: activeWaiver.id } } }]
+          : [{ waiverAcceptances: { none: {} } }]),
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      memberProfile: { select: { phone: true, dateOfBirth: true } },
+      waiverAcceptances: activeWaiver
+        ? { where: { waiverVersionId: activeWaiver.id }, select: { id: true } }
+        : { select: { id: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 500,
+  });
+
+  let queued = 0;
+  for (const member of members) {
+    await queueEmail(prisma, {
+      userId: member.id,
+      to: member.email,
+      subject: 'Please update your Rhyze profile and waivers',
+      template: 'PROFILE_COMPLETION_REMINDER',
+      payload: {
+        name: member.name || 'Rhyzer',
+        profileUrl: appUrl('/member/profile'),
+        waiverUrl: appUrl('/member/waiver'),
+      },
+      dedupeKey: `profile-completion-reminder:${member.id}:2026-08-birthdate-waiver`,
+    });
+    queued += 1;
   }
 
-  const acceptanceFilter = {
-    none: { waiverVersionId: activeWaiver.id },
-  } as const;
-  const [profiles, bookings] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        status: 'ACTIVE',
-        createdAt: { lte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-        waiverAcceptances: acceptanceFilter,
-      },
-      select: { id: true, email: true, name: true },
-    }),
-    prisma.booking.findMany({
-      where: {
-        status: 'CONFIRMED',
-        occurrence: {
-          status: 'SCHEDULED',
-          startAt: {
-            gt: now,
-            lte: new Date(now.getTime() + 24 * 60 * 60 * 1000),
-          },
-        },
-        user: { waiverAcceptances: acceptanceFilter },
-      },
-      include: {
-        user: { select: { id: true, email: true, name: true } },
-        occurrence: {
-          select: {
-            startAt: true,
-            template: { select: { name: true } },
-          },
-        },
-      },
-    }),
-  ]);
-
-  const messages = [
-    ...profiles.map((user) => ({
-      userId: user.id,
-      to: user.email,
-      subject: 'Complete your required Rhyze studio agreement',
-      template: 'WAIVER_REMINDER_24_HOUR',
-      payload: {
-        name: user.name,
-        agreementVersion: activeWaiver.version,
-        path: '/member/profile',
-      },
-      dedupeKey: `waiver:${activeWaiver.id}:user:${user.id}:24-hour`,
-    })),
-    ...bookings.map((booking) => ({
-      userId: booking.user.id,
-      to: booking.user.email,
-      subject: `Sign your Rhyze agreement before ${booking.occurrence.template.name}`,
-      template: 'WAIVER_REMINDER_UPCOMING_CLASS',
-      payload: {
-        name: booking.user.name,
-        agreementVersion: activeWaiver.version,
-        className: booking.occurrence.template.name,
-        startAt: booking.occurrence.startAt.toISOString(),
-        path: '/member/profile',
-      },
-      dedupeKey: `waiver:${activeWaiver.id}:booking:${booking.id}`,
-    })),
-  ];
-
-  await Promise.all(
-    messages.map((message) =>
-      prisma.emailMessage.upsert({
-        where: { dedupeKey: message.dedupeKey },
-        update: {},
-        create: message,
-      }),
-    ),
-  );
-
-  return NextResponse.json({
-    queued: messages.length,
-    profiles: profiles.length,
-    upcomingClasses: bookings.length,
-  });
+  return NextResponse.json({ queued, checked: members.length });
 }

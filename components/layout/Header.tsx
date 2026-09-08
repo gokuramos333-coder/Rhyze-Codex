@@ -16,6 +16,9 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [portalHref, setPortalHref] = useState('/sign-in');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
   const isHome = pathname === '/';
 
@@ -31,7 +34,15 @@ export function Header() {
     fetch('/api/auth/session')
       .then((response) => response.json())
       .then((session) => {
-        if (!active || !session?.user?.email) return;
+        if (!active) return;
+        if (!session?.user?.email) {
+          setIsAuthenticated(false);
+          setPortalHref('/sign-in');
+          setShowAdmin(false);
+          return;
+        }
+        setIsAuthenticated(true);
+        setPortalHref('/member');
         setShowAdmin(
           isApprovedOwner({
             email: session.user.email,
@@ -39,8 +50,18 @@ export function Header() {
             status: session.user.status,
           }),
         );
+        fetch('/api/member/unread-count')
+          .then((response) => response.json())
+          .then((result) => {
+            if (active && typeof result?.count === 'number') setUnreadCount(result.count);
+          })
+          .catch(() => setUnreadCount(0));
       })
-      .catch(() => setShowAdmin(false));
+      .catch(() => {
+        setIsAuthenticated(false);
+        setPortalHref('/sign-in');
+        setShowAdmin(false);
+      });
     return () => {
       active = false;
     };
@@ -75,9 +96,6 @@ export function Header() {
             </span>
             <span className="sr-only">{site.name}</span>
           </Link>
-          <span className="hidden rounded-full border border-rhyze-gold/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-rhyze-gold xl:inline-flex">
-            Rhyze Fitness
-          </span>
 
           <nav
             aria-label="Primary"
@@ -143,18 +161,40 @@ export function Header() {
 
           <div className="hidden items-center gap-3 lg:flex">
             <CartButton />
-            <Link
-              href="/sign-in"
-              className="focus-ring rounded-md px-3 py-2 text-sm font-medium uppercase tracking-wide text-rhyze-cream/80 hover:text-rhyze-coral"
+            <Button
+              href={portalHref}
+              size="sm"
+              className="shrink-0 whitespace-nowrap"
             >
-              Member Portal
-            </Link>
-            <Button href="/join" size="sm">
+              {isAuthenticated ? 'Member Portal' : 'Log In'}
+              {unreadCount > 0 && (
+                <span className="grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-black leading-none text-white" aria-label={`${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Button>
+            <Button
+              href="/join"
+              size="sm"
+              className="shrink-0 whitespace-nowrap"
+            >
               Join Now
             </Button>
           </div>
 
           <div className="flex items-center gap-2 lg:hidden">
+            <Button
+              href={portalHref}
+              size="sm"
+              className="shrink-0 whitespace-nowrap"
+            >
+              {isAuthenticated ? 'Portal' : 'Log In'}
+              {unreadCount > 0 && (
+                <span className="grid min-h-4 min-w-4 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-black leading-none text-white" aria-label={`${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Button>
             <CartButton />
             <button
               type="button"
@@ -172,6 +212,9 @@ export function Header() {
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
         showAdmin={showAdmin}
+        portalHref={portalHref}
+        portalLabel={isAuthenticated ? 'Member Portal' : 'Log In'}
+        unreadCount={unreadCount}
       />
     </>
   );

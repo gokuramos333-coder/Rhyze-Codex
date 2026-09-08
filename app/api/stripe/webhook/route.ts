@@ -1,8 +1,12 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { getStripe } from '@/lib/payments/stripe';
-import { commissionCentsForProduct } from '@/lib/domain/referrals/referral-service';
+import { hydrateInvoiceEvent } from '@/lib/payments/stripe-event-hydration';
+import { processStripeEvent } from '@/lib/payments/webhook-processor';
+import { retrySerializableTransaction } from '@/lib/payments/transaction-retry';
 
 export async function POST(request: Request) {
   const signature = request.headers.get('stripe-signature');
@@ -25,80 +29,32 @@ export async function POST(request: Request) {
     update: {},
     create: { id: event.id, type: event.type, payload: JSON.parse(rawBody) },
   });
-
   try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const purchaseId = session.metadata?.purchaseId || session.client_reference_id;
-      if (purchaseId) {
-        const purchase = await prisma.purchase.update({
-          where: { id: purchaseId },
-          data: {
-            status: 'PAID',
-            paidAt: new Date(),
-            stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
-          },
-          include: { product: true },
-        });
-        if (typeof session.customer === 'string') {
-          await prisma.user.update({ where: { id: purchase.userId }, data: { stripeCustomerId: session.customer } });
-        }
-        if (purchase.discountCents > 0) {
-          const attribution = await prisma.referralAttribution.findUnique({
-            where: { referredUserId: purchase.userId },
-            include: { referralCode: true },
-          });
-          const alreadyRedeemed = await prisma.discountRedemption.findUnique({ where: { userId: purchase.userId } });
-          if (attribution && !alreadyRedeemed) {
-            await prisma.$transaction([
-              prisma.discountRedemption.create({
-                data: { userId: purchase.userId, purchaseId: purchase.id, referralCodeId: attribution.referralCodeId, discountCents: purchase.discountCents },
-              }),
-              prisma.referralCommission.create({
-                data: {
-                  instructorId: attribution.referralCode.instructorId,
-                  referredUserId: purchase.userId,
-                  purchaseId: purchase.id,
-                  amountCents: commissionCentsForProduct(purchase.product.kind),
-                },
-              }),
-            ]);
-          }
-        }
-        const number = `RHY-${new Date().getFullYear()}-${purchase.id.slice(-6).toUpperCase()}`;
-        await prisma.invoice.upsert({
-          where: { purchaseId: purchase.id },
-          update: {},
-          create: { purchaseId: purchase.id, number, amountCents: purchase.amountCents },
-        });
-        if (purchase.product.billingInterval !== 'ONE_TIME') {
-          await prisma.membership.upsert({
-            where: { purchaseId: purchase.id },
-            update: { status: 'ACTIVE' },
-            create: {
-              purchaseId: purchase.id,
-              productId: purchase.productId,
-              userId: purchase.userId,
-              status: 'ACTIVE',
-              currentPeriodStart: new Date(),
-            },
-          });
-        } else if (purchase.product.includedCredits || purchase.product.isUnlimited) {
-          await prisma.creditAccount.create({
-            data: {
-              userId: purchase.userId,
-              label: purchase.product.name,
-              isUnlimited: purchase.product.isUnlimited,
-              entries: purchase.product.includedCredits ? { create: { type: 'GRANT', quantity: purchase.product.includedCredits, reason: 'Purchase' } } : undefined,
-            },
-          });
-        }
-      }
-    }
-    await prisma.stripeEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
+    const hydratedEvent = await hydrateInvoiceEvent(event, getStripe().invoices);
+    await retrySerializableTransaction(() =>
+      prisma.$transaction(
+        async (tx) => {
+          await processStripeEvent(tx, hydratedEvent);
+          await tx.stripeEvent.update({ where: { id: event.id }, data: { processedAt: new Date(), error: null } });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
   } catch (error) {
-    await prisma.stripeEvent.update({ where: { id: event.id }, data: { error: error instanceof Error ? error.message : 'Unknown error' } });
+    await prisma.stripeEvent.update({
+      where: { id: event.id },
+      data: { error: error instanceof Error ? error.message : 'Unknown error' },
+    });
     return NextResponse.json({ error: 'Processing failed.' }, { status: 500 });
+  }
+  const object = event.data.object as { metadata?: { occurrenceId?: string } };
+  revalidatePath('/admin');
+  revalidatePath('/admin/activity');
+  revalidatePath('/admin/payments');
+  revalidatePath('/instructor/schedule');
+  if (object.metadata?.occurrenceId) {
+    revalidatePath(`/instructor/classes/${object.metadata.occurrenceId}/roster`);
+    revalidatePath(`/admin/schedule/${object.metadata.occurrenceId}/roster`);
   }
   return NextResponse.json({ received: true });
 }

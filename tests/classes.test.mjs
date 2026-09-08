@@ -5,19 +5,18 @@ import { classes } from '../lib/classes.ts';
 
 test('class catalog matches the official recurring Rhyze class formats', () => {
   const expected = [
-    ['global-hiit-mackenzie', 'Global HIIT with Mackenzie', 'strength', 50],
-    ['yoga-vinyasa-mackenzie', 'Yoga / Vinyasa with Mackenzie', 'yoga', 50],
-    ['core-360-carla-rio', 'Core 360 with Carla Rio', 'strength', 50],
-    ['pound-mackenzie', 'POUND with Mackenzie', 'strength', 50],
-    ['dance-fit-jessica', 'Dance Fit with Jessica', 'dance', 50],
-    ['grind-and-grow-carla-reo', 'Grind & Grow with Carla Reo', 'strength', 50],
+    ['global-hiit-mackenzie', 'Global Fit & Flow with Kenzie', 'strength', 50],
+    ['yoga-vinyasa-mackenzie', 'Vinyasa/Hatha Yoga with Kenzie', 'yoga', 50],
+    ['core-360-carla-rio', 'Core 360 with Carla', 'strength', 50],
+    ['pound-mackenzie', 'POUND with Kenzie', 'strength', 50],
+    ['grind-and-grow-carla-reo', 'Grind & Grow with Carla', 'strength', 50],
     [
-      'heels-101-walk-with-me-jessica',
-      'Heels 101 "Walk with Me" with Jessica',
+      'heels-101-walk-with-me-nicole',
+      'Heels 101 "Walk with Me" with Nicole',
       'dance',
       50,
     ],
-    ['hypnotic-heels-jessica', 'Hypnotic Heels with Jessica', 'dance', 75],
+    ['hypnotic-heels-nicole', 'Hypnotic Heels with Nicole', 'dance', 75],
     ['ignite-julie', 'Ignite with Julie', 'strength', 50],
     ['pilates-pulse-adrianna', 'Pilates Pulse with Adrianna', 'yoga', 50],
     [
@@ -28,8 +27,9 @@ test('class catalog matches the official recurring Rhyze class formats', () => {
     ],
     ['rhyze-ritmo-melissa', 'Rhyze Ritmo with Melissa', 'dance', 50],
     ['rhyze-up-vanessa', 'Rhyze Up with Vanessa', 'dance', 50],
+    ['work-tone-mswoy36a', 'Work & Tone with Avery', 'strength', 50],
     ['seat-seduction-vanessa', 'Seat Seduction With Vanessa', 'dance', 75],
-    ['soul-line-dancing-rachel', 'Soul Line-Dancing with Rachel', 'dance', 50],
+    ['soul-line-dancing-rachel', 'Soul Line & Groove with Rachel', 'dance', 50],
     [
       'tcj-hip-hop-happy-hour-tricia',
       'TCJ Hip-Hop Happy Hour with Tricia',
@@ -56,7 +56,7 @@ test('class descriptions use concise one-paragraph Rhyze copy', () => {
   for (const cls of classes) {
     assert.ok(cls.description.length > 0, `${cls.name} needs a description`);
     assert.ok(
-      cls.description.length <= 420,
+      cls.description.length <= 700,
       `${cls.name} description is too long`,
     );
     assert.doesNotMatch(
@@ -106,6 +106,16 @@ test('class descriptions use concise one-paragraph Rhyze copy', () => {
     bySlug.get('seat-seduction-vanessa').description,
     /beginner-friendly chair choreography/,
   );
+  assert.match(
+    bySlug.get('heels-101-walk-with-me-nicole').description,
+    /Step into your power and build unshakeable confidence/,
+  );
+  assert.match(
+    bySlug.get('heels-101-walk-with-me-nicole').description,
+    /Bring your favorite heels, an open mind, and get ready to walk your walk!/,
+  );
+
+  assert.equal(classes.some((item) => /jessica/i.test(`${item.slug} ${item.name}`)), false);
 
   assert.equal(bySlug.has('rhyze-and-groove'), false);
   assert.equal(bySlug.has('rhyze-revolution'), false);

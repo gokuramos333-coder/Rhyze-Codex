@@ -23,3 +23,33 @@ export function parseSignedDate(value: FormDataEntryValue | null): Date {
   }
   return signedDate;
 }
+
+export function bookingWaiverDestination(occurrenceId: string): string {
+  const returnTo = `/member/bookings/new?occurrence=${encodeURIComponent(occurrenceId)}`;
+  return `/member/waiver?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export function membershipWaiverDestination(): string {
+  return `/member/waiver?returnTo=${encodeURIComponent('/member/membership')}`;
+}
+
+export function eventCheckoutWaiverDestination(slug: string): string {
+  return `/member/waiver?returnTo=${encodeURIComponent(`/book/event/${encodeURIComponent(slug)}`)}`;
+}
+
+export function waiverCompletionDestination(value: unknown): string {
+  const returnTo = String(value || '');
+  if (returnTo === '/member/profile' || returnTo === '/instructor/profile') {
+    return `${returnTo}?saved=agreement`;
+  }
+  if (returnTo === '/member/membership') {
+    return `${returnTo}?saved=agreement`;
+  }
+  if (/^\/member\/bookings\/new\?occurrence=[^&]+$/.test(returnTo)) {
+    return returnTo;
+  }
+  if (/^\/book\/event\/[a-z0-9-]+$/.test(returnTo)) {
+    return returnTo;
+  }
+  return '/member/waiver?saved=1';
+}

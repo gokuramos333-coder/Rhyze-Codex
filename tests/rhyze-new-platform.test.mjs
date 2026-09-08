@@ -150,7 +150,7 @@ test('Rhyze-owned schedule renders as a branded weekly calendar', () => {
       'Pilates Pulse with Adrianna',
       'Flow with Adrianna',
       'Ignite with Julie',
-      'Heels 101 "Walk with Me" with Jessica',
+      'Heels 101 "Walk with Me" with Nicole',
     ],
   );
   assert.ok(ownedSchedule.every((slot) => slot.photo.startsWith('/founders/')));
@@ -270,7 +270,9 @@ test('policies use the approved cancellation policy and no late-entry column', (
 
   assert.match(policiesSource, /Cancellation for Classes/);
   assert.match(policiesSource, /6 hours before class start time/);
-  assert.match(policiesSource, /\$10 transfer fee/);
+  assert.match(policiesSource, /\$5 transfer fee/);
+  assert.match(policiesSource, /Submit every cancellation through My Bookings/);
+  assert.match(policiesSource, /\$10 for standard clients/);
   assert.match(policiesSource, /non-refundable except where required by law/);
   assert.match(policiesSource, /Online booking closes 30 minutes before/);
   assert.match(policiesSource, /Private Group Parties/);

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   ArrowRight,
   CalendarDays,
@@ -9,6 +10,25 @@ import {
 } from 'lucide-react';
 import { prisma } from '@/lib/db/prisma';
 import { calculateSombleMetrics } from '@/lib/admin/somble-metrics';
+import {
+  buildDailyRevenueSeries,
+  recordsInRange,
+  summarizeRevenue,
+} from '@/lib/admin/dashboard-analytics';
+import {
+  CountBars,
+  DistributionBars,
+  RevenueAreaChart,
+} from '@/components/admin/AnalyticsCharts';
+import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControls';
+import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
+import { buildAdminActivityItems } from '@/lib/admin/activity-client-metrics';
+import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
+import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
+import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function money(cents: number) {
   return new Intl.NumberFormat('en-US', {
@@ -27,17 +47,21 @@ function dateTime(date: Date) {
   }).format(date);
 }
 
-export default async function AdminHomePage({
-  searchParams,
-}: {
-  searchParams: { panel?: string };
-}) {
+export default async function AdminHomePage(
+  props: {
+    searchParams: Promise<{ panel?: string; analytics?: string; range?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const panel = ['activity', 'community', 'upcoming', 'sales'].includes(
     searchParams.panel ?? '',
   )
     ? searchParams.panel!
     : 'activity';
   const now = new Date();
+  await syncRecentStripePaymentRecords(prisma).catch((error) => {
+    console.error('Stripe payment sync failed', error);
+  });
   const [
     profiles,
     transactions,
@@ -46,6 +70,19 @@ export default async function AdminHomePage({
     nativeRevenue,
     productCount,
     classCount,
+    nativePurchases,
+    totalAccounts,
+    bookedUsers,
+    upcomingCount,
+    activityUsers,
+    activityPurchases,
+    activityMemberships,
+    activityCommerceOrders,
+    activityBookings,
+    activityWaitlistEntries,
+    activityAttendanceRecords,
+    activityPaymentRecords,
+    refunds,
   ] = await Promise.all([
     prisma.sombleClientProfile.findMany({
       include: {
@@ -65,7 +102,7 @@ export default async function AdminHomePage({
       where: { startAt: { gte: now }, status: 'SCHEDULED' },
       include: {
         template: true,
-        instructor: true,
+        instructor: { include: { instructorProfile: true } },
         _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
       },
       orderBy: { startAt: 'asc' },
@@ -80,30 +117,145 @@ export default async function AdminHomePage({
     }),
     prisma.product.count({ where: { isActive: true } }),
     prisma.classTemplate.count({ where: { isActive: true } }),
+    prisma.purchase.findMany({
+      where: { status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
+      select: {
+        amountCents: true,
+        refundedAmountCents: true,
+        paidAt: true,
+        createdAt: true,
+        userId: true,
+        user: { select: { name: true, email: true } },
+        product: { select: { name: true } },
+      },
+    }),
+    prisma.user.count({
+      where: {
+        role: { in: ['MEMBER', 'INSTRUCTOR', 'MANAGER', 'ADMIN', 'OWNER'] },
+        NOT: { email: { endsWith: '@rhyze.local' } },
+      },
+    }),
+    prisma.booking.findMany({
+      where: { status: { in: ['CONFIRMED', 'ATTENDED'] } },
+      select: { userId: true },
+      distinct: ['userId'],
+    }),
+    prisma.classOccurrence.count({
+      where: { startAt: { gte: now }, status: 'SCHEDULED' },
+    }),
+    prisma.user.findMany({
+      where: { NOT: { email: { endsWith: '@rhyze.local' } } },
+      select: { id: true, name: true, email: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.purchase.findMany({
+      where: { status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
+      include: { user: true, product: true, refunds: true },
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    }),
+    prisma.membership.findMany({
+      include: { user: true, product: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.commerceOrder.findMany({
+      where: { status: { in: ['PAID', 'FULFILLMENT_REVIEW', 'REFUNDED'] } },
+      include: { user: true, items: true },
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    }),
+    prisma.booking.findMany({
+      include: { user: true, occurrence: { include: { template: true } } },
+      orderBy: [{ updatedAt: 'desc' }, { bookedAt: 'desc' }],
+      take: 100,
+    }),
+    prisma.waitlistEntry.findMany({
+      include: { user: true, occurrence: { include: { template: true } } },
+      orderBy: [{ updatedAt: 'desc' }, { joinedAt: 'desc' }],
+      take: 100,
+    }),
+    prisma.attendanceRecord.findMany({
+      include: { user: true, occurrence: { include: { template: true } } },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    }),
+    prisma.paymentRecord.findMany({
+      where: { status: { in: ['SUCCEEDED', 'PARTIALLY_REFUNDED', 'REFUNDED', 'DISPUTED'] } },
+      include: { user: true },
+      orderBy: { occurredAt: 'desc' },
+      take: 100,
+    }),
+    prisma.refund.findMany({
+      include: { purchase: { include: { user: true, product: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
   ]);
   const metrics = calculateSombleMetrics(transactions);
-  const downloadedCount = profiles.filter((item) => item.appDownloaded).length;
-  const activity = [
+  const visiblePaymentRecords = excludeSombleBackedStripePaymentRecords(activityPaymentRecords, transactions);
+  const unlinkedPaymentRecords = visiblePaymentRecords.filter(
+    (record) => !record.purchaseId && !record.commerceOrderId,
+  );
+  const directRevenuePaymentRecords = unlinkedPaymentRecords.filter((record) => record.userId);
+  const range = resolveAnalyticsRange(searchParams);
+  const allRevenueRecords = [
     ...transactions.map((item) => ({
-      id: `transaction-${item.id}`,
-      at: item.transferredAt,
-      name: item.user.name || item.supporterName,
-      detail: `Transferred ${money(item.amountCents)} · ${item.contentType}`,
-      href: '/admin/payments',
+      amountCents: item.amountCents,
+      occurredAt: item.transferredAt,
+      customerId: item.userId,
+      type: item.contentType,
+      source: 'SOMBLE' as const,
     })),
-    ...profiles.map((item) => ({
-      id: `client-${item.id}`,
-      at: item.sourceJoinedAt,
-      name: item.user.name || item.user.email,
-      detail: 'Joined the Rhyze community through Somble',
-      href: '/admin/members',
+    ...nativePurchases.map((item) => ({
+      amountCents: item.amountCents - item.refundedAmountCents,
+      occurredAt: item.paidAt || item.createdAt,
+      customerId: item.userId,
+      type: item.product.name,
+      source: 'RHYZE' as const,
     })),
-  ]
-    .sort((a, b) => b.at.getTime() - a.at.getTime())
-    .slice(0, 14);
+    ...directRevenuePaymentRecords.map((item) => ({
+      amountCents: item.amountCents - item.refundedAmountCents,
+      occurredAt: item.occurredAt,
+      customerId: item.userId || `guest-stripe-${item.id}`,
+      type: item.kind.replaceAll('_', ' '),
+      source: 'RHYZE' as const,
+    })),
+  ];
+  const revenueRecords = recordsInRange(allRevenueRecords, range.start, range.end);
+  const revenueSummary = summarizeRevenue(revenueRecords);
+  const revenueSeries = buildDailyRevenueSeries(
+    revenueRecords,
+    range.start,
+    range.end,
+  );
+  const analytics =
+    searchParams.analytics === 'traffic' ? 'traffic' : 'earnings';
+  const downloadedCount = profiles.filter((item) => item.appDownloaded).length;
+  const refundTotalCents = refunds.reduce((total, item) => total + item.amountCents, 0);
+  const sombleTransferRevenueCents = transactions.reduce((total, item) => total + item.amountCents, 0);
+  const nativeGrossRevenueCents = nativePurchases.reduce((total, item) => total + item.amountCents, 0);
+  const nativeRefundedRevenueCents = nativePurchases.reduce((total, item) => total + item.refundedAmountCents, 0);
+  const directStripeGrossRevenueCents = directRevenuePaymentRecords.reduce((total, item) => total + item.amountCents, 0);
+  const directStripeRefundedRevenueCents = directRevenuePaymentRecords.reduce((total, item) => total + item.refundedAmountCents, 0);
+  const totalRevenueCents = sombleTransferRevenueCents + nativeGrossRevenueCents + directStripeGrossRevenueCents - nativeRefundedRevenueCents - directStripeRefundedRevenueCents;
+  const activity = buildAdminActivityItems({
+    users: activityUsers,
+    purchases: activityPurchases,
+    memberships: activityMemberships,
+    commerceOrders: activityCommerceOrders,
+    sombleTransactions: transactions.slice(0, 100),
+    sombleProfiles: profiles.slice(0, 100),
+    bookings: activityBookings,
+    waitlistEntries: activityWaitlistEntries,
+    attendanceRecords: activityAttendanceRecords,
+    paymentRecords: visiblePaymentRecords,
+  }).slice(0, 14);
 
   return (
     <>
+      <LiveDataRefresh />
       <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">
@@ -133,12 +285,19 @@ export default async function AdminHomePage({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric
-          label="Somble transferred revenue"
-          value={money(metrics.transferredRevenueCents)}
-          detail={`${transactions.length} reconciled transfers`}
+          label="Total revenue"
+          value={money(totalRevenueCents)}
+          detail={`${money(sombleTransferRevenueCents)} Somble transferred + ${money(nativeGrossRevenueCents + directStripeGrossRevenueCents)} Rhyze Stripe - ${money(nativeRefundedRevenueCents + directStripeRefundedRevenueCents)} refunds`}
           href="/admin/payments"
+          icon={<CircleDollarSign />}
+        />
+        <Metric
+          label="Refunds issued"
+          value={money(refundTotalCents)}
+          detail={`${refunds.length} refund records · click for members and dates`}
+          href="/admin?panel=sales#refunds"
           icon={<CircleDollarSign />}
         />
         <Metric
@@ -157,12 +316,102 @@ export default async function AdminHomePage({
         />
         <Metric
           label="Upcoming classes"
-          value={`${upcoming.length}`}
+          value={`${upcomingCount}`}
           detail={`${classCount} class templates`}
-          href="/admin/schedule"
+          href="/admin/classes"
           icon={<CalendarDays />}
         />
       </div>
+
+      <section className="mt-8 border border-black/10 bg-[#f5f0e6] p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">
+              Live business analytics
+            </p>
+            <h2 className="mt-2 font-display text-5xl tracking-wider">
+              {analytics === 'earnings' ? 'EARNINGS' : 'TRAFFIC + CONVERSION'}
+            </h2>
+          </div>
+          <div className="flex">
+            <Link
+              href={`/admin?analytics=earnings&panel=${panel}`}
+              className={`px-5 py-3 text-xs font-black uppercase tracking-widest ${
+                analytics === 'earnings'
+                  ? 'bg-rhyze-orange text-rhyze-black'
+                  : 'bg-white text-rhyze-black/50'
+              }`}
+            >
+              Earnings
+            </Link>
+            <Link
+              href={`/admin?analytics=traffic&panel=${panel}`}
+              className={`px-5 py-3 text-xs font-black uppercase tracking-widest ${
+                analytics === 'traffic'
+                  ? 'bg-rhyze-orange text-rhyze-black'
+                  : 'bg-white text-rhyze-black/50'
+              }`}
+            >
+              Traffic
+            </Link>
+          </div>
+        </div>
+        {analytics === 'earnings' ? (
+          <>
+            <AnalyticsRangeControls basePath="/admin" active={range.key} from={searchParams.from} to={searchParams.to} />
+            <div className="mt-5 grid gap-5 xl:grid-cols-[1.6fr_.8fr]">
+              <RevenueAreaChart
+                title={`Revenue · ${range.label}`}
+                points={revenueSeries.map((point) => ({
+                  label: point.label,
+                  value: point.amountCents,
+                }))}
+              />
+              <DistributionBars
+                title={`Revenue by type · ${range.label}`}
+                href="/admin/payments"
+                items={Object.entries(revenueSummary.byType).map(
+                  ([label, value]) => ({ label, value }),
+                )}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_.8fr]">
+            <CountBars
+              title="Known client conversion"
+              items={[
+                { label: 'Client accounts', value: totalAccounts },
+                {
+                  label: 'Customers with payment history',
+                  value: revenueSummary.uniqueCustomers,
+                },
+                { label: 'Native class bookers', value: bookedUsers.length },
+              ]}
+              note="This uses real account, payment, and booking records. It updates as Rhyze activity is recorded."
+            />
+            <section className="border-t-4 border-rhyze-gold bg-white p-5">
+              <p className="text-xs font-black uppercase tracking-widest text-rhyze-black/45">
+                Website visit analytics
+              </p>
+              <strong className="mt-3 block font-display text-4xl tracking-wider">
+                CONNECTION NEEDED
+              </strong>
+              <p className="mt-3 text-sm font-bold text-rhyze-black/50">
+                Page visits, add-to-cart counts, geography, and acquisition
+                sources require a privacy-conscious website analytics provider.
+                No traffic numbers are invented here.
+              </p>
+              <Link
+                href="/admin/integrations"
+                className="mt-5 inline-flex bg-rhyze-black px-4 py-3 text-xs font-black uppercase tracking-widest text-white"
+              >
+                Open integrations
+              </Link>
+            </section>
+          </div>
+        )}
+      </section>
 
       <section className="mt-8 overflow-hidden border border-black/10 bg-white">
         <div className="flex flex-wrap border-b border-black/10 bg-[#f5f0e6]">
@@ -253,7 +502,7 @@ export default async function AdminHomePage({
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {profiles.slice(0, 12).map((profile) => (
                 <Link
-                  href={`/admin/members?q=${encodeURIComponent(profile.user.email)}`}
+                  href={`/admin/members/${profile.userId}`}
                   key={profile.id}
                   className="border-l-4 border-rhyze-orange bg-[#f5f0e6] p-4 hover:bg-rhyze-gold/15"
                 >
@@ -277,22 +526,36 @@ export default async function AdminHomePage({
                 UPCOMING FLOOR
               </h2>
               <Link
-                href="/admin/schedule"
+                href="/admin/classes"
                 className="text-xs font-black uppercase text-rhyze-coral"
               >
-                Full schedule
+                All classes
               </Link>
             </div>
             <div className="grid gap-3">
               {upcoming.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/admin/schedule/${item.id}`}
-                  className="grid gap-3 border border-black/10 p-4 hover:border-rhyze-coral md:grid-cols-[9rem_1fr_auto] md:items-center"
+                  href={`/admin/classes/${item.templateId}`}
+                  className="grid gap-3 border border-black/10 p-4 hover:border-rhyze-coral md:grid-cols-[9rem_3.5rem_1fr_auto] md:items-center"
                 >
                   <time className="font-display text-2xl tracking-wider">
                     {dateTime(item.startAt)}
                   </time>
+                  {item.instructor?.instructorProfile?.photoUrl ? (
+                    <Image
+                      src={item.instructor.instructorProfile.photoUrl}
+                      alt=""
+                      width={48}
+                      height={48}
+                      unoptimized={item.instructor.instructorProfile.photoUrl.startsWith('/api/media/')}
+                      className="h-12 w-12 object-cover"
+                    />
+                  ) : (
+                    <span className="grid h-12 w-12 place-items-center bg-rhyze-orange/10 font-display text-2xl">
+                      {(item.instructor?.name || 'T').slice(0, 1)}
+                    </span>
+                  )}
                   <span>
                     <strong className="block">{item.template.name}</strong>
                     <small>
@@ -300,7 +563,7 @@ export default async function AdminHomePage({
                     </small>
                   </span>
                   <strong>
-                    {item._count.bookings}/{item.capacity} booked
+                    {item._count.bookings + item.historicalSignupCount}/{item.capacity} booked
                   </strong>
                 </Link>
               ))}
@@ -317,7 +580,7 @@ export default async function AdminHomePage({
           <div className="overflow-x-auto p-5">
             <div className="mb-5 flex items-center justify-between gap-4">
               <h2 className="font-display text-4xl tracking-wider">
-                SOMBLE TRANSFER LEDGER
+                SYNCED SALES LEDGER
               </h2>
               <Link
                 href="/admin/payments"
@@ -325,6 +588,23 @@ export default async function AdminHomePage({
               >
                 Full ledger
               </Link>
+            </div>
+            <section className="mb-5 border-t-4 border-rhyze-orange bg-rhyze-black p-5 text-rhyze-cream">
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-gold">Total revenue</p>
+              <strong className="mt-2 block font-display text-6xl tracking-wider">{money(totalRevenueCents)}</strong>
+              <p className="mt-2 text-sm font-bold text-rhyze-cream/60">Somble transferred revenue + verified Rhyze Stripe purchases - refunds. Stripe charges already represented by Somble payment IDs, or not matched to a Rhyze user/order yet, are excluded from Total Revenue so money is counted once.</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-5">
+                <Stat label="Somble transfers" value={money(sombleTransferRevenueCents)} />
+                <Stat label="Native purchases" value={money(nativeGrossRevenueCents)} />
+                <Stat label="Verified direct Stripe" value={money(directStripeGrossRevenueCents)} />
+                <Stat label="Refunds deducted" value={money(nativeRefundedRevenueCents + directStripeRefundedRevenueCents)} />
+                <Stat label="Synced rows" value={`${transactions.length + nativePurchases.length + unlinkedPaymentRecords.length}`} />
+              </div>
+            </section>
+            <div className="mb-5 grid gap-3 md:grid-cols-3">
+              <Stat label="Gross synced revenue" value={money(sombleTransferRevenueCents + nativeGrossRevenueCents + directStripeGrossRevenueCents)} />
+              <Stat label="Net synced revenue" value={money(totalRevenueCents)} />
+              <Stat label="Refunds issued" value={money(refundTotalCents)} />
             </div>
             <table className="w-full min-w-[48rem] text-left text-sm">
               <thead>
@@ -337,6 +617,15 @@ export default async function AdminHomePage({
                 </tr>
               </thead>
               <tbody>
+                {nativePurchases.slice(0, 12).map((item) => (
+                  <tr key={`native-${item.userId}-${item.createdAt.toISOString()}`} className="border-b border-black/5">
+                    <td className="p-3">{dateTime(item.paidAt || item.createdAt)}</td>
+                    <td><Link className="font-bold text-rhyze-coral" href={`/admin/members/${item.userId}`}>{item.user.name || item.user.email}</Link></td>
+                    <td>{item.product.name}</td>
+                    <td className="font-black">{money(item.amountCents - item.refundedAmountCents)}</td>
+                    <td className="font-mono text-xs">Rhyze native</td>
+                  </tr>
+                ))}
                 {transactions.slice(0, 12).map((item) => (
                   <tr key={item.id} className="border-b border-black/5">
                     <td className="p-3">{dateTime(item.transferredAt)}</td>
@@ -350,6 +639,27 @@ export default async function AdminHomePage({
                 ))}
               </tbody>
             </table>
+            <section id="refunds" className="mt-8 scroll-mt-24 border-t-4 border-rhyze-coral bg-[#f5f0e6] p-5">
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Refund records</p>
+                  <h3 className="font-display text-4xl tracking-wider">REFUNDS</h3>
+                </div>
+                <strong>{money(refundTotalCents)} total refunded</strong>
+              </div>
+              <div className="grid gap-3">
+                {refunds.map((refund) => (
+                  <Link key={refund.id} href={`/admin/members/${refund.purchase.userId}`} className="grid gap-2 bg-white p-4 hover:bg-rhyze-gold/10 md:grid-cols-[1fr_auto]">
+                    <span>
+                      <strong className="block">{refund.purchase.user.name || refund.purchase.user.email}</strong>
+                      <small className="text-rhyze-black/55">{refund.purchase.product.name} · {refund.reason || 'No reason recorded'} · {dateTime(refund.createdAt)}</small>
+                    </span>
+                    <strong>{money(refund.amountCents)}</strong>
+                  </Link>
+                ))}
+                {!refunds.length && <p className="bg-white p-4 text-sm font-bold text-rhyze-black/45">No refunds recorded yet.</p>}
+              </div>
+            </section>
           </div>
         )}
       </section>
@@ -364,7 +674,7 @@ export default async function AdminHomePage({
               .sort((a, b) => b[1] - a[1])
               .map(([type, amount]) => (
                 <Link
-                  href="/admin/offerings"
+                  href="/admin/products"
                   key={type}
                   className="flex items-center justify-between border-b border-black/10 py-3"
                 >

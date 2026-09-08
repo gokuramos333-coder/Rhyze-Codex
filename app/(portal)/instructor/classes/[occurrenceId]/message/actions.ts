@@ -6,6 +6,30 @@ import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { queueEmail } from '@/lib/notifications/email-queue';
 
+function classDate(value: Date) {
+  return value.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function classTime(value: Date) {
+  return value.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+}
+
+function resolveCancellationReason(formData: FormData) {
+  const customReason = String(formData.get('customCancellationReason') || '').trim();
+  if (customReason) return customReason;
+
+  const reasonType = String(formData.get('cancellationReasonType') || 'instructor');
+  switch (reasonType) {
+    case 'weather':
+      return 'Due to weather conditions, we need to cancel this class.';
+    case 'general':
+      return 'We need to cancel this class. Thank you for your understanding.';
+    case 'instructor':
+    default:
+      return 'Due to an instructor emergency, we need to cancel this class.';
+  }
+}
+
 export async function sendClassMessageAction(formData: FormData) {
   const instructor = await requireArea('instructor');
   const occurrenceId = String(formData.get('occurrenceId') || '');
@@ -30,7 +54,16 @@ export async function sendClassMessageAction(formData: FormData) {
         to: booking.user.email,
         subject,
         template: 'CLASS_UPDATE',
-        payload: { body, occurrenceId, messageId: message.id },
+        payload: {
+          name: booking.user.name || 'Rhyzer',
+          messageSubject: subject,
+          body,
+          className: occurrence.template.name,
+          classDate: classDate(occurrence.startAt),
+          classTime: classTime(occurrence.startAt),
+          bookingsUrl: '/member/bookings',
+          messageId: message.id,
+        },
         dedupeKey: `class-message-email:${message.id}:${booking.userId}`,
       });
     }
@@ -43,7 +76,7 @@ export async function sendClassMessageAction(formData: FormData) {
 export async function cancelAssignedClassAction(formData: FormData) {
   const instructor = await requireArea('instructor');
   const occurrenceId = String(formData.get('occurrenceId') || '');
-  const reason = String(formData.get('reason') || '').trim();
+  const reason = resolveCancellationReason(formData);
   if (reason.length < 10) redirect(`/instructor/classes/${occurrenceId}/message?error=reason`);
   const occurrence = await prisma.classOccurrence.findFirst({
     where: { id: occurrenceId, instructorId: instructor.id, status: 'SCHEDULED' },
@@ -60,7 +93,21 @@ export async function cancelAssignedClassAction(formData: FormData) {
         if (!released) await tx.creditLedgerEntry.create({ data: { creditAccountId: reservation.creditAccountId, bookingId: booking.id, type: 'RELEASE', quantity: 1, reason: 'Instructor cancelled class' } });
       }
       await tx.inAppNotification.create({ data: { userId: booking.userId, title: `${occurrence.template.name} was cancelled`, body: reason, link: '/member/bookings', dedupeKey: `class-cancelled:${occurrenceId}:${booking.userId}` } });
-      await queueEmail(tx, { userId: booking.userId, to: booking.user.email, subject: `${occurrence.template.name} was cancelled`, template: 'CLASS_CANCELLED', payload: { reason, occurrenceId }, dedupeKey: `class-cancelled-email:${occurrenceId}:${booking.userId}` });
+      await queueEmail(tx, {
+        userId: booking.userId,
+        to: booking.user.email,
+        subject: `${occurrence.template.name} was cancelled`,
+        template: 'CLASS_CANCELLED',
+        payload: {
+          name: booking.user.name || 'Rhyzer',
+          className: occurrence.template.name,
+          classDate: classDate(occurrence.startAt),
+          classTime: classTime(occurrence.startAt),
+          reason,
+          creditResult: 'Your eligible class credit was returned automatically.',
+        },
+        dedupeKey: `class-cancelled-email:${occurrenceId}:${booking.userId}`,
+      });
     }
     await tx.classMessage.create({ data: { occurrenceId, instructorId: instructor.id, subject: `${occurrence.template.name} cancelled`, body: reason, kind: 'CANCELLATION', recipientCount: occurrence.bookings.length } });
     await tx.auditLog.create({ data: { actorId: instructor.id, action: 'class.cancelled.by-instructor', entityType: 'ClassOccurrence', entityId: occurrenceId } });

@@ -36,7 +36,7 @@ const detailCatalog: Record<string, DetailRecord> = {
           {
             label: 'Rhyze Up with Vanessa',
             value: '$616',
-            meta: '22 bookings x $28',
+            meta: '22 bookings x $25',
           },
           {
             label: 'Pilates Pulse with Adrianna',
@@ -129,11 +129,11 @@ const detailCatalog: Record<string, DetailRecord> = {
         rows: [
           {
             label: 'Rhyze Up with Vanessa',
-            value: '22/24',
+            value: '22/25',
             meta: '4 waitlist',
           },
           {
-            label: 'Hypnotic Heels with Jessica',
+            label: 'Hypnotic Heels with Nicole',
             value: '18/18',
             meta: '6 waitlist',
           },
@@ -288,11 +288,11 @@ const detailCatalog: Record<string, DetailRecord> = {
         rows: [
           {
             label: 'Rhyze Up with Vanessa',
-            value: '22/24',
+            value: '22/25',
             meta: 'Confirm room setup',
           },
           {
-            label: 'Hypnotic Heels with Jessica',
+            label: 'Hypnotic Heels with Nicole',
             value: 'Full',
             meta: 'Release waitlist spot',
           },
@@ -458,7 +458,7 @@ const detailCatalog: Record<string, DetailRecord> = {
             meta: '17/20 booked - VIP eligible monthly choice',
           },
           {
-            label: 'Hypnotic Heels with Jessica',
+            label: 'Hypnotic Heels with Nicole',
             value: 'Aug 10 - $30',
             meta: '18/18 booked - 6 waitlist',
           },
@@ -528,7 +528,7 @@ const detailCatalog: Record<string, DetailRecord> = {
         rows: [
           {
             label: 'Ava Martinez',
-            value: 'Start date: Aug 1, 2026',
+            value: 'Start date: Aug 3, 2026',
             meta: 'Intro Offer - Rhyze Up booked',
           },
           {
@@ -583,7 +583,7 @@ const detailCatalog: Record<string, DetailRecord> = {
         rows: [
           {
             label: 'Ava Martinez',
-            value: 'Start date: Aug 1, 2026',
+            value: 'Start date: Aug 3, 2026',
             meta: 'Intro Offer - Rhyze Up booked',
           },
           {
@@ -651,7 +651,7 @@ const detailCatalog: Record<string, DetailRecord> = {
           {
             label: 'Ava Martinez',
             value: 'Intro Offer 7-Days',
-            meta: 'ava.martinez@example.com - (973) 555-0112 - Aug 1, 2026',
+            meta: 'ava.martinez@example.com - (973) 555-0112 - Aug 3, 2026',
           },
           {
             label: 'Priya Santos',
@@ -793,7 +793,7 @@ const detailCatalog: Record<string, DetailRecord> = {
           { label: 'Melissa Llanos', value: 'Rhyze Ritmo', meta: '18 booked' },
           { label: 'Adrianna', value: 'Pilates Pulse', meta: '12 booked' },
           {
-            label: 'Jessica',
+            label: 'Nicole',
             value: 'Hypnotic Heels',
             meta: '18 booked + 6 waitlist',
           },

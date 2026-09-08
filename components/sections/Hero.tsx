@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 
 export function Hero() {
   return (
-    <section className="grain relative flex min-h-[92vh] items-center overflow-hidden bg-rhyze-black">
+    <section className="grain relative flex min-h-[92vh] items-center overflow-hidden bg-rhyze-black pb-16 pt-44 md:pt-48">
       {/* Background photo */}
       <Image
         src="/founders/main-intro.jpg"
@@ -90,7 +90,7 @@ export function Hero() {
             </p>
           </div>
           <Link
-            href="/schedule"
+            href="/classes#schedule"
             className="focus-ring group rounded-full px-4 py-2 text-sm font-semibold uppercase tracking-wide text-rhyze-cream hover:text-rhyze-coral"
           >
             View Class Schedule{' '}

@@ -11,7 +11,7 @@ export type PricingTier = {
 };
 
 export const openingBillingNote =
-  'Monthly memberships begin on August 3, 2026, when Rhyze Fitness officially opens. The $7 trial activates when the client books their first class and automatically expires 7 calendar days after that first booked class.';
+  'The $7 trial is available now. It activates on the date of the client’s first booked standard class and automatically expires 7 calendar days after that first booking.';
 
 export const trial = {
   price: '$7',
@@ -39,6 +39,24 @@ export const tiers: PricingTier[] = [
       'Valid for first-time clients only',
     ],
     cta: { label: 'Choose Plan', href: '/sign-up?plan=intro-offer' },
+  },
+  {
+    id: 'eight-class-pack',
+    name: '8-Class Pack',
+    price: '$179',
+    cadence: '/ 3 months',
+    perClass: '8 classes · valid 3 months',
+    popular: false,
+    blurb:
+      'Includes 8 standard class credits valid for 3 months. Auto-renews every 3 months unless cancelled at least 14 days before renewal. Unused credits expire at the end of each 3-month period.',
+    bullets: [
+      'Available September 1, 2026',
+      '8 standard class credits valid for 3 months',
+      'Auto-renews every 3 months at $179',
+      'Cancel at least 14 days before renewal',
+      'Specialty events and workshops excluded',
+    ],
+    cta: { label: 'Choose Pack', href: '/sign-up?plan=eight-class-pack' },
   },
   {
     id: 'full-rhythm',
@@ -79,16 +97,17 @@ export const tiers: PricingTier[] = [
   {
     id: 'vip-access-pass',
     name: 'The VIP Access Pass',
-    price: '$199',
+    price: '$222',
     cadence: '/ month',
-    perClass: 'AUGUST ONLY',
+    perClass: 'VIP Membership',
     popular: false,
     blurb:
-      'Founding Members lock in $199/month for life. Unlimited full access to all standard classes, 1 eligible specialty class per month, and a unique 20% merch promo code.',
+      'Unlimited full access to all standard classes, 1 eligible specialty class per month, and a unique 20% merch promo code. New membership buyers can use RHYZE2026 September 1–7 for 20% off the first 2 months.',
     bullets: [
-      'Billing begins August 3, 2026 for opening month',
+      'Regular VIP rate starts September 1, 2026',
       'Unlimited standard classes',
       '1 eligible specialty event per month',
+      'RHYZE2026 sale: 20% off the first 2 months for new membership buyers only',
       'Eligible event choices are announced monthly',
       'Unique member promo code for 20% off Rhyze merchandise',
     ],

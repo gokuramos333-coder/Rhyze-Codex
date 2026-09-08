@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { AuthField, AuthFrame } from '@/components/domain/accounts/AuthFrame';
+import { PasswordField } from '@/components/domain/accounts/PasswordField';
+import { AccountAccessNotice } from '@/components/domain/accounts/AccountAccessNotice';
 import { signInAction } from '../actions';
 
 const errorMessages: Record<string, string> = {
@@ -7,11 +9,12 @@ const errorMessages: Record<string, string> = {
   credentials: 'The email or password did not match an active account.',
 };
 
-export default function SignInPage({
-  searchParams,
-}: {
-  searchParams: { error?: string; reset?: string; callbackUrl?: string };
-}) {
+export default async function SignInPage(
+  props: {
+    searchParams: Promise<{ error?: string; reset?: string; claimed?: string; callbackUrl?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const error = searchParams.error
     ? errorMessages[searchParams.error]
     : undefined;
@@ -47,11 +50,10 @@ export default function SignInPage({
           {error}
         </p>
       )}
-      {searchParams.reset && (
-        <p className="mt-5 border-l-4 border-emerald-600 bg-emerald-50 p-4 text-sm font-bold">
-          Password updated. Sign in with your new password.
-        </p>
-      )}
+      <AccountAccessNotice
+        claimed={Boolean(searchParams.claimed)}
+        reset={Boolean(searchParams.reset)}
+      />
       <form action={signInAction} className="mt-8 grid gap-5">
         {callbackUrl && (
           <input type="hidden" name="callbackUrl" value={callbackUrl} />
@@ -62,10 +64,9 @@ export default function SignInPage({
           type="email"
           autoComplete="email"
         />
-        <AuthField
+        <PasswordField
           label="Password"
           name="password"
-          type="password"
           autoComplete="current-password"
         />
         <div className="flex items-center justify-end">

@@ -1,27 +1,30 @@
 'use client';
 
-import { useState } from 'react';
 import Image from 'next/image';
 import { ShoppingBag } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import { useState } from 'react';
 import type { Product } from '@/lib/products';
-import { useCart } from '@/lib/cart';
-import { Button } from '@/components/ui/Button';
 
 export function ProductCard({ product }: { product: Product }) {
-  const [size, setSize] = useState(product.sizes[0]);
-  const add = useCart((s) => s.add);
+  const [showBack, setShowBack] = useState(false);
+  const hasBackImage = Boolean(product.image && product.backImage);
+  const activeImage = showBack && product.backImage
+    ? product.backImage
+    : product.image;
+  const viewLabel = showBack ? 'Back' : 'Front';
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-rhyze-charcoal transition hover:-translate-y-1 hover:border-rhyze-coral/40 hover:shadow-glow">
       <div className="relative aspect-[4/5] overflow-hidden bg-rhyze-black">
-        {product.image ? (
+        {activeImage ? (
           <Image
-            src={product.image}
-            alt={product.name}
+            src={activeImage}
+            alt={`${product.name} — ${viewLabel} view`}
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            className="object-cover transition duration-500 group-hover:scale-105"
+            className={`transition duration-500 group-hover:scale-[1.02] ${
+              hasBackImage ? 'bg-white object-contain' : 'object-cover'
+            }`}
           />
         ) : (
           <div className="relative flex h-full items-center justify-center">
@@ -47,6 +50,32 @@ export function ProductCard({ product }: { product: Product }) {
             Coming Soon
           </span>
         )}
+
+        {hasBackImage && (
+          <div
+            className="absolute bottom-4 left-1/2 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/20 bg-rhyze-black/85 p-1 shadow-xl backdrop-blur"
+            aria-label={`${product.name} image view`}
+          >
+            {(['Front', 'Back'] as const).map((label) => {
+              const isActive = (label === 'Back') === showBack;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setShowBack(label === 'Back')}
+                  className={`rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] transition ${
+                    isActive
+                      ? 'bg-rhyze-gold text-rhyze-black'
+                      : 'text-rhyze-cream hover:bg-white/10'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col p-6">
@@ -60,38 +89,15 @@ export function ProductCard({ product }: { product: Product }) {
           {product.description}
         </p>
 
-        <fieldset className="mb-5">
-          <legend className="mb-2 text-xs uppercase tracking-widest text-rhyze-cream/50">
-            Size
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {product.sizes.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSize(s)}
-                disabled={product.comingSoon}
-                className={cn(
-                  'focus-ring rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest transition',
-                  size === s
-                    ? 'border-rhyze-coral bg-rhyze-coral text-rhyze-black'
-                    : 'border-white/10 text-rhyze-cream/70 hover:border-rhyze-coral/50',
-                  product.comingSoon && 'opacity-40',
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <Button
-          onClick={() => add(product, size)}
-          disabled={product.comingSoon}
-          className="w-full"
-        >
-          {product.comingSoon ? 'Coming Soon' : 'Add to Cart'}
-        </Button>
+        {product.comingSoon ? (
+          <p className="border border-rhyze-gold/50 bg-rhyze-gold/10 px-4 py-4 text-center text-xs font-black uppercase leading-relaxed tracking-widest text-rhyze-gold">
+            Coming soon. Check out all available options at the studio.
+          </p>
+        ) : (
+          <p className="border border-emerald-300/70 bg-emerald-200 px-4 py-4 text-center text-xs font-black uppercase leading-relaxed tracking-widest text-emerald-950">
+            {product.availabilityLabel}
+          </p>
+        )}
       </div>
     </article>
   );

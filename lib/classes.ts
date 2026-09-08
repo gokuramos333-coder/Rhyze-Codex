@@ -20,12 +20,12 @@ export const categoryLabel: Record<ClassCategory, string> = {
 export const classes: RhyzeClass[] = [
   {
     slug: 'global-hiit-mackenzie',
-    name: 'Global HIIT with Mackenzie',
+    name: 'Global Fit & Flow with Kenzie',
     category: 'strength',
     duration: 50,
     tagline: 'World hits, HIIT conditioning, and light-weight strength',
     description:
-      'Global HIIT with Mackenzie keeps you moving to hits from around the world while challenging both brain and body. Expect heart-rate-raising intervals, music-led energy, light weights, bodyweight exercises, and a guided cooldown.',
+      'Global Fit & Flow with Kenzie keeps you moving to hits from around the world while challenging both brain and body. Expect heart-rate-raising intervals, music-led energy, light weights, bodyweight exercises, and a guided cooldown.',
     whatToExpect: [
       'HIIT intervals powered by global music',
       'Light weights mixed with bodyweight exercises',
@@ -39,12 +39,12 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'yoga-vinyasa-mackenzie',
-    name: 'Yoga / Vinyasa with Mackenzie',
+    name: 'Vinyasa/Hatha Yoga with Kenzie',
     category: 'yoga',
     duration: 50,
     tagline: 'Vinyasa yoga linking movement, breath, strength, and flexibility',
     description:
-      'Yoga / Vinyasa with Mackenzie links dynamic physical poses with steady conscious breaths to build strength, flexibility, and endurance. Every class offers a unique, creative sequence that keeps the practice engaging and welcoming for all levels.',
+      'Vinyasa/Hatha Yoga with Kenzie links dynamic physical poses with steady conscious breaths to build strength, flexibility, and endurance. Every class offers a unique, creative sequence that keeps the practice engaging and welcoming for all levels.',
     whatToExpect: [
       'Dynamic Vinyasa movement linked with breath',
       'Strength, flexibility, and endurance work',
@@ -54,7 +54,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'core-360-carla-rio',
-    name: 'Core 360 with Carla Rio',
+    name: 'Core 360 with Carla',
     category: 'strength',
     duration: 50,
     tagline: 'Functional core strength, posture, and balance from every angle',
@@ -73,12 +73,12 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'pound-mackenzie',
-    name: 'POUND with Mackenzie',
+    name: 'POUND with Kenzie',
     category: 'strength',
     duration: 50,
     tagline: 'Cardio Pilates, isometric strength, plyometrics, and Ripstix',
     description:
-      'POUND with Mackenzie combines cardio, Pilates, isometric movement, plyometrics, and constant simulated drumming set to loud, high-energy music. Each strike of the Ripstix releases stress, builds rhythm, and lets you truly become the music.',
+      'POUND with Kenzie combines cardio, Pilates, isometric movement, plyometrics, and constant simulated drumming set to loud, high-energy music. Each strike of the Ripstix releases stress, builds rhythm, and lets you truly become the music.',
     whatToExpect: [
       'Cardio Pilates with constant simulated drumming',
       'Isometric movement, plyometrics, rhythm, and sweat',
@@ -91,27 +91,8 @@ export const classes: RhyzeClass[] = [
     ],
   },
   {
-    slug: 'dance-fit-jessica',
-    name: 'Dance Fit with Jessica',
-    category: 'dance',
-    duration: 50,
-    tagline: 'High-energy dance cardio with strength and toning',
-    description:
-      'Dance Fit with Jessica is a high-energy, feel-good workout that blends upbeat dance cardio with strength and toning. Expect great music, welcoming vibes, and a confidence-building sweat that feels more like a dance party than a traditional fitness class.',
-    whatToExpect: [
-      'Dance-cardio blended with functional strength and sculpting',
-      'A welcoming, judgment-free dance party atmosphere',
-      'A confidence-building full-body sweat',
-    ],
-    whatToBring: [
-      'Comfortable athletic wear',
-      'Supportive sneakers',
-      'Water bottle',
-    ],
-  },
-  {
     slug: 'grind-and-grow-carla-reo',
-    name: 'Grind & Grow with Carla Reo',
+    name: 'Grind & Grow with Carla',
     category: 'strength',
     duration: 50,
     tagline: 'Full-body strength with dumbbells, kettlebells, bands, and more',
@@ -129,17 +110,17 @@ export const classes: RhyzeClass[] = [
     ],
   },
   {
-    slug: 'heels-101-walk-with-me-jessica',
-    name: 'Heels 101 "Walk with Me" with Jessica',
+    slug: 'heels-101-walk-with-me-nicole',
+    name: 'Heels 101 "Walk with Me" with Nicole',
     category: 'dance',
     duration: 50,
-    tagline: 'Beginner-friendly heels fundamentals',
+    tagline: 'Master your foundation, connect with your power, and own the room',
     description:
-      'Heels 101 "Walk with Me" with Jessica is a beginner-friendly heels class focused on posture, balance, walking technique, and confidence. It helps you learn how to move safely and feel strong in heels before progressing into more choreographed heels work.',
+      'Step into your power and build unshakeable confidence with Heels 101: Walk with Me. Whether you are completely new to heels or looking to sharpen your technique, this class is all about mastering the foundation. We will focus on posture, balance, core strength, and the mechanics of a fierce, graceful stride so you can move with absolute poise and attitude. It is a safe, empowering space to leave your inhibitions at the door, connect with your inner strength, and own the room from the moment you step onto the floor. Bring your favorite heels, an open mind, and get ready to walk your walk!',
     whatToExpect: [
-      'Heels movement and walking technique',
-      'Beginner-friendly pacing with confidence-building support',
-      'A focused class for learning how to move safely in heels',
+      'Posture, balance, core strength, and walking mechanics',
+      'Beginner-friendly technique in a safe, empowering space',
+      'A fierce, graceful stride built with confidence and poise',
     ],
     whatToBring: [
       'Supportive heels',
@@ -148,13 +129,13 @@ export const classes: RhyzeClass[] = [
     ],
   },
   {
-    slug: 'hypnotic-heels-jessica',
-    name: 'Hypnotic Heels with Jessica',
+    slug: 'hypnotic-heels-nicole',
+    name: 'Hypnotic Heels with Nicole',
     category: 'dance',
     duration: 75,
     tagline: 'A specialty heels class for confidence, technique, and flow',
     description:
-      'Hypnotic Heels with Jessica is a 75-minute specialty class for dancers ready to build confidence, poise, technique, and flow in heels. You will warm up, practice posture and balance, learn a choreographed routine, and explore a fresh monthly theme.',
+      'Hypnotic Heels with Nicole is a 75-minute specialty class for dancers ready to build confidence, poise, technique, and flow in heels. You will warm up, practice posture and balance, learn a choreographed routine, and explore a fresh monthly theme.',
     whatToExpect: [
       'A barefoot or socks warm-up before heels work',
       'Posture, balance, strutting, and choreographed routine work',
@@ -262,6 +243,25 @@ export const classes: RhyzeClass[] = [
     ],
   },
   {
+    slug: 'work-tone-mswoy36a',
+    name: 'Work & Tone with Avery',
+    category: 'strength',
+    duration: 50,
+    tagline: 'Low-impact strength, sculpting, and toning with Avery',
+    description:
+      'Work & Tone with Avery blends approachable strength training, sculpting intervals, and controlled toning work for a full-body class that builds confidence, endurance, and steady burn without losing the Rhyze energy.',
+    whatToExpect: [
+      'Full-body toning with approachable strength work',
+      'Controlled sculpting intervals and steady endurance',
+      'Supportive coaching for all fitness levels',
+    ],
+    whatToBring: [
+      'Comfortable athletic wear',
+      'Supportive sneakers',
+      'Water bottle',
+    ],
+  },
+  {
     slug: 'seat-seduction-vanessa',
     name: 'Seat Seduction With Vanessa',
     category: 'dance',
@@ -282,7 +282,7 @@ export const classes: RhyzeClass[] = [
   },
   {
     slug: 'soul-line-dancing-rachel',
-    name: 'Soul Line-Dancing with Rachel',
+    name: 'Soul Line & Groove with Rachel',
     category: 'dance',
     duration: 50,
     tagline: 'Soulful line-dancing, collective movement, and pure joy',

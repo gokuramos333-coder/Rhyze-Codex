@@ -1,12 +1,15 @@
 import { hashPassword, validatePassword } from '@/lib/auth/password';
-import { classifyInstructorCode } from '@/lib/domain/onboarding/instructor-application';
 
 export type NewAccountInput = {
   name: string;
   email: string;
   phone: string;
-  referralCode?: string;
-  instructorCode?: string;
+  dateOfBirth: Date;
+  waiverAccepted: boolean;
+  waiverVersionId: string;
+  mediaConsent?: boolean;
+  ipAddress?: string | null;
+  userAgent?: string | null;
   password: string;
 };
 
@@ -16,13 +19,15 @@ export type AccountRepository = {
     name: string;
     email: string;
     phone: string;
+    dateOfBirth: Date;
     passwordHash: string;
-    createInstructorApplication: boolean;
-    referralCode?: string;
+    waiverVersionId: string;
+    mediaConsent: boolean;
+    ipAddress?: string | null;
+    userAgent?: string | null;
   }): Promise<{
     id: string;
     email: string;
-    instructorApplicationId: string | null;
   }>;
 };
 
@@ -43,10 +48,10 @@ export class InvalidPasswordError extends Error {
   }
 }
 
-export class InvalidInstructorCodeError extends Error {
+export class AgreementRequiredError extends Error {
   constructor() {
-    super('The instructor access code is not valid.');
-    this.name = 'InvalidInstructorCodeError';
+    super('The studio policies and waiver must be accepted.');
+    this.name = 'AgreementRequiredError';
   }
 }
 
@@ -56,13 +61,11 @@ export async function createAccount(
 ): Promise<{
   id: string;
   email: string;
-  instructorApplicationId: string | null;
 }> {
   const email = input.email.trim().toLowerCase();
   const name = input.name.trim();
   const phone = input.phone.trim();
   const passwordValidation = validatePassword(input.password);
-  const instructorCode = classifyInstructorCode(input.instructorCode || null);
 
   if (!passwordValidation.valid) {
     throw new InvalidPasswordError(passwordValidation.errors);
@@ -71,14 +74,18 @@ export async function createAccount(
   if (await repository.findByEmail(email)) {
     throw new AccountConflictError();
   }
-  if (instructorCode === 'INVALID') throw new InvalidInstructorCodeError();
-
+  if (!input.waiverAccepted || !input.waiverVersionId) {
+    throw new AgreementRequiredError();
+  }
   return repository.createMember({
     email,
     name,
     phone,
+    dateOfBirth: input.dateOfBirth,
     passwordHash: await hashPassword(input.password),
-    createInstructorApplication: instructorCode === 'PENDING',
-    referralCode: input.referralCode?.trim().toUpperCase() || undefined,
+    waiverVersionId: input.waiverVersionId,
+    mediaConsent: input.mediaConsent ?? false,
+    ipAddress: input.ipAddress,
+    userAgent: input.userAgent,
   });
 }

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db/prisma';
+import { ATTENDED_RECORD_STATUSES } from '@/lib/domain/bookings/booking-rules';
 
 export default async function ReportsPage() {
   const [nativeRevenue, sombleRevenue, attended, importedClients, failed] =
@@ -9,7 +10,9 @@ export default async function ReportsPage() {
         _sum: { amountCents: true },
       }),
       prisma.sombleTransaction.aggregate({ _sum: { amountCents: true } }),
-      prisma.attendanceRecord.count({ where: { status: 'ATTENDED' } }),
+      prisma.attendanceRecord.count({
+        where: { status: { in: ATTENDED_RECORD_STATUSES } },
+      }),
       prisma.sombleClientProfile.count(),
       prisma.purchase.count({ where: { status: 'FAILED' } }),
     ]);

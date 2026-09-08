@@ -1,26 +1,56 @@
+import Link from 'next/link';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { uploadCredentialAction } from './actions';
-import { AgreementProfileCard } from '@/components/domain/accounts/AgreementProfileCard';
+import { BirthdayFields } from '@/components/domain/accounts/BirthdayFields';
+import { updateInstructorBirthdayAction, uploadCredentialAction } from './actions';
 
-export default async function InstructorProfilePage({ searchParams }: { searchParams: { saved?: string; error?: string } }) {
+export default async function InstructorProfilePage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await requireArea('instructor');
-  const [profile, credentials, code] = await Promise.all([
+  const [profile, memberProfile, credentials, code] = await Promise.all([
     prisma.instructorProfile.findUnique({ where: { userId: user.id } }),
+    prisma.memberProfile.findUnique({ where: { userId: user.id } }),
     prisma.instructorCredential.findMany({ where: { instructorId: user.id }, orderBy: { createdAt: 'desc' } }),
     prisma.referralCode.findFirst({ where: { instructorId: user.id, isActive: true } }),
   ]);
+  const isOwnerInstructor = ['vanessa@rhyzefit.com', 'melissa@rhyzefit.com'].includes(user.email.toLowerCase());
+  const standardRateCents = isOwnerInstructor ? 0 : (profile?.standardClassRateCents ?? 4_000);
   return (
     <>
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Instructor identity & compliance</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">MY PROFILE</h1>
-      {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">Document uploaded for admin review.</p>}
-      {searchParams.error && <p className="mt-5 border-l-4 border-rhyze-coral bg-white p-4 font-bold text-rhyze-coral">Use a valid PDF, JPG, or PNG. If provided, the expiration date must be in the future.</p>}
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Link href="/instructor/profile#credentials" className="border border-rhyze-orange bg-orange-50 px-4 py-3 text-xs font-black uppercase tracking-widest">Upload credentials</Link>
+        <Link href="/instructor/referrals" className="bg-rhyze-black px-4 py-3 text-xs font-black uppercase tracking-widest text-white">Referral commissions</Link>
+      </div>
+      {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">{searchParams.saved === 'birthday' ? 'Birthday saved.' : 'Document uploaded for admin review.'}</p>}
+      {searchParams.error && <p className="mt-5 border-l-4 border-rhyze-coral bg-white p-4 font-bold text-rhyze-coral">{searchParams.error === 'birthday' ? 'Choose a valid birthday month and day.' : 'Use a valid PDF, JPG, or PNG. If provided, the expiration date must be in the future.'}</p>}
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
         <section className="border-t-4 border-rhyze-gold bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Name</p><p className="mt-2 text-xl font-bold">{user.name || 'Name not set'}</p><p className="mt-6 text-xs font-black uppercase tracking-widest">Bio</p><p className="mt-2 text-rhyze-black/60">{profile?.bio || 'Your public bio can be completed with the studio.'}</p></section>
-        <section className="border-t-4 border-rhyze-coral bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Referral code</p><p className="mt-3 font-display text-5xl tracking-wider">{code?.code || 'PENDING'}</p><p className="mt-2 text-sm text-rhyze-black/55">Your dashboard includes copy controls and earnings.</p></section>
+        <Link href="/instructor/referrals" className="border-t-4 border-rhyze-coral bg-white p-6 transition hover:-translate-y-0.5 hover:shadow-lg"><p className="text-xs font-black uppercase tracking-widest">Referral code</p><p className="mt-3 font-display text-5xl tracking-wider">{code?.code || 'PENDING'}</p><p className="mt-2 text-sm text-rhyze-black/55">Open copy controls, referred clients, and commission details →</p></Link>
       </div>
-      <section className="mt-6 border-t-4 border-rhyze-orange bg-white p-6">
+      <section className="mt-6 border-t-4 border-rhyze-coral bg-white p-6">
+        <h2 className="font-display text-4xl tracking-wider">BIRTHDAY</h2>
+        <form action={updateInstructorBirthdayAction} className="mt-4 grid max-w-xl gap-4">
+          <BirthdayFields value={memberProfile?.dateOfBirth} />
+          <button className="bg-rhyze-black px-4 py-3 text-xs font-black uppercase text-white">Save birthday</button>
+        </form>
+      </section>
+      <section className="mt-6 border-t-4 border-rhyze-gold bg-white p-6">
+        <h2 className="font-display text-4xl tracking-wider">PAY RATES</h2>
+        <p className="mt-2 text-sm text-rhyze-black/55">Rates are set and maintained by Rhyze Admin.</p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="bg-orange-50 p-5">
+            <p className="text-xs font-black uppercase tracking-widest">Standard Classes</p>
+            <p className="mt-2 font-display text-5xl">${(standardRateCents / 100).toFixed(2)}</p>
+          </div>
+          <div className="bg-orange-50 p-5">
+            <p className="text-xs font-black uppercase tracking-widest">Specialty Events</p>
+            <p className="mt-2 whitespace-pre-wrap text-lg font-black leading-7">{profile?.specialtyEventRateText || (profile?.specialtyEventRateCents == null ? 'Not set' : `$${(profile.specialtyEventRateCents / 100).toFixed(2)}`)}</p>
+          </div>
+        </div>
+      </section>
+      <section id="credentials" className="mt-6 scroll-mt-24 border-t-4 border-rhyze-orange bg-white p-6">
         <h2 className="font-display text-4xl tracking-wider">REQUIRED DOCUMENTS</h2>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">{(['INSURANCE','CPR'] as const).map((type) => {
           const latest = credentials.find((item) => item.type === type);
@@ -47,7 +77,6 @@ export default async function InstructorProfilePage({ searchParams }: { searchPa
           );
         })}</div>
       </section>
-      <AgreementProfileCard userId={user.id} returnTo="/instructor/profile" />
     </>
   );
 }

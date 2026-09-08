@@ -1,6 +1,6 @@
 export function WelcomeCopy() {
   return (
-    <section className="mx-auto max-w-4xl px-6 py-24 text-center">
+    <section className="mx-auto max-w-4xl px-6 py-24 text-left md:text-center">
       <p className="mb-4 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
         Welcome
       </p>

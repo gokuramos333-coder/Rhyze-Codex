@@ -6,20 +6,22 @@ export function generateStaticParams() {
   return classes.map((c) => ({ slug: c.slug }));
 }
 
-export function generateMetadata({
-  params,
-}: {
-  params: { slug: string };
-}): Metadata {
+export async function generateMetadata(
+  props: {
+    params: Promise<{ slug: string }>;
+  }
+): Promise<Metadata> {
+  const params = await props.params;
   const c = getClass(params.slug);
   if (!c) return { title: 'Class not found' };
   return { title: c.name, description: c.tagline };
 }
 
-export default function ClassDetailPage({
-  params,
-}: {
-  params: { slug: string };
-}) {
+export default async function ClassDetailPage(
+  props: {
+    params: Promise<{ slug: string }>;
+  }
+) {
+  const params = await props.params;
   redirect(`/book/${params.slug}`);
 }

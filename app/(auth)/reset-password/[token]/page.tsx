@@ -1,14 +1,16 @@
 import Link from 'next/link';
-import { AuthField, AuthFrame } from '@/components/domain/accounts/AuthFrame';
+import { AuthFrame } from '@/components/domain/accounts/AuthFrame';
+import { ResetPasswordForm } from '@/components/domain/accounts/ResetPasswordForm';
 import { resetPasswordAction } from '../../actions';
 
-export default function ResetPasswordPage({
-  params,
-  searchParams,
-}: {
-  params: { token: string };
-  searchParams: { error?: string };
-}) {
+export default async function ResetPasswordPage(
+  props: {
+    params: Promise<{ token: string }>;
+    searchParams: Promise<{ error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   return (
     <AuthFrame
       eyebrow="One final step"
@@ -30,27 +32,10 @@ export default function ResetPasswordPage({
         <p className="mt-5 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-4 text-sm font-bold">
           {searchParams.error === 'token'
             ? 'This reset link is invalid or expired. Request a new one.'
-            : 'Use 12 or more characters with an uppercase letter, number, and symbol.'}
+            : 'Use at least 9 characters with an uppercase letter, number, and symbol, and make sure both entries match.'}
         </p>
       )}
-      <form action={resetPasswordAction} className="mt-8 grid gap-5">
-        <input type="hidden" name="token" value={params.token} />
-        <AuthField
-          label="New password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-        />
-        <AuthField
-          label="Confirm new password"
-          name="passwordConfirmation"
-          type="password"
-          autoComplete="new-password"
-        />
-        <button className="min-h-14 bg-rhyze-gradient px-6 text-sm font-black uppercase tracking-[0.2em]">
-          Save new password
-        </button>
-      </form>
+      <ResetPasswordForm token={params.token} action={resetPasswordAction} />
     </AuthFrame>
   );
 }

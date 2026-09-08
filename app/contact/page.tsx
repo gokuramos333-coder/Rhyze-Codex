@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <main className="py-20">
-      <section className="mx-auto max-w-4xl px-6 text-center">
+      <section className="mx-auto max-w-4xl px-6 text-left md:text-center">
         <p className="mb-4 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
           Get In Touch
         </p>
@@ -42,6 +42,7 @@ export default function ContactPage() {
                   <div>
                     <p className="font-black">{site.address.line1}</p>
                     <p className="text-rhyze-cream/70">{site.address.line2}</p>
+                    <p className="text-rhyze-cream/70">{site.address.line3}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
@@ -85,11 +86,12 @@ export default function ContactPage() {
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-rhyze-orange" />
                   <div className="space-y-1">
                     {site.hours.map((h) => (
-                      <p key={h.days} className="flex gap-3">
-                        <span className="w-20 text-rhyze-cream/60">
-                          {h.days}
-                        </span>
-                        <span>{h.hours}</span>
+                      <p
+                        key={h.days}
+                        className="grid grid-cols-[4.5rem_auto] gap-x-3"
+                      >
+                        <span className="text-rhyze-cream/60">{h.days}</span>
+                        <span className="whitespace-nowrap">{h.hours}</span>
                       </p>
                     ))}
                   </div>

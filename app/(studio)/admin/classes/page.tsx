@@ -3,7 +3,6 @@ import {
   archiveClassTemplateAction,
   createClassTemplateAction,
   deleteClassTemplateAction,
-  duplicateClassTemplateAction,
 } from './actions';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -19,21 +18,36 @@ import {
 import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
 import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControls';
 import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
-import { loadClassGalleryImages } from '@/lib/classes/class-gallery';
-import { ClassGalleryManager } from '@/components/admin/ClassGalleryManager';
-import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { resolveScheduleOccurrenceRange } from '@/lib/admin/schedule-occurrence-range';
+import { assignableInstructorWhere, dedupeAssignableInstructors, instructorOptionLabel } from '@/lib/admin/assignable-instructors';
+import {
+  AdminClassesCalendar,
+  type AdminCalendarOccurrence,
+} from '@/components/admin/AdminClassesCalendar';
+import { localDateKey } from '@/lib/domain/schedule/public-calendar';
+import {
+  occurrenceInstructorName,
+  occurrenceTitle,
+  occurrenceTitleWithInstructor,
+} from '@/lib/domain/schedule/occurrence-management';
 
 export default async function AdminClassesPage(
   props: {
-    searchParams: Promise<{ saved?: string; error?: string; range?: string; from?: string; to?: string }>;
+    searchParams: Promise<{ saved?: string; error?: string; range?: string; date?: string; from?: string; to?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
-  const range = resolveAnalyticsRange(searchParams);
-  const occurrenceRange = resolveScheduleOccurrenceRange(searchParams);
   const now = new Date();
-  const [templateRows, categories, instructors, sombleRevenue, nativeRevenue, activeClients, scheduledOccurrences, galleryImages] = await Promise.all([
+  const range = resolveAnalyticsRange(searchParams);
+  const occurrenceRange = resolveScheduleOccurrenceRange(searchParams, now, 'day');
+  const occurrenceQueryRange = occurrenceRange.key === 'day'
+    ? resolveScheduleOccurrenceRange(
+        { range: 'week', date: occurrenceRange.dateKey },
+        now,
+        'week',
+      )
+    : occurrenceRange;
+  const [templateRows, categories, instructors, sombleRevenue, nativeRevenue, activeClients, scheduledOccurrences] = await Promise.all([
     prisma.classTemplate.findMany({
       where: { isEvent: false },
       include: {
@@ -53,7 +67,7 @@ export default async function AdminClassesPage(
     }),
     prisma.classCategory.findMany({ orderBy: { name: 'asc' } }),
     prisma.user.findMany({
-      where: { role: 'INSTRUCTOR', instructorProfile: { is: { isActive: true } } },
+      where: assignableInstructorWhere,
       select: { id: true, name: true, email: true },
       orderBy: { name: 'asc' },
     }),
@@ -87,23 +101,30 @@ export default async function AdminClassesPage(
     }),
     prisma.classOccurrence.findMany({
       where: {
-        startAt: { gte: occurrenceRange.start, lt: occurrenceRange.end },
+        startAt: { gte: occurrenceQueryRange.start, lt: occurrenceQueryRange.end },
         template: { isEvent: false },
       },
       include: {
         template: { include: { category: true } },
         instructor: { include: { instructorProfile: true } },
-        _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
         bookings: {
-          where: { status: { in: ['CONFIRMED', 'ATTENDED'] } },
-          select: { id: true },
+          where: { status: { not: 'CANCELLED' } },
+          select: {
+            status: true,
+            attendance: { select: { status: true } },
+          },
+        },
+        _count: {
+          select: {
+            waitlistEntries: { where: { status: 'WAITING' } },
+          },
         },
       },
       orderBy: { startAt: 'asc' },
     }),
-    loadClassGalleryImages(),
   ]);
   const templates = sortCatalogByNextOccurrence(templateRows);
+  const assignableInstructors = dedupeAssignableInstructors(instructors);
   const allRevenueRecords = [
     ...sombleRevenue.map((item) => ({
       amountCents: item.amountCents,
@@ -123,45 +144,58 @@ export default async function AdminClassesPage(
   const revenueRecords = recordsInRange(allRevenueRecords, range.start, range.end);
   const summary = summarizeRevenue(revenueRecords);
   const series = buildDailyRevenueSeries(revenueRecords, range.start, range.end);
-  const occurrenceBookingIds = scheduledOccurrences.flatMap((occurrence) =>
-    occurrence.bookings.map((booking) => booking.id),
-  );
-  const revenueLedgerEntries = occurrenceBookingIds.length
-    ? await prisma.creditLedgerEntry.findMany({
-        where: { bookingId: { in: occurrenceBookingIds }, type: 'RESERVE' },
-        select: {
-          bookingId: true,
-          creditAccount: {
-            select: {
-              sourcePurchase: {
-                select: { amountCents: true, refundedAmountCents: true },
-              },
-            },
-          },
-        },
-      })
-    : [];
-  const revenueByBookingId = new Map(
-    revenueLedgerEntries.map((entry) => [
-      entry.bookingId,
-      Math.max(
-        0,
-        (entry.creditAccount.sourcePurchase?.amountCents || 0) -
-          (entry.creditAccount.sourcePurchase?.refundedAmountCents || 0),
-      ),
-    ]),
-  );
-  const occurrenceRevenueCents = new Map(
-    scheduledOccurrences.map((occurrence) => [
-      occurrence.id,
-      occurrence.bookings.reduce(
-        (total, booking) => total + (revenueByBookingId.get(booking.id) || 0),
-        0,
-      ),
-    ]),
-  );
-  const upcomingOccurrences = scheduledOccurrences.filter((occurrence) => occurrence.startAt >= now);
-  const pastOccurrences = scheduledOccurrences.filter((occurrence) => occurrence.startAt < now);
+  const adminCalendarOccurrences: AdminCalendarOccurrence[] =
+    scheduledOccurrences.map((occurrence) => {
+      const timezone = occurrence.timezone || 'America/New_York';
+      const instructor = occurrenceInstructorName(occurrence);
+      return {
+        id: occurrence.id,
+        dateKey: localDateKey(occurrence.startAt, timezone),
+        dayLabel: occurrence.startAt.toLocaleDateString('en-US', {
+          timeZone: timezone,
+          weekday: 'long',
+        }),
+        shortDay: occurrence.startAt.toLocaleDateString('en-US', {
+          timeZone: timezone,
+          weekday: 'short',
+        }),
+        dateLabel: occurrence.startAt.toLocaleDateString('en-US', {
+          timeZone: timezone,
+          month: 'short',
+          day: 'numeric',
+        }),
+        timeLabel: occurrence.startAt.toLocaleTimeString('en-US', {
+          timeZone: timezone,
+          hour: 'numeric',
+          minute: '2-digit',
+        }),
+        duration: `${occurrence.template.durationMinutes} min`,
+        className: occurrenceTitleWithInstructor(
+          occurrenceTitle(occurrence),
+          instructor,
+        ),
+        category: occurrence.template.category.name,
+        instructor,
+        photo: occurrence.instructor?.instructorProfile?.photoUrl || null,
+        capacity: occurrence.capacity,
+        booked: occurrence.bookings.length + occurrence.historicalSignupCount,
+        attended: occurrence.bookings.filter(
+          (booking) =>
+            booking.status === 'ATTENDED' ||
+            booking.attendance?.status === 'CHECKED_IN' ||
+            booking.attendance?.status === 'ATTENDED',
+        ).length,
+        attendanceUnmarked:
+          occurrence.bookings.filter(
+            (booking) =>
+              booking.status === 'CONFIRMED' && !booking.attendance,
+          ).length + occurrence.historicalSignupCount,
+        isPast: occurrence.endAt <= now,
+        waitlist: occurrence._count.waitlistEntries,
+        status: occurrence.status,
+        cancellationReason: occurrence.cancellationReason,
+      };
+    });
 
   return (
     <>
@@ -195,56 +229,56 @@ export default async function AdminClassesPage(
         />
       </div>
       {searchParams.saved && <Notice text="Class template saved." />}
-      {searchParams.error && <Notice text={searchParams.error === 'history' ? 'This class has attendance or booking history, so it was archived instead of deleted.' : 'Check the class details.'} error />}
+      {searchParams.error && <Notice text={searchParams.error === 'history' ? 'This class has history and cannot be deleted. Archive it instead.' : 'Check the class details.'} error />}
 
-      <ClassGalleryManager images={galleryImages} />
-
-      <section className="mt-8 border-t-4 border-rhyze-black bg-white p-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <section
+        id="scheduled-classes"
+        className="mt-8 scroll-mt-8 rounded-[2rem] border border-rhyze-black/10 bg-rhyze-charcoal p-4 shadow-2xl md:p-6"
+      >
+        <div className="mb-5">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-gold">
               Scheduled classes
             </p>
-            <h2 className="mt-2 font-display text-4xl tracking-wider">
-              ALL CLASSES · {occurrenceRange.label}
+            <h2 className="mt-2 font-display text-4xl tracking-wider text-rhyze-cream md:text-5xl">
+              SCHEDULED CLASSES
             </h2>
-            <p className="mt-1 text-sm font-bold text-rhyze-black/50">
-              Every class occurrence for the selected day, week, or month, including past and upcoming rows.
+            <p className="mt-1 text-sm font-bold text-rhyze-cream/50">
+              Browse every saved class by day, week, or month—including past dates.
+            </p>
+            <p className="mt-3 rounded-xl border border-rhyze-coral/40 bg-rhyze-coral/10 p-3 text-sm font-bold text-rhyze-cream/70">
+              low attendance cancellation rule: if a class has 0 signups 2 hours before class start, use Cancel class to review the reason, approve the email, and close the occurrence so no one can sign up.
             </p>
           </div>
-          <ClassScheduleRangeControls active={occurrenceRange.key} />
         </div>
-        <div className="mt-5 grid gap-6">
-          <OccurrenceSection
-            title="UPCOMING"
-            occurrences={upcomingOccurrences}
-            occurrenceRevenueCents={occurrenceRevenueCents}
-          />
-          <OccurrenceSection
-            title="PAST"
-            occurrences={pastOccurrences}
-            occurrenceRevenueCents={occurrenceRevenueCents}
-            past
-          />
-          {!scheduledOccurrences.length && (
-            <p className="border border-black/10 p-5 text-sm font-bold text-rhyze-black/50">
-              No scheduled classes in this range.
-            </p>
-          )}
-        </div>
+        <AdminClassesCalendar
+          occurrences={adminCalendarOccurrences}
+          view={occurrenceRange.key}
+          selectedDateKey={occurrenceRange.dateKey}
+        />
       </section>
 
-      <form
-        action={createClassTemplateAction}
-        className="mt-8 grid gap-4 border-t-4 border-rhyze-coral bg-white p-6 md:grid-cols-2"
+      <section
+        id="create-a-class"
+        className="mt-8 scroll-mt-8 border-t-4 border-rhyze-coral bg-white p-6"
       >
-        <Input name="name" label="Class name" />
+        <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">
+          Class template
+        </p>
+        <h2 className="mt-2 font-display text-4xl tracking-wider">
+          CREATE A CLASS
+        </h2>
+        <form
+          action={createClassTemplateAction}
+          className="mt-5 grid gap-4 md:grid-cols-2"
+        >
+          <Input name="name" label="Class name" />
         <label className="grid gap-2">
           <span className="text-xs font-black uppercase tracking-widest">Instructor</span>
           <select name="instructorId" required className="min-h-12 border px-3">
             <option value="">Select instructor</option>
-            {instructors.map((instructor) => (
-              <option key={instructor.id} value={instructor.id}>{instructor.name || instructor.email}</option>
+            {assignableInstructors.map((instructor) => (
+              <option key={instructor.id} value={instructor.id}>{instructorOptionLabel(instructor)}</option>
             ))}
           </select>
         </label>
@@ -281,13 +315,24 @@ export default async function AdminClassesPage(
           <span className="text-xs font-black uppercase tracking-widest">Description</span>
           <textarea name="description" required className="min-h-28 border p-3" />
         </label>
-        <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">
-          Add class template
-        </button>
-      </form>
+          <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">
+            Add class template
+          </button>
+        </form>
+      </section>
 
-      <div className="mt-8 grid gap-3">
-        {templates.map((template) => (
+      <section
+        id="edit-a-class"
+        className="mt-8 scroll-mt-8 border-t-4 border-rhyze-gold bg-white p-6"
+      >
+        <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">
+          Class templates
+        </p>
+        <h2 className="mt-2 font-display text-4xl tracking-wider">
+          EDIT A CLASS
+        </h2>
+        <div className="mt-5 grid gap-3">
+          {templates.map((template) => (
           <article key={template.id} className="grid gap-3 bg-white p-5 md:grid-cols-[1fr_auto] md:items-center">
             <div className="grid gap-4 sm:grid-cols-[3.5rem_1fr] sm:items-center">
               {template.occurrences[0]?.instructor?.instructorProfile?.photoUrl ? (
@@ -321,13 +366,13 @@ export default async function AdminClassesPage(
             </div>
             <div className="flex flex-wrap gap-2">
               {template.occurrences[0] && (
-                <Link href={`/admin/schedule/${template.occurrences[0].id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>
+                <>
+                  <Link href={`/admin/schedule/${template.occurrences[0].id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Manage next class</Link>
+                  <Link href={`/admin/schedule/${template.occurrences[0].id}?cancel=1`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Cancel next class</Link>
+                  <Link href={`/admin/schedule/${template.occurrences[0].id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>
+                </>
               )}
-              <Link href={`/admin/classes/${template.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Edit</Link>
-              <form action={duplicateClassTemplateAction}>
-                <input type="hidden" name="id" value={template.id} />
-                <button className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Duplicate</button>
-              </form>
+              <Link href={`/admin/classes/${template.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Edit template</Link>
               {template.isActive ? (
                 <form action={archiveClassTemplateAction}>
                 <input type="hidden" name="id" value={template.id} />
@@ -342,96 +387,15 @@ export default async function AdminClassesPage(
               </form>
             </div>
           </article>
-        ))}
-      </div>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
 
 function Metric({ label, value, href }: { label: string; value: string; href: string }) {
   return <Link href={href} className="border-t-4 border-rhyze-orange bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-lg"><p className="text-xs font-black uppercase text-rhyze-black/45">{label}</p><p className="mt-2 font-display text-5xl">{value}</p></Link>;
-}
-
-function ClassScheduleRangeControls({ active }: { active: string }) {
-  const periods = [
-    { key: 'day', label: 'Daily' },
-    { key: 'week', label: 'Weekly' },
-    { key: 'month', label: 'Monthly' },
-  ];
-  return (
-    <div className="flex flex-wrap gap-2">
-      {periods.map((period) => (
-        <Link
-          key={period.key}
-          href={`/admin/classes?range=${period.key}`}
-          className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${
-            active === period.key
-              ? 'bg-rhyze-black text-white'
-              : 'border border-rhyze-black bg-white'
-          }`}
-        >
-          {period.label}
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function OccurrenceSection({
-  title,
-  occurrences,
-  occurrenceRevenueCents,
-  past = false,
-}: {
-  title: string;
-  occurrences: Array<{
-    id: string;
-    startAt: Date;
-    timezone: string;
-    capacity: number;
-    historicalSignupCount: number;
-    template: { name: string; category: { name: string } };
-    instructor: { name: string | null } | null;
-    _count: { bookings: number };
-  }>;
-  occurrenceRevenueCents: Map<string, number>;
-  past?: boolean;
-}) {
-  if (!occurrences.length) return null;
-  return (
-    <section>
-      <h3 className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-black/45">{title}</h3>
-      <div className="mt-3 grid gap-3">
-        {occurrences.map((occurrence) => {
-          const revenue = occurrenceRevenueCents.get(occurrence.id) || 0;
-          return (
-            <article key={occurrence.id} className={`grid gap-3 border border-black/10 p-4 md:grid-cols-[1fr_auto] md:items-center ${past ? 'bg-rhyze-black/5' : 'bg-white'}`}>
-              <div>
-                <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">
-                  {occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.template.category.name}
-                </p>
-                <h3 className="mt-1 font-display text-3xl tracking-wider">
-                  {occurrence.template.name}
-                </h3>
-                <p className="mt-1 text-sm text-rhyze-black/55">
-                  {occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups
-                  <span className="ml-2 font-black text-emerald-700">Revenue: ${(revenue / 100).toFixed(2)}</span>
-                </p>
-              </div>
-              <span className="flex flex-wrap gap-2">
-                <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">
-                  Manage
-                </Link>
-                <Link href={`/admin/schedule/${occurrence.id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">
-                  Attendees
-                </Link>
-              </span>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
 }
 
 function Input({ name, label, type = 'text', value, required = true, min, step }: { name: string; label: string; type?: string; value?: string; required?: boolean; min?: string; step?: string }) {

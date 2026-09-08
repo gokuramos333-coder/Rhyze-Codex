@@ -5,11 +5,16 @@ import Credentials from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/db/prisma';
 import { verifyPassword } from '@/lib/auth/password';
 import { signInSchema } from '@/lib/validation/auth';
-import { AUTH_SESSION_MAX_AGE_SECONDS } from '@/lib/auth/session-config';
+import {
+  AUTH_SESSION_MAX_AGE_SECONDS,
+  authSessionCookie,
+  isJwtCredentialStale,
+} from '@/lib/auth/session-config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt', maxAge: AUTH_SESSION_MAX_AGE_SECONDS },
+  cookies: { sessionToken: authSessionCookie() },
   pages: {
     signIn: '/sign-in',
   },
@@ -52,11 +57,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
         token.status = user.status;
+      } else if (token.id) {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { role: true, status: true, credentialsUpdatedAt: true },
+        });
+
+        if (currentUser) {
+          if (
+            isJwtCredentialStale(
+              typeof token.iat === 'number' ? token.iat : undefined,
+              currentUser.credentialsUpdatedAt,
+            )
+          ) {
+            delete token.id;
+            delete token.role;
+            delete token.status;
+            return token;
+          }
+          token.role = currentUser.role;
+          token.status = currentUser.status;
+        }
       }
       return token;
     },

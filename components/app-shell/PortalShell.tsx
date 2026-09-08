@@ -2,24 +2,28 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { signOutAction } from '@/app/(auth)/actions';
-
-type NavItem = { href: string; label: string };
+import {
+  PortalNavigation,
+  type PortalNavItem,
+} from './PortalNavigation';
 
 export function PortalShell({
   area,
   user,
   navigation,
+  unreadCount = 0,
   children,
 }: {
   area: string;
   user: { name: string | null; email: string };
-  navigation: NavItem[];
+  navigation: PortalNavItem[];
+  unreadCount?: number;
   children: ReactNode;
 }) {
   return (
-    <main className="relative z-[60] min-h-screen bg-[#eee9dd] text-rhyze-black">
+    <main className={`relative z-[60] min-h-screen bg-[#eee9dd] text-rhyze-black ${area === 'ADMIN' ? 'admin-shell' : ''}`}>
       <div className="grid min-h-screen lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="border-b border-white/10 bg-rhyze-black p-5 text-rhyze-cream lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
+        <aside className="border-b border-white/10 bg-rhyze-black p-5 text-rhyze-cream lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden lg:border-b-0 lg:border-r">
           <Link href="/" className="focus-ring flex items-center gap-3">
             <Image
               src="/brand/rhyze-logo-header.png"
@@ -32,25 +36,23 @@ export function PortalShell({
               <span className="block text-[9px] font-black uppercase tracking-[0.28em] text-rhyze-orange">
                 Rhyze Fitness
               </span>
-              <span className="font-display text-3xl tracking-wider">
+              <span className="flex items-center gap-2 font-display text-3xl tracking-wider">
                 {area}
+                {unreadCount > 0 && (
+                  <span
+                    className="grid min-h-6 min-w-6 place-items-center rounded-full bg-red-600 px-1.5 font-sans text-xs font-black leading-none text-white"
+                    aria-label={`${unreadCount} unread management ${unreadCount === 1 ? 'message' : 'messages'}`}
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </span>
             </span>
           </Link>
 
-          <nav className="mt-8 grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-1">
-            {navigation.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="focus-ring border-l-2 border-white/10 px-3 py-2 text-sm font-bold text-rhyze-cream/60 transition hover:border-rhyze-coral hover:bg-rhyze-coral/10 hover:text-rhyze-cream"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <PortalNavigation items={navigation} />
 
-          <div className="mt-7 border-t border-white/10 pt-5 lg:mt-auto">
+          <div className="mt-7 shrink-0 border-t border-white/10 pt-5 lg:mt-4">
             <p className="truncate text-sm font-bold">
               {user.name || user.email}
             </p>

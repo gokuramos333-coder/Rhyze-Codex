@@ -9,11 +9,12 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default function BookingNextStepPage({
-  searchParams,
-}: {
-  searchParams: { type?: string; slug?: string };
-}) {
+export default async function BookingNextStepPage(
+  props: {
+    searchParams: Promise<{ type?: string; slug?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const isEvent = searchParams.type === 'event';
   const item = isEvent
     ? getOwnedEvent(searchParams.slug ?? '')

@@ -12,14 +12,14 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <main className="py-20">
-      <section className="mx-auto max-w-4xl px-6 text-center">
+      <section className="mx-auto max-w-4xl px-6 text-left md:text-center">
         <p className="mb-4 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
           About Us
         </p>
         <h1 className="font-display text-6xl tracking-wider md:text-8xl">
           WE ARE <span className="rhyze-gradient-text">RHYZE</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/75">
+        <p className="mt-6 max-w-2xl text-lg text-rhyze-cream/75 md:mx-auto">
           Three ideas built this studio. They&apos;re what you&apos;ll feel
           the second you walk through the door.
         </p>
@@ -28,7 +28,7 @@ export default function AboutPage() {
       {/* THE MISSION */}
       <section className="mx-auto mt-28 max-w-7xl px-6">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-          <div>
+          <div className="order-2 lg:order-1">
             <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
               01 · The Mission
             </p>
@@ -43,7 +43,7 @@ export default function AboutPage() {
               we help our members grow stronger together, one beat at a time.
             </p>
           </div>
-          <div className="relative aspect-[4/5] overflow-hidden rounded-3xl">
+          <div className="order-1 relative aspect-[4/5] overflow-hidden rounded-3xl lg:order-2">
             <Image
               src="/founders/more-than-a-studio.jpg"
               alt="More than a studio, inside Rhyze Fitness"
@@ -59,18 +59,17 @@ export default function AboutPage() {
       {/* THE VIBE */}
       <section className="mx-auto mt-28 max-w-7xl px-6">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-          <div className="relative aspect-[4/5] overflow-hidden rounded-3xl lg:order-2">
+          <div className="order-2 relative aspect-[3/2] overflow-hidden rounded-3xl bg-rhyze-black lg:order-2">
             <Image
-              src="/founders/come-as-you-are.gif"
+              src="/founders/come-as-you-are.jpg"
               alt="Come as you are, the Rhyze vibe"
               fill
               sizes="(max-width: 1024px) 100vw, 50vw"
-              unoptimized
-              className="object-cover"
+              className="object-contain"
             />
             <div className="absolute inset-0 bg-gradient-to-bl from-rhyze-orange/20 via-transparent to-rhyze-black/50" />
           </div>
-          <div className="lg:order-1">
+          <div className="order-1 lg:order-1">
             <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
               02 · The Vibe
             </p>

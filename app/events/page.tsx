@@ -7,10 +7,12 @@ export const metadata: Metadata = {
     'Upcoming Rhyze Fitness specialty classes, workshops, and event booking.',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function EventsPage() {
   return (
     <main className="py-20">
-      <section className="mx-auto max-w-7xl px-6 text-center">
+      <section className="mx-auto max-w-7xl px-6 text-left md:text-center">
         <p className="mb-4 text-xs uppercase tracking-[0.3em] text-rhyze-coral">
           Specialty Classes
         </p>
@@ -23,7 +25,11 @@ export default function EventsPage() {
         </p>
       </section>
 
-      <EventsPreview heading="EVENTS BY DATE" showIntro={false} />
+      <EventsPreview
+        heading="EVENTS BY DATE"
+        showIntro={false}
+        showAllLink={false}
+      />
     </main>
   );
 }
