@@ -1,5 +1,9 @@
 import Link from 'next/link';
-import { prisma } from '@/lib/db/prisma';
+import {
+  loadPublicScheduleFilterOptions,
+  loadPublicScheduleSlots,
+} from '@/lib/domain/schedule/public-schedule-query';
+import { localDateKey } from '@/lib/domain/schedule/public-calendar';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,38 +12,13 @@ export default async function PublicSchedulePage({
 }: {
   searchParams: { category?: string; instructor?: string };
 }) {
-  const [occurrences, categories, instructors] = await Promise.all([
-    prisma.classOccurrence.findMany({
-      where: {
-        status: 'SCHEDULED',
-        template: {
-          isActive: true,
-          archivedAt: null,
-          ...(searchParams.category
-            ? { category: { slug: searchParams.category } }
-            : {}),
-        },
-        ...(searchParams.instructor
-          ? { instructorId: searchParams.instructor }
-          : {}),
-      },
-      include: {
-        template: { include: { category: true } },
-        instructor: true,
-        room: { include: { location: true } },
-      },
-      orderBy: { startAt: 'asc' },
-      take: 60,
+  const todayKey = localDateKey();
+  const [slots, filters] = await Promise.all([
+    loadPublicScheduleSlots(undefined, {
+      categorySlug: searchParams.category,
+      instructorId: searchParams.instructor,
     }),
-    prisma.classCategory.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.user.findMany({
-      where: { role: 'INSTRUCTOR' },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
+    loadPublicScheduleFilterOptions(),
   ]);
 
   return (
@@ -53,8 +32,8 @@ export default async function PublicSchedulePage({
             FIND YOUR RHYTHM
           </h1>
           <p className="mt-4 max-w-2xl text-rhyze-cream/65">
-            Filter upcoming classes, see the room and price, then open the
-            class to reserve your place.
+            Showing classes from today forward. Booking numbers are live
+            confirmed bookings only.
           </p>
         </div>
         <Link
@@ -72,8 +51,8 @@ export default async function PublicSchedulePage({
           className="min-h-12 bg-rhyze-black px-4 text-sm text-rhyze-cream"
         >
           <option value="">All class types</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.slug}>
+          {filters.categories.map((category) => (
+            <option key={category.slug} value={category.slug}>
               {category.name}
             </option>
           ))}
@@ -84,7 +63,7 @@ export default async function PublicSchedulePage({
           className="min-h-12 bg-rhyze-black px-4 text-sm text-rhyze-cream"
         >
           <option value="">All instructors</option>
-          {instructors.map((instructor) => (
+          {filters.instructors.map((instructor) => (
             <option key={instructor.id} value={instructor.id}>
               {instructor.name}
             </option>
@@ -96,50 +75,40 @@ export default async function PublicSchedulePage({
       </form>
 
       <div className="mt-8 grid gap-4">
-        {occurrences.map((occurrence) => (
+        {slots.map((slot) => (
           <article
-            key={occurrence.id}
+            key={slot.id}
             className="grid gap-5 border-l-4 border-rhyze-coral bg-rhyze-charcoal p-5 md:grid-cols-[10rem_1fr_auto] md:items-center"
           >
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
-                {occurrence.startAt.toLocaleDateString('en-US', {
-                  timeZone: occurrence.timezone,
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}
+                {slot.shortDay}, {slot.dateLabel}
               </p>
               <p className="mt-2 font-display text-3xl tracking-wider">
-                {occurrence.startAt.toLocaleTimeString('en-US', {
-                  timeZone: occurrence.timezone,
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
+                {slot.timeLabel}
               </p>
             </div>
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-orange">
-                {occurrence.template.category.name}
+                {slot.category}
               </p>
               <h2 className="mt-1 font-display text-4xl tracking-wider">
-                {occurrence.template.name}
+                {slot.className}
               </h2>
               <p className="mt-2 text-sm text-rhyze-cream/60">
-                {occurrence.instructor?.name || 'Instructor to be announced'} ·{' '}
-                {occurrence.room?.name || 'Room to be announced'} ·{' '}
-                {occurrence.template.durationMinutes} min
+                {slot.instructor} · {slot.room} · {slot.duration}
               </p>
             </div>
             <div className="md:text-right">
               <p className="font-display text-3xl text-rhyze-gold">
-                ${((occurrence.priceCents || 0) / 100).toFixed(0)}
+                {slot.price}
               </p>
               <p className="text-xs text-rhyze-cream/45">
-                {occurrence.capacity} total spots
+                {slot.booked}/{slot.capacity} booked
+                {slot.waitlist ? ` · ${slot.waitlist} waiting` : ''}
               </p>
               <Link
-                href={`/schedule/${occurrence.id}`}
+                href={slot.bookingHref}
                 className="focus-ring mt-3 inline-block bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase tracking-widest text-rhyze-black"
               >
                 View class
@@ -147,10 +116,10 @@ export default async function PublicSchedulePage({
             </div>
           </article>
         ))}
-        {occurrences.length === 0 && (
+        {slots.length === 0 && (
           <div className="border border-dashed border-white/20 p-10 text-center">
             <h2 className="font-display text-4xl tracking-wider">
-              NO MATCHING CLASSES
+              NO MATCHING CLASSES FROM TODAY
             </h2>
             <Link
               href="/schedule"

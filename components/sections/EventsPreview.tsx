@@ -1,17 +1,19 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, CalendarDays } from 'lucide-react';
-import { ownedEvents } from '@/lib/rhyze-platform';
+import { loadPublicEventSlots } from '@/lib/domain/schedule/public-schedule-query';
 
 type EventsPreviewProps = {
   heading?: string;
   showIntro?: boolean;
 };
 
-export function EventsPreview({
+export async function EventsPreview({
   heading = 'UPCOMING EVENTS',
   showIntro = true,
 }: EventsPreviewProps) {
+  const events = await loadPublicEventSlots();
+
   return (
     <section
       id="events"
@@ -28,8 +30,8 @@ export function EventsPreview({
             </h2>
             {showIntro && (
               <p className="mt-4 max-w-2xl text-rhyze-cream/65">
-                Specialty classes and workshops are listed by date, with Rhyze
-                booking, capacity, VIP eligibility, and details in one place.
+                Specialty classes and workshops are listed from today forward,
+                using live Rhyze booking counts.
               </p>
             )}
           </div>
@@ -42,47 +44,60 @@ export function EventsPreview({
           </Link>
         </div>
 
-        <div className="no-scrollbar grid auto-cols-[minmax(18rem,1fr)] grid-flow-col gap-5 overflow-x-auto pb-4 md:auto-cols-[minmax(23rem,1fr)]">
-          {ownedEvents.map((event) => (
-            <article
-              key={event.id}
-              className="group overflow-hidden rounded-3xl border border-rhyze-gold/25 bg-rhyze-charcoal shadow-[0_0_0_1px_rgba(255,199,44,0.2)] transition hover:-translate-y-1 hover:border-rhyze-orange hover:shadow-[0_0_0_1px_rgba(255,122,24,0.55),0_0_30px_rgba(255,122,24,0.18)]"
-            >
-              <Link href={`/events/${event.slug}`} className="block">
-                <div className="relative aspect-[4/3] overflow-hidden bg-rhyze-black">
-                  <Image
-                    src={event.photo}
-                    alt={event.name}
-                    fill
-                    sizes="(min-width: 768px) 24rem, 18rem"
-                    className="object-cover object-[center_18%] transition duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute left-4 top-4 rounded-full bg-rhyze-black/85 px-3 py-1 text-xs font-black uppercase tracking-widest text-rhyze-gold">
-                    {event.date}
+        {events.length ? (
+          <div className="no-scrollbar grid auto-cols-[minmax(18rem,1fr)] grid-flow-col gap-5 overflow-x-auto pb-4 md:auto-cols-[minmax(23rem,1fr)]">
+            {events.map((event) => (
+              <article
+                key={event.id}
+                className="group overflow-hidden rounded-3xl border border-rhyze-gold/25 bg-rhyze-charcoal shadow-[0_0_0_1px_rgba(255,199,44,0.2)] transition hover:-translate-y-1 hover:border-rhyze-orange hover:shadow-[0_0_0_1px_rgba(255,122,24,0.55),0_0_30px_rgba(255,122,24,0.18)]"
+              >
+                <Link href={event.bookingHref} className="block">
+                  <div className="relative aspect-[4/3] overflow-hidden bg-rhyze-black">
+                    <Image
+                      src={event.photo}
+                      alt={event.className}
+                      fill
+                      sizes="(min-width: 768px) 24rem, 18rem"
+                      className="object-cover object-[center_18%] transition duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute left-4 top-4 rounded-full bg-rhyze-black/85 px-3 py-1 text-xs font-black uppercase tracking-widest text-rhyze-gold">
+                      {event.dateLabel}
+                    </div>
                   </div>
-                </div>
-                <div className="p-5">
-                  <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-rhyze-orange">
-                    <CalendarDays className="h-4 w-4" aria-hidden />
-                    {event.time} · {event.duration}
-                  </p>
-                  <h3 className="font-display text-4xl leading-none tracking-wider">
-                    {event.name}
-                  </h3>
-                  <p className="mt-3 min-h-12 text-sm font-bold leading-relaxed text-rhyze-cream/65">
-                    {event.description}
-                  </p>
-                  <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-sm font-black">
-                    <span className="text-rhyze-gold">{event.price}</span>
-                    <span className="text-rhyze-cream/70">
-                      {event.booked}/{event.capacity} booked
-                    </span>
+                  <div className="p-5">
+                    <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-rhyze-orange">
+                      <CalendarDays className="h-4 w-4" aria-hidden />
+                      {event.timeLabel} · {event.duration}
+                    </p>
+                    <h3 className="font-display text-4xl leading-none tracking-wider">
+                      {event.className}
+                    </h3>
+                    <p className="mt-3 min-h-12 text-sm font-bold leading-relaxed text-rhyze-cream/65">
+                      {event.instructor} · {event.room}
+                    </p>
+                    <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-sm font-black">
+                      <span className="text-rhyze-gold">{event.price}</span>
+                      {event.booked >= 10 && (
+                        <span className="text-rhyze-cream/70">
+                          {event.booked}/{event.capacity} booked
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </Link>
-            </article>
-          ))}
-        </div>
+                </Link>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-dashed border-white/15 bg-rhyze-charcoal/60 p-8 text-center">
+            <h3 className="font-display text-4xl tracking-wider">
+              NO UPCOMING EVENTS LISTED
+            </h3>
+            <p className="mt-3 text-sm text-rhyze-cream/60">
+              Check the live schedule for today’s classes and newly added dates.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );

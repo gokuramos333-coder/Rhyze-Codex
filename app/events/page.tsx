@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { EventsPreview } from '@/components/sections/EventsPreview';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Events',
   description:

@@ -1,8 +1,13 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { WeeklyCalendar } from '@/components/sections/WeeklyCalendar';
+import { loadPublicScheduleSlots } from '@/lib/domain/schedule/public-schedule-query';
+import { localDateKey } from '@/lib/domain/schedule/public-calendar';
 
-export function ScheduleFull() {
+export async function ScheduleFull() {
+  const todayKey = localDateKey();
+  const slots = await loadPublicScheduleSlots();
+
   return (
     <section id="schedule" className="scroll-mt-28">
       <div className="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
@@ -24,7 +29,7 @@ export function ScheduleFull() {
         </Link>
       </div>
 
-      <WeeklyCalendar />
+      <WeeklyCalendar slots={slots} initialDateKey={todayKey} />
     </section>
   );
 }

@@ -8,6 +8,8 @@ import { FoundersStrip } from '@/components/sections/FoundersStrip';
 import { LocationBlock } from '@/components/sections/LocationBlock';
 import { FinalCTA } from '@/components/sections/FinalCTA';
 
+export const dynamic = 'force-dynamic';
+
 // The pt-44 spacer in layout.tsx makes room for the fixed header. We negate
 // it here so the hero truly fills the viewport on the home page.
 export default function HomePage() {
