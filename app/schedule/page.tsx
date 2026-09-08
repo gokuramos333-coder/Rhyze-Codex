@@ -22,16 +22,16 @@ export default async function PublicSchedulePage({
   ]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl overflow-x-hidden px-6 py-16">
+    <main className="mx-auto min-h-screen w-full max-w-7xl overflow-x-hidden px-6 py-16">
       <p className="text-xs font-black uppercase tracking-[0.32em] text-rhyze-orange">
         Live studio calendar
       </p>
-      <div className="mt-3 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-        <div>
+      <div className="mt-3 flex min-w-0 flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
           <h1 className="max-w-full font-display text-5xl tracking-wide md:text-8xl md:tracking-wider">
             FIND YOUR RHYTHM
           </h1>
-          <p className="mt-4 max-w-2xl text-rhyze-cream/65">
+          <p className="mt-4 max-w-full text-rhyze-cream/65 md:max-w-2xl">
             Showing classes from today forward. Booking numbers are live
             confirmed bookings only.
           </p>
@@ -44,11 +44,11 @@ export default async function PublicSchedulePage({
         </Link>
       </div>
 
-      <form className="mt-10 grid gap-3 border border-white/10 bg-rhyze-charcoal p-4 md:grid-cols-[1fr_1fr_auto]">
+      <form className="mt-10 grid w-full min-w-0 max-w-full gap-3 border border-white/10 bg-rhyze-charcoal p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
         <select
           name="category"
           defaultValue={searchParams.category || ''}
-          className="min-h-12 bg-rhyze-black px-4 text-sm text-rhyze-cream"
+          className="min-h-12 w-full min-w-0 bg-rhyze-black px-4 text-sm text-rhyze-cream"
         >
           <option value="">All class types</option>
           {filters.categories.map((category) => (
@@ -60,7 +60,7 @@ export default async function PublicSchedulePage({
         <select
           name="instructor"
           defaultValue={searchParams.instructor || ''}
-          className="min-h-12 bg-rhyze-black px-4 text-sm text-rhyze-cream"
+          className="min-h-12 w-full min-w-0 bg-rhyze-black px-4 text-sm text-rhyze-cream"
         >
           <option value="">All instructors</option>
           {filters.instructors.map((instructor) => (
@@ -69,7 +69,7 @@ export default async function PublicSchedulePage({
             </option>
           ))}
         </select>
-        <button className="min-h-12 bg-rhyze-gradient px-6 text-xs font-black uppercase tracking-widest text-rhyze-black">
+        <button className="min-h-12 w-full bg-rhyze-gradient px-6 text-xs font-black uppercase tracking-widest text-rhyze-black md:w-auto">
           Apply filters
         </button>
       </form>
@@ -78,7 +78,7 @@ export default async function PublicSchedulePage({
         {slots.map((slot) => (
           <article
             key={slot.id}
-            className="grid gap-5 border-l-4 border-rhyze-coral bg-rhyze-charcoal p-5 md:grid-cols-[10rem_1fr_auto] md:items-center"
+            className="grid min-w-0 gap-5 border-l-4 border-rhyze-coral bg-rhyze-charcoal p-5 md:grid-cols-[10rem_minmax(0,1fr)_auto] md:items-center"
           >
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">
@@ -88,7 +88,7 @@ export default async function PublicSchedulePage({
                 {slot.timeLabel}
               </p>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-orange">
                 {slot.category}
               </p>
