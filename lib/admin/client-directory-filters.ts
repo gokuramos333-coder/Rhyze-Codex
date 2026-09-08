@@ -1,4 +1,5 @@
 import type { MembershipStatus, Prisma } from '@prisma/client';
+import { qualifyingMembershipWhere } from '@/lib/domain/memberships/active-membership';
 
 export const currentMembershipStatuses: MembershipStatus[] = [
   'TRIALING',
@@ -14,6 +15,7 @@ type ClientDirectoryFilters = {
   source?: string;
   plan?: string;
   account?: string;
+  membership?: string;
 };
 
 export function buildClientDirectoryWhere({
@@ -21,6 +23,7 @@ export function buildClientDirectoryWhere({
   source,
   plan,
   account,
+  membership,
 }: ClientDirectoryFilters): Prisma.UserWhereInput {
   const query = q?.trim();
   const where: Prisma.UserWhereInput = {
@@ -47,7 +50,14 @@ export function buildClientDirectoryWhere({
     where.sombleClientProfile = { isNot: null };
   }
 
-  if (plan === 'none') {
+  if (membership === 'active') {
+    where.memberships = {
+      some: {
+        ...qualifyingMembershipWhere,
+        ...(plan && plan !== 'none' ? { productId: plan } : {}),
+      },
+    };
+  } else if (plan === 'none') {
     where.memberships = {
       none: { status: { in: currentMembershipStatuses } },
     };

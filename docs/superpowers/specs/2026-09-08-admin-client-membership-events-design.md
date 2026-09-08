@@ -4,9 +4,10 @@
 
 Show only bookable future events on the public site, replace the misleading
 historical-subscription dashboard metric with a consistent active-membership
-metric, and let Rhyze management create client accounts and either start a
-secure Stripe membership purchase or grant a time-bounded membership without a
-charge.
+metric, make the overview revenue and refund cards report the current calendar
+month with range-aware drill-down charts, and let Rhyze management create
+client accounts and either start a secure Stripe membership purchase or grant
+a time-bounded membership without a charge.
 
 The feature must preserve all existing users, bookings, purchases,
 memberships, Stripe identifiers, email history, waivers, credits, and audit
@@ -31,6 +32,13 @@ records. It must not deploy until the user explicitly requests deployment.
   password and sign the waiver. Admin has no create-client screen.
 - A client profile can pause or resume an existing membership, but cannot start
   a membership for a client who has none.
+- The overview `Total revenue` and `Refunds issued` cards currently display
+  lifetime amounts. The existing earnings controls can select day, week,
+  month, year, or custom dates, but refunds are not represented as a dated
+  analytics series.
+- Purchase refunds have dedicated rows with timestamps. Event and merchandise
+  refunds only update cumulative amounts on their commerce orders, so the
+  system cannot reliably place those refunds into historical accounting ranges.
 
 ## Membership Definition
 
@@ -102,6 +110,48 @@ the plan name and will therefore show management exactly which membership each
 listed client has. Existing search, source, account-status, plan, and sort
 controls will remain available and composable with the active-membership
 filter.
+
+## Monthly Financial Cards and Drill-Down
+
+The two overview cards will be renamed `Revenue this month` and `Refunds this
+month`. Their values will reset at midnight on the first day of every calendar
+month in `America/New_York`; no historical rows will be reset, deleted, or
+modified. A reset means only that the card query changes to the new month's
+date range.
+
+Financial analytics will distinguish three values:
+
+- gross revenue recorded during the selected range;
+- refunds issued during the selected range, dated by the actual refund time;
+  and
+- net revenue for the selected range, calculated as gross revenue minus those
+  dated refunds.
+
+Somble transferred revenue will remain assigned to its transferred timestamp.
+Native purchases and unlinked Stripe payment records will remain assigned to
+their paid/occurred timestamp. Native purchase refunds will use their existing
+`Refund.createdAt` timestamp.
+
+A new dated commerce-refund record will be introduced for event and merchandise
+refunds. The refund action will create this record in the same transaction that
+updates the order and payment record. A data migration will backfill the one
+existing refunded commerce order using its last-updated timestamp so its
+historical refund remains represented exactly once. The cumulative
+`refundedAmountCents` fields remain intact for reconciliation and refund limits.
+
+Clicking either monthly card will open the existing Earnings analytics section
+on the overview. The section will preserve the current Day, Week, Month, Year,
+and custom-date controls and will show, for the selected range:
+
+- gross revenue, refunds, and net revenue summary values;
+- a daily net-revenue chart;
+- a daily refunds chart;
+- revenue distribution by offering type; and
+- dated refund details linked to the affected client or order when available.
+
+The range controls will preserve the active Earnings view and Sales panel while
+changing periods. The existing lifetime sales ledger and refund history remain
+available below the analytics section.
 
 ## Create Client Flow
 
@@ -240,6 +290,10 @@ Implementation will follow red-green-refactor cycles. Tests will cover:
 - exclusion of intro trials, class packs, drop-ins, events, paused, past-due,
   cancelled, and expired memberships;
 - dashboard-to-directory filter parity;
+- New York monthly boundaries for the current-month revenue and refund cards;
+- refund-date accounting, including commerce-refund backfill and prevention of
+  double counting;
+- Day, Week, Month, Year, and custom-date financial summaries and series;
 - removal of past public event occurrences;
 - carousel visibility, navigation boundaries, and accessible controls;
 - create-client validation, duplicate email handling, activation email, and

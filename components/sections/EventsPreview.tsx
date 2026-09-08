@@ -7,6 +7,11 @@ import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
+import {
+  upcomingEventOccurrenceWhere,
+  upcomingEventTemplateWhere,
+} from '@/lib/catalog/upcoming-events';
+import { EventsCarousel } from '@/components/sections/EventsCarousel';
 
 type EventsPreviewProps = {
   heading?: string;
@@ -19,16 +24,13 @@ export async function EventsPreview({
   showIntro = true,
   showAllLink = true,
 }: EventsPreviewProps) {
-  const displayWindowStart = new Date('2026-08-01T00:00:00-04:00');
-  const displayWindowEnd = new Date('2026-10-01T00:00:00-04:00');
   const now = new Date();
   const liveEventRows = await prisma.classTemplate.findMany({
-    where: { isEvent: true, isActive: true, archivedAt: null },
+    where: upcomingEventTemplateWhere(now),
     include: {
       occurrences: {
         where: {
-          status: 'SCHEDULED',
-          startAt: { gte: displayWindowStart, lt: displayWindowEnd },
+          ...upcomingEventOccurrenceWhere(now),
         },
         include: {
           _count: {
@@ -82,10 +84,9 @@ export async function EventsPreview({
           )}
         </div>
 
-        <div className="no-scrollbar grid auto-cols-[minmax(18rem,1fr)] grid-flow-col gap-5 overflow-x-auto pb-4 md:auto-cols-[minmax(23rem,1fr)]">
+        <EventsCarousel>
           {eventCards.map(({ event, occurrence }) => {
             const fallback = ownedEvents.find((item) => item.slug === event.slug);
-            const isClosed = occurrence.startAt.getTime() < now.getTime();
             const bookingLabel = publicBookingCountLabel(
               occurrence._count.bookings + occurrence.historicalSignupCount,
               occurrence.capacity,
@@ -107,14 +108,8 @@ export async function EventsPreview({
                       day: 'numeric',
                     })}
                   </div>
-                  <div
-                    className={`absolute bottom-4 left-4 rounded-full px-3 py-1 text-xs font-black uppercase tracking-widest ${
-                      isClosed
-                        ? 'bg-rhyze-cream/90 text-rhyze-black'
-                        : 'bg-rhyze-coral text-rhyze-black'
-                    }`}
-                  >
-                    {isClosed ? 'Bookings closed' : 'Booking available'}
+                  <div className="absolute bottom-4 left-4 rounded-full bg-rhyze-coral px-3 py-1 text-xs font-black uppercase tracking-widest text-rhyze-black">
+                    Booking available
                   </div>
                 </div>
                 <div className="p-5">
@@ -144,23 +139,15 @@ export async function EventsPreview({
             return (
               <article
                 key={`${event.id}-${occurrence.id}`}
-                className={`group overflow-hidden rounded-3xl border bg-rhyze-charcoal shadow-[0_0_0_1px_rgba(255,199,44,0.2)] transition ${
-                  isClosed
-                    ? 'border-white/10 opacity-75'
-                    : 'border-rhyze-gold/25 hover:-translate-y-1 hover:border-rhyze-orange hover:shadow-[0_0_0_1px_rgba(255,122,24,0.55),0_0_30px_rgba(255,122,24,0.18)]'
-                }`}
+                className="group overflow-hidden rounded-3xl border border-rhyze-gold/25 bg-rhyze-charcoal shadow-[0_0_0_1px_rgba(255,199,44,0.2)] transition hover:-translate-y-1 hover:border-rhyze-orange hover:shadow-[0_0_0_1px_rgba(255,122,24,0.55),0_0_30px_rgba(255,122,24,0.18)] motion-reduce:transition-none"
               >
-                {isClosed ? (
-                  <div className="block">{cardContent}</div>
-                ) : (
-                  <Link href={`/events/${event.slug}`} className="block">
-                    {cardContent}
-                  </Link>
-                )}
+                <Link href={`/events/${event.slug}`} className="block">
+                  {cardContent}
+                </Link>
               </article>
             );
           })}
-        </div>
+        </EventsCarousel>
       </div>
     </section>
   );

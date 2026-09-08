@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Download, Mail, Search } from 'lucide-react';
+import { Download, Mail, Search, UserPlus } from 'lucide-react';
 import { prisma } from '@/lib/db/prisma';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { adminClientStatus, claimedAccountStatusUpdateWhere } from '@/lib/admin/client-status';
@@ -13,6 +13,10 @@ import {
   clientDirectoryLastLoginAt,
   clientDirectoryWorkoutCount,
 } from '@/lib/admin/activity-client-metrics';
+import {
+  qualifyingMembershipProductKinds,
+  qualifyingMembershipWhere,
+} from '@/lib/domain/memberships/active-membership';
 
 function date(value: Date | null) {
   return value
@@ -27,6 +31,7 @@ export default async function AdminMembersPage(
       source?: string;
       plan?: string;
       account?: string;
+      membership?: string;
       sort?: string;
     }>;
   }
@@ -36,6 +41,7 @@ export default async function AdminMembersPage(
   const source = searchParams.source?.trim();
   const plan = searchParams.plan?.trim();
   const account = searchParams.account?.trim();
+  const membership = searchParams.membership?.trim();
   const sort = searchParams.sort || 'joined-desc';
   await prisma.user.updateMany({
     where: claimedAccountStatusUpdateWhere(),
@@ -50,11 +56,13 @@ export default async function AdminMembersPage(
           ? ({ createdAt: 'asc' } as const)
           : ({ createdAt: 'desc' } as const);
   const members = await prisma.user.findMany({
-    where: buildClientDirectoryWhere({ q, source, plan, account }),
+    where: buildClientDirectoryWhere({ q, source, plan, account, membership }),
     include: {
       sombleClientProfile: true,
       memberships: {
-        where: { status: { in: currentMembershipStatuses } },
+        where: membership === 'active'
+          ? qualifyingMembershipWhere
+          : { status: { in: currentMembershipStatuses } },
         include: { product: true },
         orderBy: { createdAt: 'desc' },
       },
@@ -80,6 +88,7 @@ export default async function AdminMembersPage(
     }),
     prisma.product.findMany({
       where: {
+        kind: { in: qualifyingMembershipProductKinds },
         memberships: {
           some: { status: { in: currentMembershipStatuses } },
         },
@@ -103,15 +112,24 @@ export default async function AdminMembersPage(
             {sombleTotal} Somble histories + {nativeTotal} native Rhyze accounts.
           </p>
         </div>
-        <Link
-          href="/api/admin/somble-export?type=clients"
-          className="inline-flex items-center gap-2 bg-rhyze-black px-5 py-3 text-xs font-black uppercase text-white"
-        >
-          <Download className="h-4 w-4" /> Export Clients
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/members/new"
+            className="inline-flex items-center gap-2 bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase text-rhyze-black"
+          >
+            <UserPlus className="h-4 w-4" /> Create Client
+          </Link>
+          <Link
+            href="/api/admin/somble-export?type=clients"
+            className="inline-flex items-center gap-2 bg-rhyze-black px-5 py-3 text-xs font-black uppercase text-white"
+          >
+            <Download className="h-4 w-4" /> Export Clients
+          </Link>
+        </div>
       </div>
 
       <form className="mt-7 grid gap-3 border-t-4 border-rhyze-gold bg-white p-4 lg:grid-cols-[minmax(14rem,1fr)_11rem_12rem_14rem_11rem_auto]">
+        {membership === 'active' && <input type="hidden" name="membership" value="active" />}
         <label className="relative">
           <Search className="absolute left-4 top-4 h-4 w-4 text-rhyze-black/35" />
           <input
@@ -166,6 +184,15 @@ export default async function AdminMembersPage(
           Apply
         </button>
       </form>
+
+      {membership === 'active' && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-4 text-sm font-bold">
+          <span>Showing active recurring membership clients. Trials and one-time purchases are excluded.</span>
+          <Link href="/admin/members" className="text-xs font-black uppercase tracking-widest text-rhyze-coral">
+            Clear filter
+          </Link>
+        </div>
+      )}
 
       <div className="mt-5 overflow-x-auto bg-white">
         <table className="w-full min-w-[72rem] text-left text-sm">

@@ -23,6 +23,15 @@ import {
   manualCreditAccountCanBeDeleted,
   manualCreditLabel,
 } from '@/lib/domain/credits/manual-credit';
+import { startAdminMembershipCheckout } from '@/lib/domain/memberships/admin-membership-checkout';
+import {
+  assignedMembershipRecords,
+  parseAdminMembershipAssignmentInput,
+} from '@/lib/domain/memberships/admin-membership-assignment';
+import {
+  qualifyingMembershipProductKinds,
+  qualifyingMembershipWhere,
+} from '@/lib/domain/memberships/active-membership';
 
 const messageSchema = z.object({
   userId: z.string().min(1),
@@ -823,4 +832,164 @@ export async function reviewMembershipChangeRequestAction(formData: FormData) {
   revalidatePath(`/admin/members/${userId}`);
   revalidatePath('/member/membership');
   redirect(`/admin/members/${userId}?sent=request-review`);
+}
+
+export async function startAdminMembershipCheckoutAction(formData: FormData) {
+  await requireApprovedOwner();
+  const userId = String(formData.get('userId') || '');
+  const productId = String(formData.get('productId') || '');
+  if (!userId || !productId || !stripeIsConfigured()) {
+    redirect(`/admin/members/${userId}?membership=checkout-error#start-membership`);
+  }
+  const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://www.rhyzefitness.com';
+  let checkoutUrl: string;
+  try {
+    checkoutUrl = await startAdminMembershipCheckout({ clientId: userId, productId, origin }, {
+      findClient: (id) => prisma.user.findFirst({
+        where: { id, NOT: { email: { endsWith: '@rhyze.local' } }, status: { not: 'ARCHIVED' } },
+        select: { id: true, email: true, name: true, stripeCustomerId: true },
+      }),
+      findProduct: (id) => prisma.product.findUnique({
+        where: { id },
+        select: {
+          id: true, name: true, kind: true, isActive: true,
+          billingInterval: true, stripePriceId: true, priceCents: true,
+        },
+      }),
+      hasCurrentMembership: async (id) => Boolean(await prisma.membership.findFirst({
+        where: { userId: id, ...qualifyingMembershipWhere },
+        select: { id: true },
+      })),
+      createPurchase: (input) => prisma.purchase.create({ data: input, select: { id: true } }),
+      createCheckoutSession: (input, idempotencyKey) => getStripe().checkout.sessions.create(
+        input as never,
+        { idempotencyKey },
+      ),
+      saveCheckoutSession: async (purchaseId, stripeCheckoutSessionId) => {
+        await prisma.purchase.update({ where: { id: purchaseId }, data: { stripeCheckoutSessionId } });
+      },
+      failPurchase: async (purchaseId) => {
+        await prisma.purchase.update({
+          where: { id: purchaseId },
+          data: { status: 'FAILED', failedAt: new Date() },
+        });
+      },
+    });
+  } catch (error) {
+    console.error('Admin membership checkout failed', {
+      userId,
+      productId,
+      message: error instanceof Error ? error.message : 'Unknown checkout error',
+    });
+    redirect(`/admin/members/${userId}?membership=checkout-error#start-membership`);
+  }
+  redirect(checkoutUrl);
+}
+
+export async function assignAdminMembershipAction(formData: FormData) {
+  const actor = await requireApprovedOwner();
+  const userId = String(formData.get('userId') || '');
+  let parsed: ReturnType<typeof parseAdminMembershipAssignmentInput>;
+  try {
+    parsed = parseAdminMembershipAssignmentInput({
+      productId: formData.get('productId'),
+      accessEndDate: formData.get('accessEndDate'),
+      reason: formData.get('reason'),
+    });
+  } catch {
+    redirect(`/admin/members/${userId}?membership=assignment-invalid#start-membership`);
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+      const [member, product, currentMembership] = await Promise.all([
+        tx.user.findFirst({
+          where: { id: userId, NOT: { email: { endsWith: '@rhyze.local' } }, status: { not: 'ARCHIVED' } },
+          select: { id: true, email: true, name: true },
+        }),
+        tx.product.findFirst({
+          where: {
+            id: parsed.productId,
+            isActive: true,
+            kind: { in: qualifyingMembershipProductKinds },
+          },
+          select: { id: true, name: true, includedCredits: true, isUnlimited: true },
+        }),
+        tx.membership.findFirst({
+          where: { userId, ...qualifyingMembershipWhere },
+          select: { id: true },
+        }),
+      ]);
+      if (!member || !product) throw new Error('Client or membership plan is unavailable.');
+      if (currentMembership) throw new Error('Client already has a current membership.');
+
+      const now = new Date();
+      const records = assignedMembershipRecords({
+        actorId: actor.id,
+        userId,
+        now,
+        end: parsed.end,
+        reason: parsed.reason,
+        product,
+      });
+      const purchase = await tx.purchase.create({ data: records.purchase });
+      await tx.membership.create({
+        data: { ...records.membership, purchaseId: purchase.id },
+      });
+      const creditAccount = await tx.creditAccount.create({
+        data: { ...records.creditAccount, sourcePurchaseId: purchase.id },
+      });
+      if (records.grant) {
+        await tx.creditLedgerEntry.create({
+          data: { ...records.grant, creditAccountId: creditAccount.id },
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'admin.membership-assigned',
+          entityType: 'Membership',
+          entityId: purchase.id,
+          after: {
+            ...records.audit,
+            userId,
+            productId: product.id,
+            purchaseId: purchase.id,
+          },
+        },
+      });
+      await queueEmail(tx, {
+        userId,
+        to: member.email,
+        subject: `${product.name} was added to your Rhyze account`,
+        template: 'ADMIN_MEMBERSHIP_ASSIGNED',
+        payload: {
+          name: member.name || 'Rhyzer',
+          planName: product.name,
+          accessEndsAt: parsed.end.toLocaleDateString('en-US', {
+            timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric',
+          }),
+          membershipUrl: '/member/membership',
+        },
+        dedupeKey: `admin-membership-assigned:${purchase.id}`,
+      });
+    });
+  } catch (error) {
+    console.error('Admin membership assignment failed', {
+      userId,
+      productId: parsed.productId,
+      message: error instanceof Error ? error.message : 'Unknown assignment error',
+    });
+    redirect(`/admin/members/${userId}?membership=assignment-error#start-membership`);
+  }
+
+  revalidatePath('/admin');
+  revalidatePath('/admin/members');
+  revalidatePath(`/admin/members/${userId}`);
+  revalidatePath('/member');
+  revalidatePath('/member/membership');
+  revalidatePath('/member/bookings');
+  revalidatePath('/schedule');
+  redirect(`/admin/members/${userId}?membership=assigned#memberships`);
 }

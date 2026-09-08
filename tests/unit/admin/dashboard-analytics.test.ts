@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDailyFinancialSeries,
   buildDailyRevenueSeries,
   calculatePeriodTotals,
+  summarizeFinancials,
   summarizeRevenue,
 } from '@/lib/admin/dashboard-analytics';
 
@@ -82,5 +84,44 @@ describe('ADMIN dashboard analytics', () => {
       yearCents: 12900,
       lifetimeCents: 12900,
     });
+  });
+
+  it('subtracts refunds on the day they were issued rather than the purchase day', () => {
+    const refundRecords = [{
+      amountCents: 3_000,
+      occurredAt: new Date('2026-09-08T14:00:00.000Z'),
+      customerId: 'one',
+      type: 'Event',
+      source: 'RHYZE' as const,
+    }];
+    const financials = summarizeFinancials(
+      [{
+        amountCents: 3_000,
+        occurredAt: new Date('2026-08-31T18:00:00.000Z'),
+        customerId: 'one',
+        type: 'Event',
+        source: 'RHYZE',
+      }],
+      refundRecords,
+    );
+
+    expect(financials).toEqual({
+      grossCents: 3_000,
+      refundCents: 3_000,
+      netCents: 0,
+    });
+
+    const series = buildDailyFinancialSeries(
+      [],
+      refundRecords,
+      new Date('2026-09-08T04:00:00.000Z'),
+      new Date('2026-09-09T03:59:59.999Z'),
+    );
+    expect(series).toEqual([expect.objectContaining({
+      label: 'Sep 8',
+      grossCents: 0,
+      refundCents: 3_000,
+      netCents: -3_000,
+    })]);
   });
 });

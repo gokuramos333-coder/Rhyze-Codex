@@ -95,6 +95,14 @@ export async function refundCommerceOrderAction(formData: FormData) {
     { idempotencyKey: `admin-order-refund-${order.id}` },
   );
   await prisma.$transaction(async (tx) => {
+    await tx.commerceRefund.create({
+      data: {
+        commerceOrderId: order.id,
+        amountCents: refund.amount,
+        stripeRefundId: refund.id,
+        reason: 'Admin full refund',
+      },
+    });
     await tx.commerceOrder.update({
       where: { id: order.id },
       data: { status: 'REFUNDED', refundedAmountCents: refund.amount },

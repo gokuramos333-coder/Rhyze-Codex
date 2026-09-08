@@ -69,6 +69,22 @@ export const emailTemplateCatalog = {
       closing: `Waivers and the cancellation policy must be accepted before booking or taking class. You can review the waiver here: ${text(p, 'waiverUrl', '/member/waiver')}`,
     }),
   },
+  ADMIN_CLIENT_INVITATION: {
+    label: 'Admin-created member activation', category: 'Accounts', trigger: 'When management creates a client account for a new member',
+    subject: () => 'Your My Rhyze account is ready to activate', sample: { name: 'Sample Member', activationUrl: '/claim-account/sample-token' },
+    present: (p) => ({
+      eyebrow: 'Welcome to the Rhyze tribe',
+      headline: 'Management created your account',
+      greeting: `Hi ${text(p, 'name', 'Rhyzer')},`,
+      paragraphs: [
+        'Rhyze management created your My Rhyze profile so you can manage memberships, credits, and class bookings in one place.',
+        'Use this secure one-time link to choose your password and personally accept the current studio waiver and policies before booking.',
+        'The activation link expires after one month.',
+      ],
+      cta: { label: 'Activate My Rhyze Account', href: text(p, 'activationUrl', '/forgot-password') },
+      closing: 'If you need help, reply to this email and the Rhyze team will assist you.',
+    }),
+  },
   ACCOUNT_ACTIVATION: {
     label: 'Imported member account activation', category: 'Accounts', trigger: 'When an imported Somble member is invited to activate My Rhyze',
     subject: () => 'Your new My Rhyze Fitness account is ready!', sample: { name: 'Sample Member', activationUrl: '/claim-account/sample-token' },
@@ -234,6 +250,24 @@ export const emailTemplateCatalog = {
     label: 'Membership paused', category: 'Memberships & payments', trigger: 'When management pauses a membership',
     subject: () => 'Your Rhyze membership is paused', sample: { ...member, planName: 'Elevate', pauseUntil: 'September 1, 2026', billingUrl: '/member/billing' },
     present: (p) => ({ eyebrow: 'Membership update', headline: 'Your plan is paused', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`, paragraphs: [`Your ${text(p, 'planName', 'Rhyze')} membership is paused. No new membership credits will be available during the pause.`], facts: [{ label: 'Scheduled return', value: text(p, 'pauseUntil', 'Management will confirm') }], cta: { label: 'View membership', href: text(p, 'billingUrl', '/member/billing') } }),
+  },
+  ADMIN_MEMBERSHIP_ASSIGNED: {
+    label: 'Membership assigned by management', category: 'Memberships & payments', trigger: 'When management grants a time-bounded membership without charging the client',
+    subject: (p) => `${text(p, 'planName', 'A membership')} was added to your Rhyze account`, sample: { ...member, planName: 'VIP', accessEndsAt: 'October 8, 2026' },
+    present: (p) => ({
+      eyebrow: 'Membership added',
+      headline: 'Your Rhyze access is ready',
+      greeting: `Hi ${text(p, 'name', 'Rhyzer')},`,
+      paragraphs: [
+        `Rhyze management added ${text(p, 'planName', 'a membership')} to your account.`,
+        'No payment was charged and this assignment will not renew automatically.',
+      ],
+      facts: [
+        { label: 'Plan', value: text(p, 'planName', 'Rhyze membership') },
+        { label: 'Access through', value: text(p, 'accessEndsAt', 'See My Rhyze') },
+      ],
+      cta: { label: 'View membership', href: text(p, 'membershipUrl', '/member/membership') },
+    }),
   },
   MEMBERSHIP_RESUMED: {
     label: 'Membership resumed', category: 'Memberships & payments', trigger: 'When management resumes a paused membership',

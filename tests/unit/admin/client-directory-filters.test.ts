@@ -57,6 +57,20 @@ describe('ADMIN client directory filters', () => {
     });
   });
 
+  it('limits the active-membership dashboard drill-down to qualifying recurring plans', () => {
+    expect(buildClientDirectoryWhere({ membership: 'active' })).toMatchObject({
+      NOT: { email: { endsWith: '@rhyze.local' } },
+      memberships: {
+        some: {
+          status: { in: ['ACTIVE', 'TRIALING'] },
+          product: {
+            kind: { in: ['MONTHLY_UNLIMITED', 'LIMITED_MEMBERSHIP', 'VIP'] },
+          },
+        },
+      },
+    });
+  });
+
   it('combines text, source, and membership filters', () => {
     expect(
       buildClientDirectoryWhere({

@@ -30,6 +30,7 @@ import {
   manualCreditKindForLabel,
 } from '@/lib/domain/credits/manual-credit';
 import {
+  assignAdminMembershipAction,
   deleteManualMemberCreditsAction,
   grantManualMemberCreditsAction,
   refundMemberPurchaseAction,
@@ -37,10 +38,16 @@ import {
   reviewMembershipChangeRequestAction,
   scheduleMembershipFreezeAction,
   sendMemberMessageAction,
+  startAdminMembershipCheckoutAction,
   updateManualMemberCreditsAction,
   updateAdminMemberProfilePhotoAction,
   updateMemberMembershipAction,
 } from './actions';
+import { AdminMembershipStartForm } from '@/components/admin/AdminMembershipStartForm';
+import {
+  isQualifyingActiveMembership,
+  qualifyingMembershipProductKinds,
+} from '@/lib/domain/memberships/active-membership';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -100,12 +107,12 @@ function dateTime(value: Date | null | undefined) {
 export default async function AdminMemberDetailPage(
   props: {
     params: Promise<{ userId: string }>;
-    searchParams: Promise<{ sent?: string; error?: string }>;
+    searchParams: Promise<{ sent?: string; error?: string; membership?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
-  const [member, activeWaiver] = await Promise.all([
+  const [member, activeWaiver, membershipProducts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: params.userId },
       include: {
@@ -203,6 +210,11 @@ export default async function AdminMemberDetailPage(
       where: { isActive: true },
       orderBy: { version: 'desc' },
     }),
+    prisma.product.findMany({
+      where: { isActive: true, kind: { in: qualifyingMembershipProductKinds } },
+      select: { id: true, name: true, priceCents: true, stripePriceId: true },
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+    }),
   ]);
   if (!member) notFound();
   const referralCommission = member.referralCommission;
@@ -223,6 +235,12 @@ export default async function AdminMemberDetailPage(
       })),
   );
   const currentMembership = activeMemberships[0];
+  const hasQualifyingMembership = member.memberships.some((membership) =>
+    isQualifyingActiveMembership({
+      status: membership.status,
+      productKind: membership.product.kind,
+    }),
+  );
   const creditBalances = availableCreditSummary(member.creditAccounts
     .filter((account) => {
       const membership = account.sourcePurchase?.membership;
@@ -361,6 +379,41 @@ export default async function AdminMemberDetailPage(
         <Metric label="Spent this year" value={money(spend.yearlyCents)} icon={<CalendarCheck />} href="#payment-history" />
         <Metric label="Lifetime spent" value={money(spend.lifetimeCents)} icon={<CalendarCheck />} href="#payment-history" />
       </div>
+      {searchParams.sent === 'client-created' && (
+        <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">
+          Client profile created. A secure account-activation email was queued for this client.
+        </p>
+      )}
+      {searchParams.membership === 'success' && (
+        <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">
+          Stripe accepted the membership checkout. Access activates automatically when Stripe confirms the payment.
+        </p>
+      )}
+      {searchParams.membership === 'cancelled' && (
+        <p className="mt-6 border-l-4 border-rhyze-gold bg-orange-50 p-4 font-bold">
+          Stripe checkout was cancelled. The client was not charged and no membership access was added.
+        </p>
+      )}
+      {searchParams.membership === 'checkout-error' && (
+        <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">
+          Membership checkout could not start. The client was not charged. Confirm the selected plan has a Stripe price and try again.
+        </p>
+      )}
+      {searchParams.membership === 'assigned' && (
+        <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">
+          No-charge membership access was assigned, recorded in the audit log, and queued for client notification.
+        </p>
+      )}
+      {searchParams.membership === 'assignment-invalid' && (
+        <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">
+          Membership access was not assigned. Choose a plan, a future access-through date, and enter a reason.
+        </p>
+      )}
+      {searchParams.membership === 'assignment-error' && (
+        <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">
+          Membership access was not assigned. Confirm the client has no current recurring membership, then try again.
+        </p>
+      )}
       {searchParams.sent === 'message' && (
         <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">
           Message sent. It will appear as a new alert when this member enters My Rhyze.
@@ -616,7 +669,16 @@ export default async function AdminMemberDetailPage(
             />
           </InfoSection>
 
-          <InfoSection title="MEMBERSHIPS">
+          <InfoSection id="memberships" title="MEMBERSHIPS">
+            {!hasQualifyingMembership && (
+              <AdminMembershipStartForm
+                userId={member.id}
+                products={membershipProducts}
+                checkoutAction={startAdminMembershipCheckoutAction}
+                assignmentAction={assignAdminMembershipAction}
+                minimumEndDate={new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)}
+              />
+            )}
             {member.memberships.map((membership) => (
               <div key={membership.id} className="border-b border-black/10 py-3">
                 <div className="flex items-center justify-between gap-3">
@@ -927,14 +989,16 @@ function Metric({
 }
 
 function InfoSection({
+  id,
   title,
   children,
 }: {
+  id?: string;
   title: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t-4 border-rhyze-gold bg-white p-5">
+    <section id={id} className="scroll-mt-24 border-t-4 border-rhyze-gold bg-white p-5">
       <h2 className="font-display text-4xl tracking-wider">{title}</h2>
       <div className="mt-3">{children}</div>
     </section>

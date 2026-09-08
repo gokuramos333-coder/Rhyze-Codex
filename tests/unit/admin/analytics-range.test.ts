@@ -31,4 +31,14 @@ describe('admin analytics date ranges', () => {
     expect(range.end.toISOString()).toBe('2026-07-11T03:59:59.999Z');
     expect(range.label).toBe('Jul 1 – Jul 10');
   });
+
+  it('resets month reporting at the New York calendar-month boundary', () => {
+    const range = resolveAnalyticsRange(
+      { range: 'month' },
+      new Date('2026-09-08T14:00:00.000Z'),
+    );
+
+    expect(range.start.toISOString()).toBe('2026-09-01T04:00:00.000Z');
+    expect(range.end.toISOString()).toBe('2026-10-01T03:59:59.999Z');
+  });
 });

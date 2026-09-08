@@ -736,10 +736,25 @@ model CommerceOrder {
   occurrence     ClassOccurrence?    @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
   items          CommerceOrderItem[]
   paymentRecords PaymentRecord[]
+  refunds        CommerceRefund[]
 
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@index([occurrenceId, status])
+}
+
+model CommerceRefund {
+  id              String   @id @default(cuid())
+  commerceOrderId String
+  amountCents     Int
+  reason          String?
+  stripeRefundId  String?  @unique
+  createdAt       DateTime @default(now())
+
+  commerceOrder CommerceOrder @relation(fields: [commerceOrderId], references: [id], onDelete: Restrict)
+
+  @@index([commerceOrderId, createdAt])
+  @@index([createdAt])
 }
 
 model CommerceOrderItem {

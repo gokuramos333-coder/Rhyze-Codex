@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { chartTooltip } from '@/lib/admin/chart-tooltip';
 
 type Point = {
@@ -34,20 +34,25 @@ export function RevenueAreaChart({
   const height = 230;
   const paddingX = 28;
   const paddingY = 24;
-  const max = Math.max(...points.map((point) => point.value), 0);
+  const maxValue = Math.max(...points.map((point) => point.value), 0);
+  const minValue = Math.min(...points.map((point) => point.value), 0);
+  const valueSpan = Math.max(maxValue - minValue, 1);
+  const hasData = points.some((point) => point.value !== 0);
   const chartWidth = width - paddingX * 2;
   const chartHeight = height - paddingY * 2;
+  const valueY = (value: number) =>
+    paddingY + ((maxValue - value) / valueSpan) * chartHeight;
+  const zeroY = valueY(0);
   const coordinates = points.map((point, index) => {
     const x =
       paddingX +
       (points.length <= 1 ? 0 : (index / (points.length - 1)) * chartWidth);
-    const y =
-      paddingY + chartHeight - (max ? (point.value / max) * chartHeight : 0);
+    const y = valueY(point.value);
     return { ...point, x, y };
   });
   const line = coordinates.map((point) => `${point.x},${point.y}`).join(' ');
   const area = coordinates.length
-    ? `${paddingX},${paddingY + chartHeight} ${line} ${paddingX + chartWidth},${paddingY + chartHeight}`
+    ? `${paddingX},${zeroY} ${line} ${paddingX + chartWidth},${zeroY}`
     : '';
   const activePoint = activeIndex === null ? null : coordinates[activeIndex];
 
@@ -62,13 +67,15 @@ export function RevenueAreaChart({
             {exactMoney(points.reduce((sum, point) => sum + point.value, 0))}
           </strong>
         </div>
-        {max > 0 && (
+        {hasData && (
           <span className="text-xs font-bold text-rhyze-black/40">
-            Peak {exactMoney(max)}
+            {minValue < 0
+              ? `High ${exactMoney(maxValue)} · Low ${exactMoney(minValue)}`
+              : `Peak ${exactMoney(maxValue)}`}
           </span>
         )}
       </div>
-      {max > 0 ? (
+      {hasData ? (
         <>
           <div className="relative">
           {activePoint && (
@@ -101,6 +108,17 @@ export function RevenueAreaChart({
                 />
               );
             })}
+            {minValue < 0 && (
+              <line
+                data-zero-line="true"
+                x1={paddingX}
+                x2={width - paddingX}
+                y1={zeroY}
+                y2={zeroY}
+                stroke="rgba(20,20,20,.45)"
+                strokeWidth="2"
+              />
+            )}
             <polygon points={area} fill="rgba(247,147,30,.28)" />
             <polyline
               points={line}

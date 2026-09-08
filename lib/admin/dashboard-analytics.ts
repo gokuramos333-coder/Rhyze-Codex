@@ -12,6 +12,14 @@ export type DailyRevenuePoint = {
   amountCents: number;
 };
 
+export type RefundRecord = RevenueRecord;
+
+export type DailyFinancialPoint = DailyRevenuePoint & {
+  grossCents: number;
+  refundCents: number;
+  netCents: number;
+};
+
 const NEW_YORK_TIME_ZONE = 'America/New_York';
 
 const dayKey = (date: Date) => {
@@ -66,6 +74,25 @@ export function summarizeRevenue(records: RevenueRecord[]) {
   };
 }
 
+export function summarizeFinancials(
+  revenueRecords: RevenueRecord[],
+  refundRecords: RefundRecord[],
+) {
+  const grossCents = revenueRecords.reduce(
+    (total, record) => total + record.amountCents,
+    0,
+  );
+  const refundCents = refundRecords.reduce(
+    (total, record) => total + record.amountCents,
+    0,
+  );
+  return {
+    grossCents,
+    refundCents,
+    netCents: grossCents - refundCents,
+  };
+}
+
 export function buildDailyRevenueSeries(
   records: RevenueRecord[],
   start: Date,
@@ -95,6 +122,35 @@ export function buildDailyRevenueSeries(
   }
 
   return points;
+}
+
+export function buildDailyFinancialSeries(
+  revenueRecords: RevenueRecord[],
+  refundRecords: RefundRecord[],
+  start: Date,
+  end: Date,
+): DailyFinancialPoint[] {
+  const revenue = new Map(
+    buildDailyRevenueSeries(revenueRecords, start, end).map((point) => [
+      dayKey(point.date),
+      point,
+    ]),
+  );
+  const refunds = new Map<string, number>();
+  for (const record of refundRecords) {
+    const key = dayKey(record.occurredAt);
+    refunds.set(key, (refunds.get(key) ?? 0) + record.amountCents);
+  }
+
+  return [...revenue.values()].map((point) => {
+    const refundCents = refunds.get(dayKey(point.date)) ?? 0;
+    return {
+      ...point,
+      grossCents: point.amountCents,
+      refundCents,
+      netCents: point.amountCents - refundCents,
+    };
+  });
 }
 
 export function calculatePeriodTotals(records: RevenueRecord[], now = new Date()) {

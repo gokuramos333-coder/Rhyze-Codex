@@ -231,7 +231,7 @@ describe('admin activity feed and client metrics', () => {
     expect(source).toContain('attendanceRecords: activityAttendanceRecords');
     expect(source).toContain('SYNCED SALES LEDGER');
     expect(source).toContain('Total revenue');
-    expect(source).toContain('Somble transferred revenue + verified Rhyze Stripe purchases - refunds');
+    expect(source).toContain('Somble transferred revenue + verified Rhyze memberships, class packs, events, merchandise, and direct Stripe charges - refunds');
     expect(source).toContain("status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] }");
     expect(source).toContain('directStripeGrossRevenueCents');
     expect(source).toContain('directStripeRefundedRevenueCents');
