@@ -22,13 +22,13 @@ export default async function PublicSchedulePage({
   ]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-16">
+    <main className="mx-auto min-h-screen max-w-7xl overflow-x-hidden px-6 py-16">
       <p className="text-xs font-black uppercase tracking-[0.32em] text-rhyze-orange">
         Live studio calendar
       </p>
       <div className="mt-3 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="font-display text-6xl tracking-wider md:text-8xl">
+          <h1 className="max-w-full font-display text-5xl tracking-wide md:text-8xl md:tracking-wider">
             FIND YOUR RHYTHM
           </h1>
           <p className="mt-4 max-w-2xl text-rhyze-cream/65">
@@ -92,7 +92,7 @@ export default async function PublicSchedulePage({
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-orange">
                 {slot.category}
               </p>
-              <h2 className="mt-1 font-display text-4xl tracking-wider">
+              <h2 className="mt-1 max-w-full break-words font-display text-3xl tracking-wide md:text-4xl md:tracking-wider">
                 {slot.className}
               </h2>
               <p className="mt-2 text-sm text-rhyze-cream/60">
