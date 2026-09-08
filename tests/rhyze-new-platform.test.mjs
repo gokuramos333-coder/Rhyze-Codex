@@ -262,6 +262,20 @@ test('join page and pricing cards route through Rhyze-owned memberships', () => 
   assert.doesNotMatch(pageSource, /Somble|somble/);
 });
 
+test('public memberships preserve the selected plan through auth', () => {
+  const membershipsSource = readFileSync('app/memberships/page.tsx', 'utf8');
+  const signInSource = readFileSync('app/(auth)/sign-in/page.tsx', 'utf8');
+  const signUpSource = readFileSync('app/(auth)/sign-up/page.tsx', 'utf8');
+
+  assert.match(membershipsSource, /membershipDestination\(product\.slug, signedIn\)/);
+  assert.match(membershipsSource, /\/member\/membership\?plan=\$\{encodeURIComponent\(slug\)\}#available-plans/);
+  assert.match(membershipsSource, /\/sign-in\?callbackUrl=\$\{encodeURIComponent\(memberPath\)\}/);
+  assert.doesNotMatch(membershipsSource, /callbackUrl=\/memberships/);
+  assert.match(signInSource, /searchParams\.plan/);
+  assert.match(signInSource, /#available-plans/);
+  assert.match(signUpSource, /#available-plans/);
+});
+
 test('policies use the approved cancellation policy and no late-entry column', () => {
   const policiesSource = [
     readFileSync('app/policies/page.tsx', 'utf8'),

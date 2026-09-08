@@ -5,12 +5,19 @@ import { stripeIsConfigured } from '@/lib/payments/stripe';
 
 export const dynamic = 'force-dynamic';
 
+function membershipDestination(slug: string, signedIn: boolean): string {
+  const memberPath = `/member/membership?plan=${encodeURIComponent(slug)}#available-plans`;
+  return signedIn
+    ? memberPath
+    : `/sign-in?callbackUrl=${encodeURIComponent(memberPath)}`;
+}
+
 export default async function MembershipsPage() {
   const [session, products] = await Promise.all([
     auth(),
     prisma.product.findMany({ where: { isActive: true, isPublic: true }, orderBy: { priceCents: 'asc' } }),
   ]);
-  const destination = session?.user ? '/member/membership' : '/sign-in?callbackUrl=/memberships';
+  const signedIn = Boolean(session?.user);
   return (
     <main className="min-h-screen bg-rhyze-black px-6 py-24 text-rhyze-cream">
       <div className="mx-auto max-w-7xl">
@@ -24,7 +31,7 @@ export default async function MembershipsPage() {
               <h2 className="mt-3 font-display text-4xl tracking-wider">{product.name}</h2>
               <p className="mt-3 flex-1 text-sm text-rhyze-cream/60">{product.description}</p>
               <p className="mt-6 text-3xl font-black">${(product.priceCents / 100).toFixed(0)}<span className="text-xs text-rhyze-cream/50">{product.billingInterval === 'MONTHLY' ? '/month' : ''}</span></p>
-              <Link href={destination} className="mt-5 bg-rhyze-gradient px-4 py-3 text-center text-xs font-black uppercase tracking-widest">Choose plan</Link>
+              <Link href={membershipDestination(product.slug, signedIn)} className="mt-5 bg-rhyze-gradient px-4 py-3 text-center text-xs font-black uppercase tracking-widest">Choose plan</Link>
             </article>
           ))}
         </div>

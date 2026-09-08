@@ -10,16 +10,18 @@ const errorMessages: Record<string, string> = {
 export default function SignInPage({
   searchParams,
 }: {
-  searchParams: { error?: string; reset?: string; callbackUrl?: string };
+  searchParams: { error?: string; reset?: string; callbackUrl?: string; plan?: string };
 }) {
   const error = searchParams.error
     ? errorMessages[searchParams.error]
     : undefined;
+  const requestedCallback = searchParams.callbackUrl ?? '';
   const callbackUrl =
-    searchParams.callbackUrl?.startsWith('/') &&
-    !searchParams.callbackUrl.startsWith('//')
-      ? searchParams.callbackUrl
-      : '';
+    requestedCallback.startsWith('/') && !requestedCallback.startsWith('//')
+      ? requestedCallback
+      : searchParams.plan
+        ? `/member/membership?plan=${encodeURIComponent(searchParams.plan)}#available-plans`
+        : '';
   const signUpHref = callbackUrl
     ? `/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`
     : '/sign-up';

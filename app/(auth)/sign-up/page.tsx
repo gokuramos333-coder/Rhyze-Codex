@@ -28,7 +28,7 @@ export default function SignUpPage({
     requestedCallback.startsWith('/') && !requestedCallback.startsWith('//')
       ? requestedCallback
       : searchParams.plan
-        ? `/member/membership?plan=${encodeURIComponent(searchParams.plan)}`
+        ? `/member/membership?plan=${encodeURIComponent(searchParams.plan)}#available-plans`
         : '';
   const signInHref = callbackUrl
     ? `/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`
