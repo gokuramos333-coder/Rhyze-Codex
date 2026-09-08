@@ -10,6 +10,9 @@ import {
 import { prisma } from '@/lib/db/prisma';
 import { calculateSombleMetrics } from '@/lib/admin/somble-metrics';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function money(cents: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -45,6 +48,12 @@ export default async function AdminHomePage({
     upcoming,
     qualifyingMemberships,
     nativeRevenue,
+    paidNativePurchaseCount,
+    memberCount,
+    activeMemberCount,
+    recentNativeClients,
+    recentPurchases,
+    recentBookings,
     productCount,
     classCount,
   ] = await Promise.all([
@@ -88,6 +97,34 @@ export default async function AdminHomePage({
       where: { status: 'PAID' },
       _sum: { amountCents: true },
     }),
+    prisma.purchase.count({ where: { status: 'PAID' } }),
+    prisma.user.count({ where: { role: 'MEMBER' } }),
+    prisma.user.count({ where: { role: 'MEMBER', status: 'ACTIVE' } }),
+    prisma.user.findMany({
+      where: { role: 'MEMBER' },
+      include: {
+        _count: { select: { bookings: true, purchases: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 12,
+    }),
+    prisma.purchase.findMany({
+      include: { user: true, product: true },
+      orderBy: { createdAt: 'desc' },
+      take: 14,
+    }),
+    prisma.booking.findMany({
+      include: {
+        user: true,
+        occurrence: {
+          include: {
+            template: true,
+          },
+        },
+      },
+      orderBy: { bookedAt: 'desc' },
+      take: 14,
+    }),
     prisma.product.count({ where: { isActive: true } }),
     prisma.classTemplate.count({ where: { isActive: true } }),
   ]);
@@ -97,6 +134,29 @@ export default async function AdminHomePage({
   ).size;
   const downloadedCount = profiles.filter((item) => item.appDownloaded).length;
   const activity = [
+    ...recentBookings.map((item) => ({
+      id: `booking-${item.id}`,
+      at: item.bookedAt,
+      name: item.user.name || item.user.email,
+      detail: `${item.status.toLowerCase()} booking · ${item.occurrence.template.name} · ${dateTime(
+        item.occurrence.startAt,
+      )}`,
+      href: `/admin/schedule/${item.occurrenceId}/roster`,
+    })),
+    ...recentPurchases.map((item) => ({
+      id: `purchase-${item.id}`,
+      at: item.paidAt ?? item.createdAt,
+      name: item.user.name || item.user.email,
+      detail: `${item.status.toLowerCase()} ${item.product.name} · ${money(item.amountCents)}`,
+      href: '/admin/payments',
+    })),
+    ...recentNativeClients.map((item) => ({
+      id: `native-client-${item.id}`,
+      at: item.createdAt,
+      name: item.name || item.email,
+      detail: `Rhyze account · ${item.status.toLowerCase()} · ${item._count.bookings} bookings · ${item._count.purchases} purchases`,
+      href: `/admin/members?q=${encodeURIComponent(item.email)}`,
+    })),
     ...transactions.map((item) => ({
       id: `transaction-${item.id}`,
       at: item.transferredAt,
@@ -148,16 +208,16 @@ export default async function AdminHomePage({
 
       <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Somble transferred revenue"
-          value={money(metrics.transferredRevenueCents)}
-          detail={`${transactions.length} reconciled transfers`}
+          label="Live Stripe revenue"
+          value={money(nativeRevenue._sum.amountCents ?? 0)}
+          detail={`${paidNativePurchaseCount} paid purchases`}
           href="/admin/payments"
           icon={<CircleDollarSign />}
         />
         <Metric
-          label="Imported clients"
-          value={`${profiles.length}`}
-          detail={`${metrics.uniqueCustomerCount} with transfers`}
+          label="Current clients"
+          value={`${memberCount}`}
+          detail={`${activeMemberCount} active accounts · ${profiles.length} imported`}
           href="/admin/members"
           icon={<Users />}
         />
@@ -207,6 +267,8 @@ export default async function AdminHomePage({
               </h2>
               <dl className="mt-5 grid gap-3">
                 <Stat label="Total imported clients" value={profiles.length} />
+                <Stat label="Current Rhyze clients" value={memberCount} />
+                <Stat label="Active Rhyze accounts" value={activeMemberCount} />
                 <Stat label="App downloaded" value={downloadedCount} />
                 <Stat
                   label="Average transfer/customer"
@@ -252,8 +314,8 @@ export default async function AdminHomePage({
                   MY COMMUNITY
                 </h2>
                 <p className="text-sm font-bold text-rhyze-black/45">
-                  {profiles.length} imported clients · {downloadedCount} app
-                  downloads
+                  {memberCount} current clients · {activeMemberCount} active accounts ·{' '}
+                  {profiles.length} imported Somble records
                 </p>
               </div>
               <Link
@@ -264,18 +326,19 @@ export default async function AdminHomePage({
               </Link>
             </div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {profiles.slice(0, 12).map((profile) => (
+              {recentNativeClients.map((client) => (
                 <Link
-                  href={`/admin/members?q=${encodeURIComponent(profile.user.email)}`}
-                  key={profile.id}
+                  href={`/admin/members?q=${encodeURIComponent(client.email)}`}
+                  key={client.id}
                   className="border-l-4 border-rhyze-orange bg-[#f5f0e6] p-4 hover:bg-rhyze-gold/15"
                 >
                   <strong className="block">
-                    {profile.user.name || profile.user.email}
+                    {client.name || client.email}
                   </strong>
                   <span className="mt-1 block text-xs text-rhyze-black/50">
-                    {profile.sourceStatus} ·{' '}
-                    {profile.user._count.sombleTransactions} transfers
+                    Joined {dateTime(client.createdAt)} · {client.status.toLowerCase()} ·{' '}
+                    {client._count.bookings} bookings · {client._count.purchases}{' '}
+                    purchases
                   </span>
                 </Link>
               ))}
@@ -330,7 +393,7 @@ export default async function AdminHomePage({
           <div className="overflow-x-auto p-5">
             <div className="mb-5 flex items-center justify-between gap-4">
               <h2 className="font-display text-4xl tracking-wider">
-                SOMBLE TRANSFER LEDGER
+                LIVE SALES LEDGER
               </h2>
               <Link
                 href="/admin/payments"
@@ -346,19 +409,19 @@ export default async function AdminHomePage({
                   <th>Customer</th>
                   <th>Type</th>
                   <th>Transferred amount</th>
-                  <th>Payment ID</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.slice(0, 12).map((item) => (
+                {recentPurchases.map((item) => (
                   <tr key={item.id} className="border-b border-black/5">
-                    <td className="p-3">{dateTime(item.transferredAt)}</td>
-                    <td>{item.user.name || item.supporterName}</td>
-                    <td>{item.contentType}</td>
+                    <td className="p-3">{dateTime(item.paidAt ?? item.createdAt)}</td>
+                    <td>{item.user.name || item.user.email}</td>
+                    <td>{item.product.name}</td>
                     <td className="font-black">
                       {money(item.amountCents)}
                     </td>
-                    <td className="font-mono text-xs">{item.paymentId}</td>
+                    <td className="font-mono text-xs">{item.status}</td>
                   </tr>
                 ))}
               </tbody>
