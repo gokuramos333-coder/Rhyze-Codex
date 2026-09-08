@@ -22,6 +22,7 @@ describe('reconciled ADMIN revenue', () => {
         paidAt: septemberCharge,
         createdAt: septemberCharge,
         userId: 'member-1',
+        stripePaymentIntentId: 'pi_purchase',
         product: { name: 'Memberships and classes' },
       }, {
         id: 'original-membership-purchase',
@@ -29,6 +30,7 @@ describe('reconciled ADMIN revenue', () => {
         paidAt: new Date('2026-08-03T14:00:00.000Z'),
         createdAt: new Date('2026-08-03T14:00:00.000Z'),
         userId: 'member-3',
+        stripePaymentIntentId: 'pi_original_membership',
         product: { name: 'OG Rhyze Tribe' },
       }],
       commerceOrders: [{
@@ -38,6 +40,7 @@ describe('reconciled ADMIN revenue', () => {
         createdAt: septemberCharge,
         userId: 'member-2',
         kind: 'EVENT',
+        stripePaymentIntentId: 'pi_order',
       }],
       paymentRecords: [
         {
@@ -45,8 +48,8 @@ describe('reconciled ADMIN revenue', () => {
           amountCents: 43_300,
           occurredAt: septemberCharge,
           userId: 'member-1',
-          membershipId: null,
-          purchaseId: 'purchase-1',
+          membershipId: 'membership-1',
+          purchaseId: null,
           commerceOrderId: null,
           stripeEventId: 'evt_purchase',
           stripePaymentIntentId: 'pi_purchase',
@@ -126,6 +129,7 @@ describe('reconciled ADMIN revenue', () => {
         paidAt,
         createdAt: paidAt,
         userId: 'member-1',
+        stripePaymentIntentId: 'pi_initial_membership',
         product: { name: 'OG Rhyze Tribe' },
       }],
       commerceOrders: [],

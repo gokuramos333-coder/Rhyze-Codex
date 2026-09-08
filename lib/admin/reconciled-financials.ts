@@ -15,6 +15,7 @@ type PurchaseRevenueInput = {
   paidAt: Date | null;
   createdAt: Date;
   userId: string;
+  stripePaymentIntentId?: string | null;
   product: { name: string };
 };
 
@@ -25,6 +26,7 @@ type CommerceRevenueInput = {
   createdAt: Date;
   userId: string | null;
   kind: string;
+  stripePaymentIntentId?: string | null;
 };
 
 type StripeRevenueInput = {
@@ -49,10 +51,15 @@ function purchaseHasCanonicalPaymentRecord(
   if (!purchase.id) return false;
   const purchasePaidAt = purchase.paidAt || purchase.createdAt;
   return paymentRecords.some((record) =>
-    record.purchaseId === purchase.id &&
     (
-      record.kind !== 'MEMBERSHIP_RENEWAL' ||
-      Math.abs(record.occurredAt.getTime() - purchasePaidAt.getTime()) <= MATCHED_PAYMENT_WINDOW_MS
+      (record.stripePaymentIntentId && record.stripePaymentIntentId === purchase.stripePaymentIntentId) ||
+      (
+        record.purchaseId === purchase.id &&
+        (
+          record.kind !== 'MEMBERSHIP_RENEWAL' ||
+          Math.abs(record.occurredAt.getTime() - purchasePaidAt.getTime()) <= MATCHED_PAYMENT_WINDOW_MS
+        )
+      )
     ),
   );
 }
@@ -87,11 +94,21 @@ export function buildReconciledRevenueRecords(input: {
   const representedCommerceOrderIds = new Set(
     verifiedPaymentRecords.flatMap((record) => record.commerceOrderId ? [record.commerceOrderId] : []),
   );
+  const representedPaymentIntentIds = new Set(
+    verifiedPaymentRecords.flatMap((record) => record.stripePaymentIntentId ? [record.stripePaymentIntentId] : []),
+  );
   const fallbackCommerceOrders = input.commerceOrders.filter(
-    (order) => order.amountCents > 0 && !representedCommerceOrderIds.has(order.id),
+    (order) => order.amountCents > 0 &&
+      !representedCommerceOrderIds.has(order.id) &&
+      !(order.stripePaymentIntentId && representedPaymentIntentIds.has(order.stripePaymentIntentId)),
   );
   const purchasesById = new Map(
     input.purchases.flatMap((purchase) => purchase.id ? [[purchase.id, purchase] as const] : []),
+  );
+  const purchasesByPaymentIntentId = new Map(
+    input.purchases.flatMap((purchase) => purchase.stripePaymentIntentId
+      ? [[purchase.stripePaymentIntentId, purchase] as const]
+      : []),
   );
   const commerceOrdersById = new Map(
     input.commerceOrders.map((order) => [order.id, order] as const),
@@ -127,6 +144,7 @@ export function buildReconciledRevenueRecords(input: {
         (item.purchaseId ? `purchase-${item.purchaseId}` : null) ||
         `commerce-${item.commerceOrderId}`,
       type: (item.purchaseId ? purchasesById.get(item.purchaseId)?.product.name : null) ||
+        (item.stripePaymentIntentId ? purchasesByPaymentIntentId.get(item.stripePaymentIntentId)?.product.name : null) ||
         (item.commerceOrderId ? commerceOrdersById.get(item.commerceOrderId)?.kind.replaceAll('_', ' ') : null) ||
         item.kind.replaceAll('_', ' '),
       source: 'RHYZE' as const,
