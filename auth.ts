@@ -9,6 +9,7 @@ import { AUTH_SESSION_MAX_AGE_SECONDS } from '@/lib/auth/session-config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  trustHost: true,
   session: { strategy: 'jwt', maxAge: AUTH_SESSION_MAX_AGE_SECONDS },
   pages: {
     signIn: '/sign-in',
