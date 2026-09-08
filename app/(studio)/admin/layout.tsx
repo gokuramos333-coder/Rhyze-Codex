@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { PortalShell } from '@/components/app-shell/PortalShell';
-import { requireApprovedOwner } from '@/lib/auth/session';
+import { requireAdminAccess } from '@/lib/auth/session';
 
 const navigation = [
   { href: '/admin', label: 'Overview' },
@@ -23,7 +23,7 @@ export default async function AdminLayout({
 }: {
   children: ReactNode;
 }) {
-  const user = await requireApprovedOwner();
+  const user = await requireAdminAccess();
 
   return (
     <PortalShell area="ADMIN" user={user} navigation={navigation}>

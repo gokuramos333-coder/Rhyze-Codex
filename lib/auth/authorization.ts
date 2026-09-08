@@ -4,7 +4,7 @@ export type PortalArea = 'admin' | 'instructor' | 'member';
 
 const areaRoles: Record<PortalArea, readonly StudioRole[]> = {
   admin: ['OWNER', 'ADMIN', 'MANAGER'],
-  instructor: ['INSTRUCTOR'],
+  instructor: ['OWNER', 'ADMIN', 'MANAGER', 'INSTRUCTOR'],
   member: ['OWNER', 'ADMIN', 'MANAGER', 'INSTRUCTOR', 'MEMBER'],
 };
 

@@ -46,6 +46,16 @@ export async function requireArea(area: PortalArea): Promise<ActiveUser> {
   return user;
 }
 
+export async function requireAdminAccess(): Promise<ActiveUser> {
+  const user = await requireActiveUser();
+
+  if (!canAccessArea(user.role, 'admin') && !isApprovedOwner({ ...user, status: 'ACTIVE' })) {
+    redirect(dashboardPathForRole(user.role));
+  }
+
+  return user;
+}
+
 export async function requireApprovedOwner(): Promise<ActiveUser> {
   const user = await requireActiveUser();
 

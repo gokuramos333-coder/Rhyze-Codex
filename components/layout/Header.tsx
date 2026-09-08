@@ -10,6 +10,7 @@ import { primaryNav, site } from '@/lib/site';
 import { Button } from '@/components/ui/Button';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { CartButton } from '@/components/layout/CartButton';
+import { canAccessArea } from '@/lib/auth/authorization';
 import { isApprovedOwner } from '@/lib/auth/owner-access';
 
 export function Header() {
@@ -33,11 +34,12 @@ export function Header() {
       .then((session) => {
         if (!active || !session?.user?.email) return;
         setShowAdmin(
-          isApprovedOwner({
-            email: session.user.email,
-            role: session.user.role,
-            status: session.user.status,
-          }),
+          canAccessArea(session.user.role, 'admin') ||
+            isApprovedOwner({
+              email: session.user.email,
+              role: session.user.role,
+              status: session.user.status,
+            }),
         );
       })
       .catch(() => setShowAdmin(false));

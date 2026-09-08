@@ -15,9 +15,18 @@ describe('portal authorization', () => {
 
   it('allows staff roles into the admin area but not members or instructors', () => {
     expect(canAccessArea('OWNER', 'admin')).toBe(true);
+    expect(canAccessArea('ADMIN', 'admin')).toBe(true);
     expect(canAccessArea('MANAGER', 'admin')).toBe(true);
     expect(canAccessArea('INSTRUCTOR', 'admin')).toBe(false);
     expect(canAccessArea('MEMBER', 'admin')).toBe(false);
+  });
+
+  it('allows staff to use instructor operational views without switching accounts', () => {
+    expect(canAccessArea('OWNER', 'instructor')).toBe(true);
+    expect(canAccessArea('ADMIN', 'instructor')).toBe(true);
+    expect(canAccessArea('MANAGER', 'instructor')).toBe(true);
+    expect(canAccessArea('INSTRUCTOR', 'instructor')).toBe(true);
+    expect(canAccessArea('MEMBER', 'instructor')).toBe(false);
   });
 
   it('allows every active account into its self-service member area', () => {
