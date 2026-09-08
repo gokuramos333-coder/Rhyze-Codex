@@ -40,6 +40,36 @@ type StripeRevenueInput = {
   kind: string;
 };
 
+const INITIAL_MEMBERSHIP_PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1_000;
+
+function isDistinctMembershipRenewal(
+  record: StripeRevenueInput,
+  purchasesById: Map<string, PurchaseRevenueInput>,
+) {
+  if (record.kind !== 'MEMBERSHIP_RENEWAL' || !record.purchaseId) return false;
+  const originalPurchase = purchasesById.get(record.purchaseId);
+  if (!originalPurchase) return true;
+  const originalPaidAt = originalPurchase.paidAt || originalPurchase.createdAt;
+  return Math.abs(record.occurredAt.getTime() - originalPaidAt.getTime()) >
+    INITIAL_MEMBERSHIP_PAYMENT_WINDOW_MS;
+}
+
+export function selectStandaloneRevenuePaymentRecords<T extends StripeRevenueInput>(
+  records: T[],
+  purchases: PurchaseRevenueInput[],
+) {
+  const purchasesById = new Map(
+    purchases.flatMap((purchase) => purchase.id ? [[purchase.id, purchase] as const] : []),
+  );
+  return records.filter(
+    (record) =>
+      (record.userId || record.membershipId) &&
+      !record.commerceOrderId &&
+      (!record.purchaseId || isDistinctMembershipRenewal(record, purchasesById)) &&
+      record.amountCents > 0,
+  );
+}
+
 export function buildReconciledRevenueRecords(input: {
   sombleTransactions: SombleRevenueInput[];
   purchases: PurchaseRevenueInput[];
@@ -50,12 +80,9 @@ export function buildReconciledRevenueRecords(input: {
     input.paymentRecords,
     input.sombleTransactions,
   );
-  const standaloneMemberPayments = visiblePaymentRecords.filter(
-    (record) =>
-      (record.userId || record.membershipId) &&
-      !record.purchaseId &&
-      !record.commerceOrderId &&
-      record.amountCents > 0,
+  const standaloneMemberPayments = selectStandaloneRevenuePaymentRecords(
+    visiblePaymentRecords,
+    input.purchases,
   );
 
   return [

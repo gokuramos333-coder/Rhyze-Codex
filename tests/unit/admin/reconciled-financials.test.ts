@@ -23,6 +23,13 @@ describe('reconciled ADMIN revenue', () => {
         createdAt: septemberCharge,
         userId: 'member-1',
         product: { name: 'Memberships and classes' },
+      }, {
+        id: 'original-membership-purchase',
+        amountCents: 9_200,
+        paidAt: new Date('2026-08-03T14:00:00.000Z'),
+        createdAt: new Date('2026-08-03T14:00:00.000Z'),
+        userId: 'member-3',
+        product: { name: 'OG Rhyze Tribe' },
       }],
       commerceOrders: [{
         id: 'order-1',
@@ -63,7 +70,7 @@ describe('reconciled ADMIN revenue', () => {
           occurredAt: septemberCharge,
           userId: null,
           membershipId: 'membership-3',
-          purchaseId: null,
+          purchaseId: 'original-membership-purchase',
           commerceOrderId: null,
           stripeEventId: 'evt_renewal',
           stripePaymentIntentId: 'pi_renewal',
@@ -106,6 +113,40 @@ describe('reconciled ADMIN revenue', () => {
       grossCents: 106_500,
       refundCents: 0,
       netCents: 106_500,
+    });
+  });
+
+  it('does not count the initial membership invoice twice', () => {
+    const paidAt = new Date('2026-09-03T14:00:00.000Z');
+    const records = buildReconciledRevenueRecords({
+      sombleTransactions: [],
+      purchases: [{
+        id: 'initial-membership-purchase',
+        amountCents: 9_200,
+        paidAt,
+        createdAt: paidAt,
+        userId: 'member-1',
+        product: { name: 'OG Rhyze Tribe' },
+      }],
+      commerceOrders: [],
+      paymentRecords: [{
+        id: 'initial-membership-invoice',
+        amountCents: 9_200,
+        occurredAt: new Date(paidAt.getTime() + 60_000),
+        userId: 'member-1',
+        membershipId: 'membership-1',
+        purchaseId: 'initial-membership-purchase',
+        commerceOrderId: null,
+        stripeEventId: 'evt_initial_membership',
+        stripePaymentIntentId: 'pi_initial_membership',
+        kind: 'MEMBERSHIP_RENEWAL',
+      }],
+    });
+
+    expect(summarizeFinancials(records, [])).toEqual({
+      grossCents: 9_200,
+      refundCents: 0,
+      netCents: 9_200,
     });
   });
 });
