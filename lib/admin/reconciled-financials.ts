@@ -44,24 +44,40 @@ type StripeRevenueInput = {
 
 const MATCHED_PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
-function purchaseHasCanonicalPaymentRecord(
-  purchase: PurchaseRevenueInput,
+function fallbackPurchasesWithoutCanonicalPayment(
+  purchases: PurchaseRevenueInput[],
   paymentRecords: StripeRevenueInput[],
 ) {
-  if (!purchase.id) return false;
-  const purchasePaidAt = purchase.paidAt || purchase.createdAt;
-  return paymentRecords.some((record) =>
-    (
-      (record.stripePaymentIntentId && record.stripePaymentIntentId === purchase.stripePaymentIntentId) ||
-      (
+  const matchedPaymentRecordIds = new Set<string>();
+  return purchases.filter((purchase) => {
+    if (purchase.amountCents <= 0) return false;
+    const purchasePaidAt = purchase.paidAt || purchase.createdAt;
+    const matchingRecord = paymentRecords.find((record) => {
+      if (matchedPaymentRecordIds.has(record.id)) return false;
+      const withinPaymentWindow = Math.abs(
+        record.occurredAt.getTime() - purchasePaidAt.getTime(),
+      ) <= MATCHED_PAYMENT_WINDOW_MS;
+      const exactPaymentIntent = Boolean(
+        record.stripePaymentIntentId &&
+        record.stripePaymentIntentId === purchase.stripePaymentIntentId,
+      );
+      const exactPurchase = Boolean(
+        purchase.id &&
         record.purchaseId === purchase.id &&
-        (
-          record.kind !== 'MEMBERSHIP_RENEWAL' ||
-          Math.abs(record.occurredAt.getTime() - purchasePaidAt.getTime()) <= MATCHED_PAYMENT_WINDOW_MS
-        )
-      )
-    ),
-  );
+        (record.kind !== 'MEMBERSHIP_RENEWAL' || withinPaymentWindow),
+      );
+      const sameCustomerCharge = Boolean(
+        !record.commerceOrderId &&
+        record.userId === purchase.userId &&
+        record.amountCents === purchase.amountCents &&
+        withinPaymentWindow,
+      );
+      return exactPaymentIntent || exactPurchase || sameCustomerCharge;
+    });
+    if (!matchingRecord) return true;
+    matchedPaymentRecordIds.add(matchingRecord.id);
+    return false;
+  });
 }
 
 export function selectVerifiedRevenuePaymentRecords<T extends StripeRevenueInput>(
@@ -87,9 +103,9 @@ export function buildReconciledRevenueRecords(input: {
   const verifiedPaymentRecords = selectVerifiedRevenuePaymentRecords(
     visiblePaymentRecords,
   );
-  const fallbackPurchases = input.purchases.filter(
-    (purchase) => purchase.amountCents > 0 &&
-      !purchaseHasCanonicalPaymentRecord(purchase, verifiedPaymentRecords),
+  const fallbackPurchases = fallbackPurchasesWithoutCanonicalPayment(
+    input.purchases,
+    verifiedPaymentRecords,
   );
   const representedCommerceOrderIds = new Set(
     verifiedPaymentRecords.flatMap((record) => record.commerceOrderId ? [record.commerceOrderId] : []),
