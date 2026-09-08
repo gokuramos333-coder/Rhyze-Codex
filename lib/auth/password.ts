@@ -1,5 +1,3 @@
-import { hash, verify } from '@node-rs/argon2';
-
 const passwordRules = [
   {
     message: 'Use at least 9 characters.',
@@ -30,7 +28,13 @@ export function validatePassword(password: string): {
   return { valid: errors.length === 0, errors };
 }
 
+async function loadArgon2() {
+  return import('@node-rs/argon2');
+}
+
 export async function hashPassword(password: string): Promise<string> {
+  const { hash } = await loadArgon2();
+
   return hash(password, {
     algorithm: 2,
     memoryCost: 19456,
@@ -45,6 +49,7 @@ export async function verifyPassword(
   password: string,
 ): Promise<boolean> {
   try {
+    const { verify } = await loadArgon2();
     return await verify(passwordHash, password);
   } catch {
     return false;
