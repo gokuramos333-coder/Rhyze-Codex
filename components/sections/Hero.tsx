@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 
 export function Hero() {
   return (
-    <section className="grain relative flex min-h-[92vh] items-center overflow-hidden bg-rhyze-black">
+    <section className="grain relative flex min-h-[100svh] items-center overflow-hidden bg-rhyze-black px-0 pb-20 pt-32 sm:pt-36 lg:pt-40">
       {/* Background photo */}
       <Image
         src="/founders/main-intro.jpg"
@@ -45,7 +45,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-rhyze-coral/30 bg-rhyze-coral/10 px-4 py-1.5 text-xs uppercase tracking-[0.2em] text-rhyze-coral"
+          className="mb-6 inline-flex max-w-[calc(100vw-3rem)] flex-wrap items-center justify-center gap-2 rounded-full border border-rhyze-coral/30 bg-rhyze-coral/10 px-4 py-1.5 text-center text-[10px] uppercase tracking-[0.14em] text-rhyze-coral sm:text-xs sm:tracking-[0.2em]"
         >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rhyze-coral" />
           Dance - Yoga - Strength - Community

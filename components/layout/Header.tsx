@@ -56,20 +56,20 @@ export function Header() {
             : 'bg-transparent',
         )}
       >
-        <div className="mx-auto flex h-44 max-w-7xl items-center justify-between gap-6 px-6">
+        <div className="mx-auto flex h-24 max-w-7xl items-center justify-between gap-3 px-4 sm:h-28 sm:px-6 lg:h-32 lg:gap-6">
           <Link
             href="/"
             aria-label={`${site.name}, Home`}
             className="focus-ring flex shrink-0 items-center gap-3 rounded-md"
           >
-            <span className="relative block h-20 w-28 shrink-0 md:h-24 md:w-36">
+            <span className="relative block h-14 w-20 shrink-0 sm:h-16 sm:w-24 lg:h-24 lg:w-36">
               <Image
                 src="/brand/rhyze-logo-header.png"
                 alt=""
                 fill
                 priority
                 unoptimized
-                sizes="(min-width: 768px) 144px, 112px"
+                sizes="(min-width: 1024px) 144px, (min-width: 640px) 96px, 80px"
                 className="object-contain"
               />
             </span>
@@ -155,7 +155,7 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-2 lg:hidden">
-            <CartButton />
+            <CartButton className="p-2" />
             <button
               type="button"
               aria-label="Open menu"
