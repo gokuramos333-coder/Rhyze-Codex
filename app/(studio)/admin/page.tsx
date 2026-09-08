@@ -30,19 +30,20 @@ function dateTime(date: Date) {
 export default async function AdminHomePage({
   searchParams,
 }: {
-  searchParams: { panel?: string };
+  searchParams: Promise<{ panel?: string }>;
 }) {
+  const params = await searchParams;
   const panel = ['activity', 'community', 'upcoming', 'sales'].includes(
-    searchParams.panel ?? '',
+    params.panel ?? '',
   )
-    ? searchParams.panel!
+    ? params.panel!
     : 'activity';
   const now = new Date();
   const [
     profiles,
     transactions,
     upcoming,
-    activeMemberships,
+    qualifyingMemberships,
     nativeRevenue,
     productCount,
     classCount,
@@ -71,8 +72,17 @@ export default async function AdminHomePage({
       orderBy: { startAt: 'asc' },
       take: 8,
     }),
-    prisma.membership.count({
-      where: { status: { in: ['ACTIVE', 'TRIALING'] } },
+    prisma.membership.findMany({
+      where: {
+        status: { in: ['ACTIVE', 'TRIALING'] },
+        product: {
+          OR: [
+            { kind: { in: ['MONTHLY_UNLIMITED', 'LIMITED_MEMBERSHIP', 'VIP'] } },
+            { kind: 'CLASS_PACK', includedCredits: 8 },
+          ],
+        },
+      },
+      select: { userId: true },
     }),
     prisma.purchase.aggregate({
       where: { status: 'PAID' },
@@ -82,6 +92,9 @@ export default async function AdminHomePage({
     prisma.classTemplate.count({ where: { isActive: true } }),
   ]);
   const metrics = calculateSombleMetrics(transactions);
+  const activeMembershipHolderCount = new Set(
+    qualifyingMemberships.map((membership) => membership.userId),
+  ).size;
   const downloadedCount = profiles.filter((item) => item.appDownloaded).length;
   const activity = [
     ...transactions.map((item) => ({
@@ -149,10 +162,10 @@ export default async function AdminHomePage({
           icon={<Users />}
         />
         <Metric
-          label="Historical subscriptions"
-          value={`${transactions.filter((item) => item.contentType === 'Subscription').length}`}
-          detail={`${metrics.revenueByType.Subscription ? money(metrics.revenueByType.Subscription) : '$0.00'} transferred · ${activeMemberships} native active`}
-          href="/admin/products"
+          label="Active memberships"
+          value={`${activeMembershipHolderCount}`}
+          detail="Memberships + 8 Class Pack holders"
+          href="/admin/members?membershipHolders=active"
           icon={<ArrowRight />}
         />
         <Metric

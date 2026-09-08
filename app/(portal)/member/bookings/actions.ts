@@ -4,39 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import {
-  cancellationOutcome,
-  complimentaryStandardAccessCanBook,
-  creditAccountCanBook,
-  instructorAugustStandardClassAccess,
-  standardSingleClassCreditCanBook,
-  waitlistAvailability,
-} from '@/lib/domain/bookings/booking-rules';
+import { cancellationOutcome } from '@/lib/domain/bookings/booking-rules';
 import { queueEmail } from '@/lib/notifications/email-queue';
-import {
-  evaluateIntroTrialBooking,
-  INTRO_TRIAL_REMINDER_LEAD_MS,
-} from '@/lib/domain/bookings/intro-trial-rules';
-import { bookingWaiverDestination } from '@/lib/domain/waivers/acceptance';
-import { availableMembershipCredits } from '@/lib/domain/credits/membership-renewal';
-import { notifyAdminBookingCancellation } from '@/lib/notifications/admin-booking-cancellations';
-
-function emailDate(value: Date) {
-  return value.toLocaleDateString('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
-}
-
-function emailTime(value: Date) {
-  return value.toLocaleTimeString('en-US', {
-    timeZone: 'America/New_York',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 export async function bookOccurrenceAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
@@ -46,7 +15,6 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
     const occurrence = await tx.classOccurrence.findUnique({
       where: { id: occurrenceId },
-      include: { template: true, instructor: { select: { name: true } } },
     });
     if (!occurrence || occurrence.status !== 'SCHEDULED') return 'unavailable';
 
@@ -88,45 +56,14 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     });
     if (overlap) return 'overlap';
 
-    const nativeBooked = await tx.booking.count({
+    const booked = await tx.booking.count({
       where: { occurrenceId, status: 'CONFIRMED' },
     });
-    const booked = nativeBooked + occurrence.historicalSignupCount;
     if (booked >= occurrence.capacity) {
-      const existingWaitlist = await tx.waitlistEntry.findUnique({
+      await tx.waitlistEntry.upsert({
         where: { occurrenceId_userId: { occurrenceId, userId: user.id } },
-      });
-      if (existingWaitlist?.status === 'WAITING') return 'waitlist';
-
-      const waitingCount = await tx.waitlistEntry.count({
-        where: { occurrenceId, status: 'WAITING' },
-      });
-      if (!waitlistAvailability(waitingCount).canJoin) return 'waitlist-full';
-
-      const joinedAt = new Date();
-      const waitlist = await tx.waitlistEntry.upsert({
-        where: { occurrenceId_userId: { occurrenceId, userId: user.id } },
-        update: { status: 'WAITING', joinedAt, promotedAt: null, leftAt: null },
-        create: { occurrenceId, userId: user.id, joinedAt },
-      });
-      const waitlistPosition = await tx.waitlistEntry.count({
-        where: { occurrenceId, status: 'WAITING', joinedAt: { lte: waitlist.joinedAt } },
-      });
-      await queueEmail(tx, {
-        userId: user.id,
-        to: user.email,
-        subject: `You’re on the waitlist for ${occurrence.template.name}`,
-        template: 'WAITLIST_JOINED',
-        payload: {
-          name: user.name || 'Rhyzer',
-          className: occurrence.template.name,
-          instructorName: occurrence.instructor?.name || 'Rhyze instructor',
-          classDate: emailDate(occurrence.startAt),
-          classTime: emailTime(occurrence.startAt),
-          waitlistPosition: String(waitlistPosition),
-          bookingsUrl: '/member/bookings',
-        },
-        dedupeKey: `waitlist-joined:${waitlist.id}:${joinedAt.toISOString()}`,
+        update: { status: 'WAITING', leftAt: null },
+        create: { occurrenceId, userId: user.id },
       });
       return 'waitlist';
     }
@@ -137,135 +74,35 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         validFrom: { lte: new Date() },
         OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
       },
-      include: {
-        entries: true,
-        sourcePurchase: {
-          include: {
-            membership: { select: { status: true } },
-            product: { select: { includedCredits: true, kind: true, customPlanType: true } },
-          },
-        },
-      },
+      include: { entries: true },
       orderBy: { createdAt: 'asc' },
     });
     const account = accounts.find(
-      (item) => {
-        const productKind = item.sourcePurchase?.product.kind ?? null;
-        const isSingleClassCredit = productKind === 'DROP_IN';
-        const productAllowsOccurrence = complimentaryStandardAccessCanBook({
-          customPlanType: item.sourcePurchase?.product.customPlanType,
-          isEvent: occurrence.template.isEvent,
-          durationMinutes: occurrence.template.durationMinutes,
-        });
-        const validSingleClassCredit = !isSingleClassCredit || standardSingleClassCreditCanBook({
-          productKind,
-          paidAt: item.sourcePurchase?.paidAt,
-          occurrenceStartsAt: occurrence.startAt,
-          isEvent: occurrence.template.isEvent,
-          validUntil: item.validUntil,
-        });
-        return (
-          productAllowsOccurrence &&
-          creditAccountCanBook({ membershipStatus: item.sourcePurchase?.membership?.status ?? null }) &&
-          validSingleClassCredit &&
-          (item.isUnlimited ||
-            availableMembershipCredits({
-              entries: item.entries,
-              includedCredits: item.sourcePurchase?.product.includedCredits ?? null,
-            }) > 0)
-        );
-      },
+      (item) =>
+        item.isUnlimited ||
+        item.entries.reduce((total, entry) => total + entry.quantity, 0) > 0,
     );
-    const trial = await tx.membership.findFirst({
-      where: {
-        userId: user.id,
-        status: { in: ['TRIALING', 'ACTIVE'] },
-        product: { kind: 'INTRO_TRIAL' },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    const trialAccess = trial
-      ? evaluateIntroTrialBooking({
-          activatedAt: trial.activatedAt,
-          occurrenceStartsAt: occurrence.startAt,
-          now: new Date(),
-          isEvent: occurrence.template.isEvent,
-        })
-      : null;
-    if (trial && trialAccess && !trialAccess.allowed && trialAccess.reason === 'expired') {
-      await tx.membership.update({ where: { id: trial.id }, data: { status: 'EXPIRED' } });
-    }
-    const instructorAugustAccess = instructorAugustStandardClassAccess({
-      role: user.role,
-      occurrenceStartsAt: occurrence.startAt,
-      isEvent: occurrence.template.isEvent,
-    });
-    if (!account && !instructorAugustAccess && (!trialAccess || !trialAccess.allowed)) {
-      if (trialAccess?.reason === 'not-open') return 'trial-not-open';
-      if (trialAccess?.reason === 'event-excluded') return 'trial-event';
-      if (trialAccess?.reason === 'outside-window' || trialAccess?.reason === 'expired') return 'trial-window';
-      return 'access';
-    }
+    if (!account) return 'access';
+
     const booking = await tx.booking.create({
       data: { occurrenceId, userId: user.id },
     });
-    if (!account && trial && trialAccess?.allowed && !trial.activatedAt) {
-      await tx.membership.update({
-        where: { id: trial.id },
-        data: {
-          activatedAt: trialAccess.activatesAt,
-          currentPeriodStart: trialAccess.activatesAt,
-          currentPeriodEnd: trialAccess.expiresAt,
-          status: 'TRIALING',
-        },
-      });
-      await queueEmail(tx, {
-        userId: user.id,
-        to: user.email,
-        subject: 'Your Rhyze intro week ends tomorrow',
-        template: 'TRIAL_ENDING',
-        payload: {
-          name: user.name || 'Rhyzer',
-          expiresAt: trialAccess.expiresAt.toISOString(),
-          membershipUrl: '/memberships',
-          plans: ['Elevate', 'Ritual', 'VIP Access'],
-        },
-        scheduledFor: new Date(
-          trialAccess.expiresAt.getTime() - INTRO_TRIAL_REMINDER_LEAD_MS,
-        ),
-        dedupeKey: `trial-ending:${trial.id}`,
-      });
-    }
     await queueEmail(tx, {
       userId: user.id,
       to: user.email,
-      subject: `You’re booked for ${occurrence.template.name}`,
+      subject: `You're booked for ${occurrence.startAt.toLocaleDateString()}`,
       template: 'BOOKING_CONFIRMATION',
-      payload: {
-        name: user.name || 'Rhyzer',
-        className: occurrence.template.name,
-        instructorName: occurrence.instructor?.name || 'Rhyze instructor',
-        classDate: emailDate(occurrence.startAt),
-        classTime: emailTime(occurrence.startAt),
-        bookingsUrl: '/member/bookings',
-      },
+      payload: { bookingId: booking.id, occurrenceId },
     });
     await queueEmail(tx, {
       userId: user.id,
       to: user.email,
-      subject: `${occurrence.template.name} is tomorrow`,
+      subject: 'Your Rhyze class is tomorrow',
       template: 'CLASS_REMINDER',
-      payload: {
-        name: user.name || 'Rhyzer',
-        className: occurrence.template.name,
-        instructorName: occurrence.instructor?.name || 'Rhyze instructor',
-        classDate: emailDate(occurrence.startAt),
-        classTime: emailTime(occurrence.startAt),
-        bookingsUrl: '/member/bookings',
-      },
+      payload: { bookingId: booking.id, occurrenceId },
       scheduledFor: new Date(occurrence.startAt.getTime() - 24 * 60 * 60 * 1000),
     });
-    if (account && !account.isUnlimited) {
+    if (!account.isUnlimited) {
       await tx.creditLedgerEntry.create({
         data: {
           creditAccountId: account.id,
@@ -281,9 +118,6 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
 
   revalidatePath('/member/bookings');
   revalidatePath('/schedule');
-  if (result === 'waiver') {
-    redirect(bookingWaiverDestination(occurrenceId));
-  }
   redirect(`/member/bookings?result=${result}`);
 }
 
@@ -293,7 +127,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, userId: user.id, status: 'CONFIRMED' },
-      include: { occurrence: { include: { template: true } } },
+      include: { occurrence: true },
     });
     if (!booking) return;
     const outcome = cancellationOutcome(
@@ -308,23 +142,13 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
     await queueEmail(tx, {
       userId: user.id,
       to: user.email,
-      subject: `${booking.occurrence.template.name} booking was cancelled`,
+      subject: 'Your Rhyze booking was cancelled',
       template: 'BOOKING_CANCELLATION',
-      payload: {
-        name: user.name || 'Rhyzer',
-        className: booking.occurrence.template.name,
-        classDate: emailDate(booking.occurrence.startAt),
-        classTime: emailTime(booking.occurrence.startAt),
-        creditResult: outcome.restoreCredit
-          ? 'Your class credit was returned to your account.'
-          : 'This cancellation falls inside the late-cancel window, so the credit was not returned.',
-        bookingsUrl: '/member/bookings',
-      },
+      payload: { bookingId: booking.id },
     });
     const reservation = await tx.creditLedgerEntry.findFirst({
       where: { bookingId: booking.id, type: 'RESERVE' },
     });
-    const creditReturned = Boolean(reservation && outcome.restoreCredit);
     if (reservation && outcome.restoreCredit) {
       await tx.creditLedgerEntry.create({
         data: {
@@ -336,18 +160,6 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
         },
       });
     }
-    await notifyAdminBookingCancellation(tx, {
-      bookingId: booking.id,
-      memberId: user.id,
-      memberName: user.name,
-      memberEmail: user.email,
-      occurrenceId: booking.occurrenceId,
-      className: booking.occurrence.template.name,
-      classDate: emailDate(booking.occurrence.startAt),
-      classTime: emailTime(booking.occurrence.startAt),
-      status: outcome.status,
-      creditReturned,
-    });
     if (outcome.status === 'CANCELLED') {
       const next = await tx.waitlistEntry.findFirst({
         where: { occurrenceId: booking.occurrenceId, status: 'WAITING' },
@@ -359,88 +171,19 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
           where: {
             userId: next.userId,
             validFrom: { lte: new Date() },
-            AND: [
-              { OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }] },
-              { OR: [{ isUnlimited: true }, { entries: { some: {} } }] },
-            ],
+            OR: [{ isUnlimited: true }, { entries: { some: {} } }],
           },
-          include: {
-            entries: true,
-            sourcePurchase: {
-              include: {
-                membership: { select: { status: true } },
-                product: { select: { includedCredits: true, customPlanType: true } },
-              },
-            },
-          },
+          include: { entries: true },
           orderBy: { createdAt: 'asc' },
         });
-        const balance = account
-          ? availableMembershipCredits({
-              entries: account.entries,
-              includedCredits: account.sourcePurchase?.product.includedCredits ?? null,
-            })
-          : 0;
-        const accountHasAccess = Boolean(
-          account &&
-          complimentaryStandardAccessCanBook({
-            customPlanType: account.sourcePurchase?.product.customPlanType,
-            isEvent: booking.occurrence.template.isEvent,
-            durationMinutes: booking.occurrence.template.durationMinutes,
-          }) &&
-          creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
-          (account.isUnlimited || balance > 0),
-        );
-        const trial = await tx.membership.findFirst({
-          where: {
-            userId: next.userId,
-            status: { in: ['TRIALING', 'ACTIVE'] },
-            product: { kind: 'INTRO_TRIAL' },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-        const trialAccess = trial
-          ? evaluateIntroTrialBooking({
-              activatedAt: trial.activatedAt,
-              occurrenceStartsAt: booking.occurrence.startAt,
-              now: new Date(),
-              isEvent: booking.occurrence.template.isEvent,
-            })
-          : null;
-        if (accountHasAccess || trialAccess?.allowed) {
+        const balance = account?.entries.reduce((total, entry) => total + entry.quantity, 0) || 0;
+        if (account && (account.isUnlimited || balance > 0)) {
           const promoted = await tx.booking.create({
             data: { occurrenceId: booking.occurrenceId, userId: next.userId, source: 'WAITLIST' },
           });
-          if (accountHasAccess && account && !account.isUnlimited) {
+          if (!account.isUnlimited) {
             await tx.creditLedgerEntry.create({
               data: { creditAccountId: account.id, bookingId: promoted.id, type: 'RESERVE', quantity: -1, reason: 'Waitlist promotion' },
-            });
-          }
-          if (!accountHasAccess && trial && trialAccess?.allowed && !trial.activatedAt) {
-            await tx.membership.update({
-              where: { id: trial.id },
-              data: {
-                activatedAt: trialAccess.activatesAt,
-                currentPeriodStart: trialAccess.activatesAt,
-                currentPeriodEnd: trialAccess.expiresAt,
-                status: 'TRIALING',
-              },
-            });
-            await queueEmail(tx, {
-              userId: next.userId,
-              to: next.user.email,
-              subject: 'Your Rhyze intro week ends tomorrow',
-              template: 'TRIAL_ENDING',
-              payload: {
-                name: next.user.name || 'Rhyzer',
-                expiresAt: trialAccess.expiresAt.toISOString(),
-                membershipUrl: '/memberships',
-                plans: ['Elevate', 'Ritual', 'VIP Access'],
-              },
-              scheduledFor: new Date(
-                trialAccess.expiresAt.getTime() - INTRO_TRIAL_REMINDER_LEAD_MS,
-              ),
-              dedupeKey: `trial-ending:${trial.id}`,
             });
           }
           await tx.waitlistEntry.update({ where: { id: next.id }, data: { status: 'PROMOTED', promotedAt: new Date() } });
@@ -449,31 +192,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
             to: next.user.email,
             subject: 'You are off the Rhyze waitlist',
             template: 'WAITLIST_PROMOTED',
-            payload: {
-              name: next.user.name || 'Rhyzer',
-              className: booking.occurrence.template.name,
-              classDate: emailDate(booking.occurrence.startAt),
-              classTime: emailTime(booking.occurrence.startAt),
-              bookingsUrl: '/member/bookings',
-            },
-          });
-        } else {
-          await queueEmail(tx, {
-            userId: next.userId,
-            to: next.user.email,
-            subject: `A spot is ready to claim in ${booking.occurrence.template.name}`,
-            template: 'WAITLIST_SPOT_AVAILABLE',
-            payload: {
-              name: next.user.name || 'Rhyzer',
-              className: booking.occurrence.template.name,
-              instructorName: 'Rhyze instructor',
-              classDate: emailDate(booking.occurrence.startAt),
-              classTime: emailTime(booking.occurrence.startAt),
-              claimUrl: booking.occurrence.template.isEvent
-                ? `/book/event/${booking.occurrence.template.slug}`
-                : `/book/${booking.occurrence.template.slug}?occurrence=${booking.occurrence.id}`,
-            },
-            dedupeKey: `waitlist-spot-available:${next.id}`,
+            payload: { bookingId: promoted.id, occurrenceId: booking.occurrenceId },
           });
         }
       }
