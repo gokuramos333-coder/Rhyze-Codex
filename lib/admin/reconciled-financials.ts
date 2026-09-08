@@ -32,6 +32,7 @@ type StripeRevenueInput = {
   amountCents: number;
   occurredAt: Date;
   userId: string | null;
+  membershipId: string | null;
   purchaseId: string | null;
   commerceOrderId: string | null;
   stripeEventId: string;
@@ -51,7 +52,7 @@ export function buildReconciledRevenueRecords(input: {
   );
   const standaloneMemberPayments = visiblePaymentRecords.filter(
     (record) =>
-      record.userId &&
+      (record.userId || record.membershipId) &&
       !record.purchaseId &&
       !record.commerceOrderId &&
       record.amountCents > 0,
@@ -82,7 +83,7 @@ export function buildReconciledRevenueRecords(input: {
     ...standaloneMemberPayments.map((item) => ({
       amountCents: item.amountCents,
       occurredAt: item.occurredAt,
-      customerId: item.userId!,
+      customerId: item.userId || `membership-${item.membershipId}`,
       type: item.kind.replaceAll('_', ' '),
       source: 'RHYZE' as const,
     })),

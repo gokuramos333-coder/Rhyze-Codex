@@ -221,7 +221,7 @@ describe('admin activity feed and client metrics', () => {
     expect(source).toContain('excludeSombleBackedStripePaymentRecords');
     expect(source).toContain('visiblePaymentRecords');
     expect(source).toContain('directRevenuePaymentRecords');
-    expect(source).toContain('directRevenuePaymentRecords = unlinkedPaymentRecords.filter((record) => record.userId)');
+    expect(source).toContain('(record) => record.userId || record.membershipId');
     expect(source).toContain('Verified direct Stripe');
     expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("schedule: '* * * * *'");
     expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("runProtectedJob('/api/jobs/stripe-sync')");

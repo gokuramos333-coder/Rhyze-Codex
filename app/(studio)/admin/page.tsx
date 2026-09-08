@@ -213,7 +213,9 @@ export default async function AdminHomePage(
   const unlinkedPaymentRecords = visiblePaymentRecords.filter(
     (record) => !record.purchaseId && !record.commerceOrderId,
   );
-  const directRevenuePaymentRecords = unlinkedPaymentRecords.filter((record) => record.userId);
+  const directRevenuePaymentRecords = unlinkedPaymentRecords.filter(
+    (record) => record.userId || record.membershipId,
+  );
   const range = resolveAnalyticsRange(searchParams);
   const allRevenueRecords = buildReconciledRevenueRecords({
     sombleTransactions: transactions,
