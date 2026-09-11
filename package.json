@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "stripe:sync-catalog": "tsx scripts/sync-stripe-catalog.ts",
     "stripe:configure-portal": "tsx scripts/configure-stripe-portal.ts",
+    "netlify:stage-native-bindings": "node scripts/stage-netlify-native-bindings.mjs",
     "automation:setup-accounts": "tsx scripts/setup-automation-test-accounts.ts",
     "automation:portal-smoke": "tsx scripts/portal-auth-smoke.ts",
     "test": "vitest run",
