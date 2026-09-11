@@ -30,7 +30,11 @@ export async function notifyAdminBookingCancellation(
   const dedupeKey = `booking-cancelled-admin:${input.bookingId}`;
 
   const owners = await client.user.findMany({
-    where: { role: { in: ['OWNER', 'ADMIN', 'MANAGER'] }, status: 'ACTIVE' },
+    where: {
+      role: { in: ['OWNER', 'ADMIN', 'MANAGER'] },
+      status: 'ACTIVE',
+      NOT: { email: { endsWith: '@rhyze.local' } },
+    },
     select: { id: true },
   });
 

@@ -38,6 +38,7 @@ describe('Rhyze email lifecycle wiring', () => {
     expect(helper).toContain("cc: ['vanessa@rhyzefit.com']");
     expect(helper).toContain('booking-cancelled-admin:');
     expect(helper).toContain('inAppNotification.createMany');
+    expect(helper).toContain("endsWith: '@rhyze.local'");
     expect(layout).toContain('booking-cancelled-admin:');
     expect(layout).toContain('Recent class cancellation');
   });

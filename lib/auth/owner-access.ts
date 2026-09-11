@@ -1,13 +1,18 @@
 import type { Role, UserStatus } from '@prisma/client';
 
-const APPROVED_OWNER_EMAILS = new Set([
+const OPERATIONAL_OWNER_EMAILS = [
   'vanessa@rhyzefit.com',
   'melissa@rhyzefit.com',
   'gui@westaffnj.com',
+] as const;
+
+const APPROVED_OWNER_EMAILS = new Set([
+  ...OPERATIONAL_OWNER_EMAILS,
+  'automation-admin@rhyze.local',
 ]);
 
 export function approvedOwnerEmails(): string[] {
-  return [...APPROVED_OWNER_EMAILS];
+  return [...OPERATIONAL_OWNER_EMAILS];
 }
 
 export type OwnerAccessInput = {
