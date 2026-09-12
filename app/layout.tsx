@@ -46,6 +46,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${bebas.variable} ${inter.variable}`}>
+      <head>
+        <script
+          async
+          src="https://www.googletagmanager.com/gtag/js?id=G-7FTQSRY5FL"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-7FTQSRY5FL');
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-screen bg-rhyze-black font-sans text-rhyze-cream antialiased">
         <a
           href="#content"
