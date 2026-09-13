@@ -54,6 +54,15 @@ function emailTime(value: Date) {
   });
 }
 
+function publicOccurrenceUrl(occurrence: {
+  id: string;
+  template: { isEvent: boolean; slug: string };
+}) {
+  return occurrence.template.isEvent
+    ? `/book/event/${occurrence.template.slug}`
+    : `/book/${occurrence.template.slug}?occurrence=${encodeURIComponent(occurrence.id)}`;
+}
+
 export async function bookOccurrenceAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
   const occurrenceId = String(formData.get('occurrenceId') || '');
@@ -140,7 +149,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           classDate: emailDate(occurrence.startAt),
           classTime: emailTime(occurrence.startAt),
           waitlistPosition: String(waitlistPosition),
-          bookingsUrl: '/member/bookings',
+          bookingsUrl: publicOccurrenceUrl(occurrence),
         },
         dedupeKey: `waitlist-joined:${waitlist.id}:${joinedAt.toISOString()}`,
       });
@@ -418,7 +427,14 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, userId: user.id, status: 'CONFIRMED' },
-      include: { occurrence: { include: { template: true } } },
+      include: {
+        occurrence: {
+          include: {
+            template: true,
+            instructor: { select: { name: true } },
+          },
+        },
+      },
     });
     if (!booking) return;
     const cancelledAt = new Date();
@@ -522,151 +538,28 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       creditReturned,
     });
     if (decision.status === 'CANCELLED') {
-      const next = await tx.waitlistEntry.findFirst({
+      const waitingEntries = await tx.waitlistEntry.findMany({
         where: { occurrenceId: booking.occurrenceId, status: 'WAITING' },
         include: { user: true },
         orderBy: { joinedAt: 'asc' },
+        take: 5,
       });
-      if (next) {
-        const account = await tx.creditAccount.findFirst({
-          where: {
-            userId: next.userId,
-            validFrom: { lte: new Date() },
-            AND: [
-              { OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }] },
-              { OR: [{ isUnlimited: true }, { entries: { some: {} } }] },
-            ],
+      for (const entry of waitingEntries) {
+        await queueEmail(tx, {
+          userId: entry.userId,
+          to: entry.user.email,
+          subject: `A spot opened for ${booking.occurrence.template.name}`,
+          template: 'WAITLIST_SPOT_AVAILABLE',
+          payload: {
+            name: entry.user.name || 'Rhyzer',
+            className: booking.occurrence.template.name,
+            instructorName: booking.occurrence.instructor?.name || 'Rhyze instructor',
+            classDate: emailDate(booking.occurrence.startAt),
+            classTime: emailTime(booking.occurrence.startAt),
+            claimUrl: publicOccurrenceUrl(booking.occurrence),
           },
-          include: {
-            entries: true,
-            sourcePurchase: {
-              include: {
-                membership: { select: { status: true } },
-                product: { select: { includedCredits: true, kind: true, customPlanType: true } },
-              },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
+          dedupeKey: `waitlist-spot-available:${booking.id}:${entry.id}`,
         });
-        const balance = account
-          ? availableMembershipCredits({
-              entries: account.entries,
-              includedCredits: account.sourcePurchase?.product.includedCredits ?? null,
-            })
-          : 0;
-        const accountHasAccess = Boolean(
-          account &&
-          complimentaryStandardAccessCanBook({
-            customPlanType: account.sourcePurchase?.product.customPlanType,
-            isEvent: booking.occurrence.template.isEvent,
-            durationMinutes: booking.occurrence.template.durationMinutes,
-          }) &&
-          creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
-          (account.isUnlimited || balance > 0),
-        );
-        const trial = await tx.membership.findFirst({
-          where: {
-            userId: next.userId,
-            status: { in: ['TRIALING', 'ACTIVE'] },
-            product: { kind: 'INTRO_TRIAL' },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-        const trialAccess = trial
-          ? evaluateIntroTrialBooking({
-              activatedAt: trial.activatedAt,
-              occurrenceStartsAt: booking.occurrence.startAt,
-              now: new Date(),
-              isEvent: booking.occurrence.template.isEvent,
-            })
-          : null;
-        if (accountHasAccess || trialAccess?.allowed) {
-          const promotedAccessProductKind = account?.sourcePurchase?.product.kind
-            ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null);
-          const promoted = await tx.booking.create({
-            data: {
-              occurrenceId: booking.occurrenceId,
-              userId: next.userId,
-              source: 'WAITLIST',
-              policySnapshot: bookingPolicySnapshotWithAccess({
-                currentSnapshot: null,
-                accessType: accessTypeForProductKind(promotedAccessProductKind),
-                accessProductKind: promotedAccessProductKind,
-              }),
-            },
-          });
-          if (accountHasAccess && account && !account.isUnlimited) {
-            await tx.creditLedgerEntry.create({
-              data: { creditAccountId: account.id, bookingId: promoted.id, type: 'RESERVE', quantity: -1, reason: 'Waitlist promotion' },
-            });
-          }
-          if (!accountHasAccess && trial && trialAccess?.allowed && !trial.activatedAt) {
-            await tx.membership.update({
-              where: { id: trial.id },
-              data: {
-                activatedAt: trialAccess.activatesAt,
-                currentPeriodStart: trialAccess.activatesAt,
-                currentPeriodEnd: trialAccess.expiresAt,
-                status: 'TRIALING',
-              },
-            });
-            await tx.creditAccount.updateMany({
-              where: { sourcePurchaseId: trial.purchaseId },
-              data: {
-                validFrom: trialAccess.activatesAt,
-                validUntil: trialAccess.expiresAt,
-              },
-            });
-            await queueEmail(tx, {
-              userId: next.userId,
-              to: next.user.email,
-              subject: 'Your Rhyze intro week ends tomorrow',
-              template: 'TRIAL_ENDING',
-              payload: {
-                name: next.user.name || 'Rhyzer',
-                expiresAt: trialAccess.expiresAt.toISOString(),
-                membershipUrl: '/memberships',
-                plans: ['Elevate', 'Ritual', 'VIP Access'],
-              },
-              scheduledFor: new Date(
-                trialAccess.expiresAt.getTime() - INTRO_TRIAL_REMINDER_LEAD_MS,
-              ),
-              dedupeKey: `trial-ending:${trial.id}`,
-            });
-          }
-          await tx.waitlistEntry.update({ where: { id: next.id }, data: { status: 'PROMOTED', promotedAt: new Date() } });
-          await queueEmail(tx, {
-            userId: next.userId,
-            to: next.user.email,
-            subject: 'You are off the Rhyze waitlist',
-            template: 'WAITLIST_PROMOTED',
-            payload: {
-              name: next.user.name || 'Rhyzer',
-              className: booking.occurrence.template.name,
-              classDate: emailDate(booking.occurrence.startAt),
-              classTime: emailTime(booking.occurrence.startAt),
-              bookingsUrl: '/member/bookings',
-            },
-          });
-        } else {
-          await queueEmail(tx, {
-            userId: next.userId,
-            to: next.user.email,
-            subject: `A spot is ready to claim in ${booking.occurrence.template.name}`,
-            template: 'WAITLIST_SPOT_AVAILABLE',
-            payload: {
-              name: next.user.name || 'Rhyzer',
-              className: booking.occurrence.template.name,
-              instructorName: 'Rhyze instructor',
-              classDate: emailDate(booking.occurrence.startAt),
-              classTime: emailTime(booking.occurrence.startAt),
-              claimUrl: booking.occurrence.template.isEvent
-                ? `/book/event/${booking.occurrence.template.slug}`
-                : `/book/${booking.occurrence.template.slug}?occurrence=${booking.occurrence.id}`,
-            },
-            dedupeKey: `waitlist-spot-available:${next.id}`,
-          });
-        }
       }
     }
     return { creditReturned };
