@@ -234,47 +234,73 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
   const actor = await requireArea('admin');
   const occurrenceId = String(formData.get('occurrenceId') || '');
   const bookingId = String(formData.get('bookingId') || '');
-  const booking = await prisma.booking.findFirst({
-    where: { id: bookingId, occurrenceId },
-    select: {
-      id: true,
-      userId: true,
-      user: { select: { name: true, email: true } },
-      occurrence: { select: { startAt: true, timezone: true, template: { select: { name: true } } } },
-    },
-  });
-  if (!booking) return;
-  const reservation = await prisma.creditLedgerEntry.findFirst({
-    where: { bookingId, type: 'RESERVE' },
-  });
-  // no-reservation fallback: imported/Somble/admin-created bookings may not have a RESERVE ledger entry.
-  const restoredKey = `attendance-restore:${bookingId}`;
-  const alreadyRestored = await prisma.creditLedgerEntry.findFirst({
-    where: { sourceReturnKey: restoredKey },
-  });
-  if (!alreadyRestored) {
-    const terms = returnedCreditTerms(new Date());
-    const creditAccount = await prisma.creditAccount.create({
-      data: {
-        userId: booking.userId,
-        label: 'Manual rollover credit',
-        validFrom: terms.validFrom,
-        validUntil: terms.validUntil,
+  const restored = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+    const booking = await tx.booking.findFirst({
+      where: { id: bookingId, occurrenceId },
+      select: {
+        id: true,
+        occurrenceId: true,
+        userId: true,
+        user: { select: { name: true, email: true } },
+        occurrence: { select: { startAt: true, timezone: true, template: { select: { name: true } } } },
       },
     });
-    await prisma.creditLedgerEntry.create({
-      data: {
-        creditAccountId: creditAccount.id,
-        bookingId,
-        sourceReturnKey: restoredKey,
-        type: 'RESTORE',
-        quantity: terms.quantity,
-        reason: reservation
-          ? `Manual attendance credit restore by ${actor.email}`
-          : `Manual attendance credit restore by ${actor.email} (no original credit reservation)`,
-      },
+    if (!booking) return null;
+
+    const reservation = await tx.creditLedgerEntry.findFirst({
+      where: { bookingId, type: 'RESERVE' },
     });
-  }
+    // no-reservation fallback: imported/Somble/admin-created bookings may not have a RESERVE ledger entry.
+    const restoredKey = `attendance-restore:${bookingId}`;
+    const alreadyRestored = await tx.creditLedgerEntry.findFirst({
+      where: { sourceReturnKey: restoredKey },
+    });
+    const restoredAt = new Date();
+    if (!alreadyRestored) {
+      const terms = returnedCreditTerms(restoredAt);
+      const creditAccount = await tx.creditAccount.create({
+        data: {
+          userId: booking.userId,
+          label: 'Manual rollover credit',
+          validFrom: terms.validFrom,
+          validUntil: terms.validUntil,
+        },
+      });
+      await tx.creditLedgerEntry.create({
+        data: {
+          creditAccountId: creditAccount.id,
+          bookingId,
+          sourceReturnKey: restoredKey,
+          type: 'RESTORE',
+          quantity: terms.quantity,
+          reason: reservation
+            ? `Manual attendance credit restore by ${actor.email}`
+            : `Manual attendance credit restore by ${actor.email} (no original credit reservation)`,
+        },
+      });
+    }
+
+    await tx.booking.update({
+      where: { id: booking.id },
+      data: { status: 'CANCELLED', cancelledAt: restoredAt },
+    });
+    await tx.attendanceRecord.deleteMany({
+      where: { bookingId: booking.id },
+    });
+    await tx.emailMessage.updateMany({
+      where: {
+        dedupeKey: `class-reminder:${booking.id}:${booking.occurrenceId}`,
+        template: 'CLASS_REMINDER',
+        status: { in: ['QUEUED', 'PROCESSING'] },
+      },
+      data: { status: 'CANCELLED' },
+    });
+
+    return { booking, fallbackUsed: !reservation };
+  });
+  if (!restored) return;
+  const { booking, fallbackUsed } = restored;
   await queueEmail(prisma, {
     userId: booking.userId,
     to: 'melissa@rhyzefit.com',
@@ -299,10 +325,11 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
       }),
       adminUrl: `/admin/members/${booking.userId}#credits`,
       restoredBy: actor.email,
-      fallbackUsed: !reservation,
+      fallbackUsed,
     },
   });
   revalidatePath(`/admin/schedule/${occurrenceId}/roster`);
   revalidatePath(`/admin/members/${booking.userId}`);
+  revalidatePath('/member/bookings');
   redirect(`/admin/members/${booking.userId}?sent=attendance-credit-restored#credits`);
 }
