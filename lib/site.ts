@@ -2,7 +2,7 @@ export const site = {
   name: 'Rhyze Fitness',
   versionLabel: 'Rhyze Fitness',
   tagline: 'In Rhythm, We Rise',
-  url: 'https://rhyzefit.com',
+  url: 'https://www.rhyzefitness.com',
   description:
     'A boutique movement studio offering dance, yoga, and strength classes for all levels, designed for self-expression, confidence, and the love of sweat.',
   address: {

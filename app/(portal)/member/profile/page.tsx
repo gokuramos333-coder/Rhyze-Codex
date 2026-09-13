@@ -38,16 +38,16 @@ export default async function MemberProfilePage(
         Your account
       </p>
 
-      <section className="mt-8 flex flex-wrap items-center gap-5 border-t-4 border-rhyze-gold bg-white p-6">
+      <section className="mt-8 flex min-w-0 flex-wrap items-center gap-5 border-t-4 border-rhyze-gold bg-white p-4 sm:p-6">
         <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-rhyze-black text-3xl font-black text-white">
           {profile?.photoUrl ? <Image src={profile.photoUrl} alt="" width={96} height={96} className="h-full w-full object-cover"/> : (user.name || 'R').charAt(0)}
         </div>
         <div>
           <h2 className="font-display text-3xl tracking-wider">PROFILE PHOTO</h2>
           <p className="mt-1 text-sm text-rhyze-black/55">JPG or PNG, up to 8 MB.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <form action={updateProfilePhotoAction} className="flex flex-wrap gap-2">
-              <input type="file" name="photo" accept="image/jpeg,image/png" required className="max-w-56 text-xs"/>
+          <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+            <form action={updateProfilePhotoAction} className="flex min-w-0 flex-wrap gap-2">
+              <input type="file" name="photo" accept="image/jpeg,image/png" required className="max-w-full text-xs sm:max-w-56"/>
               <button className="bg-rhyze-black px-3 py-2 text-xs font-black uppercase text-white">Upload</button>
             </form>
             {profile?.photoUrl && <form action={removeProfilePhotoAction}><button className="border border-rhyze-coral px-3 py-2 text-xs font-black uppercase text-rhyze-coral">Remove</button></form>}
@@ -94,7 +94,7 @@ export default async function MemberProfilePage(
 
       <form
         action={updateProfileAction}
-        className="mt-8 grid gap-5 border-t-4 border-rhyze-coral bg-white p-6 shadow-sm md:grid-cols-2"
+        className="mt-8 grid min-w-0 gap-5 border-t-4 border-rhyze-coral bg-white p-4 shadow-sm md:grid-cols-2 md:p-6"
       >
         <ProfileField
           label="Preferred name"
@@ -127,7 +127,7 @@ export default async function MemberProfilePage(
           defaultValue={profile?.city}
           autoComplete="address-level2"
         />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           <ProfileField
             label="State"
             name="region"

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Bebas_Neue, Inter } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 import { site } from '@/lib/site';
 import { SiteChrome } from '@/components/layout/SiteChrome';
@@ -46,23 +47,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${bebas.variable} ${inter.variable}`}>
-      <head>
-        <script
-          async
-          src="https://www.googletagmanager.com/gtag/js?id=G-7FTQSRY5FL"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-7FTQSRY5FL');
-            `,
-          }}
-        />
-      </head>
       <body className="min-h-screen bg-rhyze-black font-sans text-rhyze-cream antialiased">
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-7FTQSRY5FL"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-7FTQSRY5FL');
+          `}
+        </Script>
         <a
           href="#content"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-full focus:bg-rhyze-coral focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-rhyze-black"

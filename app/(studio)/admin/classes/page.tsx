@@ -233,7 +233,7 @@ export default async function AdminClassesPage(
 
       <section
         id="scheduled-classes"
-        className="mt-8 scroll-mt-8 rounded-[2rem] border border-rhyze-black/10 bg-rhyze-charcoal p-4 shadow-2xl md:p-6"
+        className="mt-8 min-w-0 scroll-mt-8 rounded-[2rem] border border-rhyze-black/10 bg-rhyze-charcoal p-4 shadow-2xl md:p-6"
       >
         <div className="mb-5">
           <div>
@@ -260,7 +260,7 @@ export default async function AdminClassesPage(
 
       <section
         id="create-a-class"
-        className="mt-8 scroll-mt-8 border-t-4 border-rhyze-coral bg-white p-6"
+        className="mt-8 min-w-0 scroll-mt-8 border-t-4 border-rhyze-coral bg-white p-4 sm:p-6"
       >
         <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">
           Class template
@@ -270,21 +270,21 @@ export default async function AdminClassesPage(
         </h2>
         <form
           action={createClassTemplateAction}
-          className="mt-5 grid gap-4 md:grid-cols-2"
+          className="mt-5 grid min-w-0 gap-4 md:grid-cols-2"
         >
           <Input name="name" label="Class name" />
-        <label className="grid gap-2">
+        <label className="grid min-w-0 gap-2">
           <span className="text-xs font-black uppercase tracking-widest">Instructor</span>
-          <select name="instructorId" required className="min-h-12 border px-3">
+          <select name="instructorId" required className="min-h-12 w-full min-w-0 border px-3">
             <option value="">Select instructor</option>
             {assignableInstructors.map((instructor) => (
               <option key={instructor.id} value={instructor.id}>{instructorOptionLabel(instructor)}</option>
             ))}
           </select>
         </label>
-        <label className="grid gap-2">
+        <label className="grid min-w-0 gap-2">
           <span className="text-xs font-black uppercase tracking-widest">Category</span>
-          <select name="categoryId" required className="min-h-12 border px-3">
+          <select name="categoryId" required className="min-h-12 w-full min-w-0 border px-3">
             {categories.map((category) => (
               <option key={category.id} value={category.id}>{category.name}</option>
             ))}
@@ -301,19 +301,19 @@ export default async function AdminClassesPage(
           step="0.01"
         />
         <Input name="startAt" label="First class date and time" type="datetime-local" />
-        <label className="flex min-h-12 items-center gap-3 border bg-rhyze-orange/10 px-4 text-sm font-bold">
+        <label className="flex min-h-12 min-w-0 items-center gap-3 border bg-rhyze-orange/10 px-4 text-sm font-bold">
           <input name="repeatWeekly" type="checkbox" />
           Repeat weekly on the same day and time
         </label>
         <Input name="repeatWeeks" label="Number of weeks" type="number" value="8" required={false} />
         <Input name="imageUrl" label="Image path / URL" required={false} />
-        <label className="grid gap-2">
+        <label className="grid min-w-0 gap-2">
           <span className="text-xs font-black uppercase tracking-widest">Upload photo</span>
-          <input name="image" type="file" accept="image/jpeg,image/png" className="min-h-12 border bg-rhyze-orange/10 p-3" />
+          <input name="image" type="file" accept="image/jpeg,image/png" className="min-h-12 w-full min-w-0 border bg-rhyze-orange/10 p-3" />
         </label>
         <label className="grid gap-2 md:col-span-2">
           <span className="text-xs font-black uppercase tracking-widest">Description</span>
-          <textarea name="description" required className="min-h-28 border p-3" />
+          <textarea name="description" required className="min-h-28 w-full min-w-0 border p-3" />
         </label>
           <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">
             Add class template
@@ -400,9 +400,9 @@ function Metric({ label, value, href }: { label: string; value: string; href: st
 
 function Input({ name, label, type = 'text', value, required = true, min, step }: { name: string; label: string; type?: string; value?: string; required?: boolean; min?: string; step?: string }) {
   return (
-    <label className="grid gap-2">
+    <label className="grid min-w-0 gap-2">
       <span className="text-xs font-black uppercase tracking-widest">{label}</span>
-      <input name={name} type={type} required={required} defaultValue={value} min={min} step={step} className="min-h-12 border px-3" />
+      <input name={name} type={type} required={required} defaultValue={value} min={min} step={step} className="min-h-12 w-full min-w-0 border px-3" />
     </label>
   );
 }

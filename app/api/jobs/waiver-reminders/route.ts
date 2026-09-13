@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { queueEmail } from '@/lib/notifications/email-queue';
 
 function appUrl(path: string) {
-  const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://rhyzefit.com';
+  const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://www.rhyzefitness.com';
   return new URL(path, origin).toString();
 }
 
