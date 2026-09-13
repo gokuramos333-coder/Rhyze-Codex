@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => {
     $executeRaw: vi.fn(),
     attendanceRecord: { deleteMany: vi.fn() },
     booking: { findFirst: vi.fn(), update: vi.fn() },
-    creditAccount: { create: vi.fn() },
-    creditLedgerEntry: { findFirst: vi.fn(), create: vi.fn() },
+    creditAccount: { create: vi.fn(), update: vi.fn() },
+    creditLedgerEntry: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     emailMessage: { updateMany: vi.fn() },
   };
   return {
@@ -54,6 +54,7 @@ describe('admin attendance credit restore action', () => {
     mocks.tx.creditLedgerEntry.findFirst
       .mockResolvedValueOnce({ id: 'reserve_1', creditAccountId: 'original_credit_1' })
       .mockResolvedValueOnce(null);
+    mocks.tx.creditLedgerEntry.findUnique.mockResolvedValue(null);
     mocks.tx.creditAccount.create.mockResolvedValue({ id: 'restored_credit_1' });
   });
 
@@ -112,6 +113,8 @@ describe('admin attendance credit restore action', () => {
     mocks.tx.creditLedgerEntry.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
+    mocks.tx.creditLedgerEntry.findUnique.mockReset();
+    mocks.tx.creditLedgerEntry.findUnique.mockResolvedValue(null);
     mocks.tx.creditAccount.create.mockReset();
     mocks.tx.creditAccount.create.mockResolvedValue({ id: 'restored_event_credit_1' });
 

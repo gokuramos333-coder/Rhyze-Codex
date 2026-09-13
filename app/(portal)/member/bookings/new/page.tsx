@@ -47,7 +47,7 @@ export default async function NewBookingPage(
         <p className="mt-2 text-sm text-rhyze-black/55">{occurrence.room?.name || 'Room TBA'} · {occurrence.capacity} spots</p>
         {occurrence.template.isEvent && (
           <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">
-            Event credits are valid for specialty events only and expire 30 days after the cancellation that issued them.
+            Event credits can be used for specialty events or standard classes and expire 30 days after the cancellation that issued them.
           </p>
         )}
         {missingWaiver && (

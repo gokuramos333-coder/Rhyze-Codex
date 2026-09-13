@@ -504,7 +504,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
         });
       }
       creditReturned = true;
-      creditResult = `One event-only credit was added to your account and expires ${terms.validUntil.toLocaleDateString('en-US', { timeZone: 'America/New_York' })}.`;
+      creditResult = `One event credit was added to your account and expires ${terms.validUntil.toLocaleDateString('en-US', { timeZone: 'America/New_York' })}. Event credits can be used for events or standard classes.`;
     }
     if (feeResult?.status === 'SUCCEEDED') {
       creditResult += ` A $${(decision.feeCents / 100).toFixed(0)} ${decision.window === 'TRANSFER' ? 'transfer' : 'late-cancellation'} fee was charged to your saved payment method.`;

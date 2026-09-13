@@ -24,7 +24,7 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
       template: true,
       room: true,
       bookings: {
-        where: { status: { not: 'CANCELLED' } },
+        where: { status: 'CONFIRMED' },
         include: {
           user: {
             include: {

@@ -259,11 +259,33 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
     // no-reservation fallback: imported/Somble/admin-created bookings may not have a RESERVE ledger entry.
     const restoredKey = `attendance-restore:${bookingId}`;
     const eventRestoredKey = eventCancellationCreditKey(bookingId);
-    const alreadyRestored = await tx.creditLedgerEntry.findFirst({
-      where: { sourceReturnKey: { in: [restoredKey, eventRestoredKey] } },
-    });
     const restoredAt = new Date();
-    if (!alreadyRestored) {
+    const existingEventRestore = await tx.creditLedgerEntry.findUnique({
+      where: { sourceReturnKey: eventRestoredKey },
+    });
+    const existingClassRestore = await tx.creditLedgerEntry.findUnique({
+      where: { sourceReturnKey: restoredKey },
+    });
+    if (booking.occurrence.template.isEvent && existingClassRestore && !existingEventRestore) {
+      const terms = eventCancellationCreditTerms(restoredAt);
+      await tx.creditAccount.update({
+        where: { id: existingClassRestore.creditAccountId },
+        data: {
+          label: eventCancellationCreditLabel(booking.occurrence.template.name),
+          validFrom: terms.validFrom,
+          validUntil: terms.validUntil,
+        },
+      });
+      await tx.creditLedgerEntry.update({
+        where: { id: existingClassRestore.id },
+        data: {
+          sourceReturnKey: eventRestoredKey,
+          type: 'GRANT',
+          quantity: terms.quantity,
+          reason: `Manual event cancellation credit restore by ${actor.email}`,
+        },
+      });
+    } else if (!existingEventRestore && !existingClassRestore) {
       if (reservation) {
         await tx.creditLedgerEntry.create({
           data: {

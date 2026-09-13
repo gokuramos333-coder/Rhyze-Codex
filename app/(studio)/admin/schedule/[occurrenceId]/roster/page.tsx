@@ -41,7 +41,7 @@ export default async function AdminRosterPage(props: {
       template: true,
       instructor: true,
       bookings: {
-        where: { status: { not: 'CANCELLED' } },
+        where: { status: 'CONFIRMED' },
         include: {
           user: {
             include: {
