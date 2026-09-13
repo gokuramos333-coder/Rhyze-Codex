@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { Roster } from '@/components/attendance/Roster';
@@ -56,6 +57,11 @@ export default async function AdminRosterPage(props: {
         },
         orderBy: { bookedAt: 'desc' },
       },
+      waitlistEntries: {
+        where: { status: 'WAITING' },
+        include: { user: { include: { memberProfile: true } } },
+        orderBy: { joinedAt: 'asc' },
+      },
     },
   });
   if (!occurrence) notFound();
@@ -97,6 +103,33 @@ export default async function AdminRosterPage(props: {
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Attendance desk</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
       <p className="mt-3 text-rhyze-black/55">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'} · {occurrence.bookings.length + occurrence.historicalSignupCount}/{occurrence.capacity}</p>
+      <section className="mt-6 border-t-4 border-rhyze-gold bg-white p-5">
+        <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Waitlist</p>
+        <h2 className="mt-2 font-display text-4xl tracking-wider">
+          {occurrence.waitlistEntries.length} waiting
+        </h2>
+        <div className="mt-4 grid gap-3">
+          {occurrence.waitlistEntries.map((entry, index) => (
+            <article key={entry.id} className="grid gap-2 border-l-4 border-rhyze-gold bg-orange-50 p-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+              <strong className="font-display text-3xl tracking-wider">#{index + 1}</strong>
+              <div>
+                <Link href={`/admin/members/${entry.user.id}`} className="text-lg font-black underline decoration-rhyze-gold decoration-2 underline-offset-4 hover:text-rhyze-coral">
+                  {entry.user.name || entry.user.email}
+                </Link>
+                <p className="mt-1 text-sm font-bold text-rhyze-black/55">
+                  {entry.user.email}{entry.user.memberProfile?.phone ? ` · ${entry.user.memberProfile.phone}` : ''}
+                </p>
+              </div>
+              <span className="text-xs font-black uppercase tracking-widest text-rhyze-black/45">
+                Joined {entry.joinedAt.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            </article>
+          ))}
+          {!occurrence.waitlistEntries.length && (
+            <p className="text-sm font-bold text-rhyze-black/55">No one is waiting for this class right now.</p>
+          )}
+        </div>
+      </section>
       <div className="mt-4 flex flex-wrap gap-2">
         {owners.map((owner) => {
           const attending = occurrence.bookings.some((booking) => booking.userId === owner.id && booking.status === 'CONFIRMED');
