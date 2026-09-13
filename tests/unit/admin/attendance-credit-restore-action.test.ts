@@ -47,7 +47,7 @@ describe('admin attendance credit restore action', () => {
       occurrence: {
         startAt: new Date('2026-09-15T13:00:00.000Z'),
         timezone: 'America/New_York',
-        template: { name: 'Power Yoga with Kenzie' },
+        template: { name: 'Power Yoga with Kenzie', isEvent: false },
       },
     };
     mocks.tx.booking.findFirst.mockResolvedValue(booking);
@@ -82,12 +82,59 @@ describe('admin attendance credit restore action', () => {
       },
       data: { status: 'CANCELLED' },
     });
+    expect(mocks.tx.creditAccount.create).not.toHaveBeenCalled();
     expect(mocks.tx.creditLedgerEntry.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        creditAccountId: 'restored_credit_1',
+        creditAccountId: 'original_credit_1',
         bookingId: 'booking_1',
         sourceReturnKey: 'attendance-restore:booking_1',
-        type: 'RESTORE',
+        type: 'RELEASE',
+        quantity: 1,
+      }),
+    });
+  });
+
+  it('creates an event credit when an event booking has no original reservation', async () => {
+    mocks.tx.booking.findFirst.mockResolvedValue({
+      id: 'booking_event_1',
+      occurrenceId: 'occurrence_event_1',
+      userId: 'member_1',
+      status: 'CONFIRMED',
+      cancelledAt: null,
+      user: { name: 'Rhyze Member', email: 'member@example.com' },
+      occurrence: {
+        startAt: new Date('2026-09-15T13:00:00.000Z'),
+        timezone: 'America/New_York',
+        template: { name: 'TCJ Hip-Hop Happy Hour with Tricia', isEvent: true },
+      },
+    });
+    mocks.tx.creditLedgerEntry.findFirst.mockReset();
+    mocks.tx.creditLedgerEntry.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    mocks.tx.creditAccount.create.mockReset();
+    mocks.tx.creditAccount.create.mockResolvedValue({ id: 'restored_event_credit_1' });
+
+    const formData = new FormData();
+    formData.set('occurrenceId', 'occurrence_event_1');
+    formData.set('bookingId', 'booking_event_1');
+
+    await expect(restoreCreditAction(formData)).rejects.toThrow(
+      'redirect:/admin/members/member_1?sent=attendance-credit-restored#credits',
+    );
+
+    expect(mocks.tx.creditAccount.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'member_1',
+        label: 'Event credit — TCJ Hip-Hop Happy Hour with Tricia',
+      }),
+    });
+    expect(mocks.tx.creditLedgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        creditAccountId: 'restored_event_credit_1',
+        bookingId: 'booking_event_1',
+        sourceReturnKey: 'event-cancellation:booking_event_1',
+        type: 'GRANT',
         quantity: 1,
       }),
     });

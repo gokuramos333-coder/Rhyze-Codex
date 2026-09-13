@@ -79,9 +79,10 @@ export function eventCreditCanBook(input: {
 }) {
   const specialtyText = `${input.className ?? ''} ${input.instructorName ?? ''}`.toLowerCase();
   const triciaSpecialty = specialtyText.includes('tricia');
+  const vipComplimentaryEventCredit = input.label.toLowerCase().includes('vip complimentary');
   return (
-    input.isEvent &&
-    !triciaSpecialty &&
+    (input.isEvent || input.label.startsWith(EVENT_CREDIT_LABEL_PREFIX)) &&
+    !(triciaSpecialty && vipComplimentaryEventCredit) &&
     !input.sourceProductKind &&
     input.label.startsWith(EVENT_CREDIT_LABEL_PREFIX)
   );

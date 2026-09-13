@@ -72,14 +72,14 @@ describe('booking rules', () => {
     });
   });
 
-  it('keeps restored event credits available for events only', () => {
+  it('keeps restored event credits usable for events or standard classes', () => {
     expect(eventCreditCanBook({ label: 'Event credit — Breathwork', sourceProductKind: null, isEvent: true })).toBe(true);
-    expect(eventCreditCanBook({ label: 'Event credit — Breathwork', sourceProductKind: null, isEvent: false })).toBe(false);
+    expect(eventCreditCanBook({ label: 'Event credit — Breathwork', sourceProductKind: null, isEvent: false })).toBe(true);
     expect(eventCreditCanBook({ label: 'Manual admin credit — expires Aug 30', sourceProductKind: null, isEvent: true })).toBe(false);
     expect(eventCreditCanBook({ label: 'Event credit — Breathwork', sourceProductKind: 'DROP_IN', isEvent: true })).toBe(false);
     expect(eventCreditCanBook({ label: 'VIP membership — unlimited standard class credits — September 2026', sourceProductKind: null, isEvent: true, className: 'Seat Seduction With Vanessa' })).toBe(false);
-    expect(eventCreditCanBook({ label: 'Event credit — August VIP', sourceProductKind: null, isEvent: true, className: 'TCJ Hip-Hop Happy Hour with Tricia' })).toBe(false);
-    expect(eventCreditCanBook({ label: 'Event credit — August VIP', sourceProductKind: null, isEvent: true, instructorName: 'Tricia Jones' })).toBe(false);
+    expect(eventCreditCanBook({ label: 'Event credit — TCJ Hip-Hop Happy Hour with Tricia', sourceProductKind: null, isEvent: true, className: 'TCJ Hip-Hop Happy Hour with Tricia' })).toBe(true);
+    expect(eventCreditCanBook({ label: 'Event credit — TCJ Hip-Hop Happy Hour with Tricia', sourceProductKind: null, isEvent: true, instructorName: 'Tricia Jones' })).toBe(true);
     expect(eventCreditCanBook({ label: 'Event credit — September 2026 VIP complimentary event credit', sourceProductKind: null, isEvent: true, instructorName: 'Tricia Johnsen' })).toBe(false);
   });
 

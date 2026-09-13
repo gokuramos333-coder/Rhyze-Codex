@@ -208,7 +208,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         });
         const validEventAccess = occurrence.template.isEvent
           ? isEventCredit
-          : !item.label.startsWith(EVENT_CREDIT_LABEL_PREFIX);
+          : true;
         const isSingleClassCredit = productKind === 'DROP_IN';
         const validIntroTrialCredit = productKind !== 'INTRO_TRIAL' || trialAccess?.allowed === true;
         const productAllowsOccurrence = complimentaryStandardAccessCanBook({

@@ -5,6 +5,11 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireActiveUser, requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import {
+  eventCancellationCreditKey,
+  eventCancellationCreditLabel,
+  eventCancellationCreditTerms,
+} from '@/lib/domain/bookings/cancellation-credit';
 import { returnedCreditTerms } from '@/lib/domain/credits/returned-credit';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { chargeAttendanceFee, refundAttendanceFee } from '@/lib/payments/attendance-fee';
@@ -243,7 +248,7 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
         occurrenceId: true,
         userId: true,
         user: { select: { name: true, email: true } },
-        occurrence: { select: { startAt: true, timezone: true, template: { select: { name: true } } } },
+        occurrence: { select: { startAt: true, timezone: true, template: { select: { name: true, isEvent: true } } } },
       },
     });
     if (!booking) return null;
@@ -253,32 +258,52 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
     });
     // no-reservation fallback: imported/Somble/admin-created bookings may not have a RESERVE ledger entry.
     const restoredKey = `attendance-restore:${bookingId}`;
+    const eventRestoredKey = eventCancellationCreditKey(bookingId);
     const alreadyRestored = await tx.creditLedgerEntry.findFirst({
-      where: { sourceReturnKey: restoredKey },
+      where: { sourceReturnKey: { in: [restoredKey, eventRestoredKey] } },
     });
     const restoredAt = new Date();
     if (!alreadyRestored) {
-      const terms = returnedCreditTerms(restoredAt);
-      const creditAccount = await tx.creditAccount.create({
-        data: {
-          userId: booking.userId,
-          label: 'Manual rollover credit',
-          validFrom: terms.validFrom,
-          validUntil: terms.validUntil,
-        },
-      });
-      await tx.creditLedgerEntry.create({
-        data: {
-          creditAccountId: creditAccount.id,
-          bookingId,
-          sourceReturnKey: restoredKey,
-          type: 'RESTORE',
-          quantity: terms.quantity,
-          reason: reservation
-            ? `Manual attendance credit restore by ${actor.email}`
-            : `Manual attendance credit restore by ${actor.email} (no original credit reservation)`,
-        },
-      });
+      if (reservation) {
+        await tx.creditLedgerEntry.create({
+          data: {
+            creditAccountId: reservation.creditAccountId,
+            bookingId,
+            sourceReturnKey: restoredKey,
+            type: 'RELEASE',
+            quantity: 1,
+            reason: `Manual attendance credit release by ${actor.email}`,
+          },
+        });
+      } else {
+        const terms = booking.occurrence.template.isEvent
+          ? eventCancellationCreditTerms(restoredAt)
+          : returnedCreditTerms(restoredAt);
+        const creditAccount = await tx.creditAccount.create({
+          data: {
+            userId: booking.userId,
+            label: booking.occurrence.template.isEvent
+              ? eventCancellationCreditLabel(booking.occurrence.template.name)
+              : 'Class credit — Manual rollover credit',
+            validFrom: terms.validFrom,
+            validUntil: terms.validUntil,
+          },
+        });
+        await tx.creditLedgerEntry.create({
+          data: {
+            creditAccountId: creditAccount.id,
+            bookingId,
+            sourceReturnKey: booking.occurrence.template.isEvent
+              ? eventRestoredKey
+              : restoredKey,
+            type: booking.occurrence.template.isEvent ? 'GRANT' : 'RESTORE',
+            quantity: terms.quantity,
+            reason: booking.occurrence.template.isEvent
+              ? `Manual event cancellation credit restore by ${actor.email}`
+              : `Manual attendance class credit restore by ${actor.email} (no original credit reservation)`,
+          },
+        });
+      }
     }
 
     await tx.booking.update({

@@ -101,7 +101,7 @@ export async function addMemberToClassAction(formData: FormData) {
       });
       const validEventAccess = occurrence.template.isEvent
         ? isEventCredit
-        : !account.label.startsWith(EVENT_CREDIT_LABEL_PREFIX);
+        : true;
       const productAllowsOccurrence = complimentaryStandardAccessCanBook({
         customPlanType: account.sourcePurchase?.product.customPlanType,
         isEvent: occurrence.template.isEvent,
