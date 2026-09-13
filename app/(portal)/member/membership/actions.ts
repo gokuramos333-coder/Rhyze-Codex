@@ -31,6 +31,7 @@ import { parseMembershipChangeRequest } from '@/lib/domain/memberships/change-re
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { membershipWaiverDestination } from '@/lib/domain/waivers/acceptance';
 import { parseTrialPolicyConsent } from '@/lib/domain/memberships/trial-policy-consent';
+import { checkoutPlanValue } from '@/lib/payments/checkout-attribution';
 
 export async function requestMembershipChangeAction(formData: FormData) {
   const user = await requireArea('member');
@@ -242,6 +243,7 @@ export async function startCheckoutAction(formData: FormData) {
   });
   const stripe = getStripe();
   const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+  const trackingPlan = encodeURIComponent(checkoutPlanValue(product.slug));
   let checkout;
   try {
     const coupon = usesRhyze2026Promo
@@ -299,9 +301,9 @@ export async function startCheckoutAction(formData: FormData) {
           }),
       discounts: coupon ? [{ coupon: coupon.id }] : undefined,
       success_url: product.kind === 'INTRO_TRIAL'
-        ? `${origin}/api/checkout/membership/success?session_id={CHECKOUT_SESSION_ID}`
-        : `${origin}/member/membership?result=success`,
-      cancel_url: `${origin}/member/membership?result=cancelled`,
+        ? `${origin}/api/checkout/membership/success?session_id={CHECKOUT_SESSION_ID}&plan=${trackingPlan}`
+        : `${origin}/member/membership?result=success&plan=${trackingPlan}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/member/membership?result=cancelled&plan=${trackingPlan}`,
     }, { idempotencyKey: `checkout-${purchase.id}` });
   } catch (error) {
     console.error('Stripe membership checkout failed', {

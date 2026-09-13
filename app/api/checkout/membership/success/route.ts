@@ -8,12 +8,23 @@ import { fulfillMembershipCheckoutReturn } from '@/lib/payments/membership-check
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
 import { retrySerializableTransaction } from '@/lib/payments/transaction-retry';
 import { processStripeEvent } from '@/lib/payments/webhook-processor';
+import { checkoutPlanValue } from '@/lib/payments/checkout-attribution';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-function membershipPage(request: Request, result: string) {
-  return new URL(`/member/membership?result=${result}`, request.url);
+function membershipPage(
+  request: Request,
+  result: string,
+  attribution?: { plan: string; sessionId: string },
+) {
+  const destination = new URL('/member/membership', request.url);
+  destination.searchParams.set('result', result);
+  if (attribution) {
+    destination.searchParams.set('plan', attribution.plan);
+    destination.searchParams.set('session_id', attribution.sessionId);
+  }
+  return destination;
 }
 
 function checkoutReturnEvent(checkoutSession: Stripe.Checkout.Session) {
@@ -43,6 +54,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    let verifiedPlan: string | null = null;
     const result = await fulfillMembershipCheckoutReturn(
       { sessionId, userId: session.user.id },
       {
@@ -54,9 +66,10 @@ export async function GET(request: Request) {
               id: true,
               userId: true,
               stripeCheckoutSessionId: true,
-              product: { select: { kind: true } },
+              product: { select: { kind: true, slug: true } },
             },
           });
+          verifiedPlan = purchase ? checkoutPlanValue(purchase.product.slug) : null;
           return purchase
             ? {
                 id: purchase.id,
@@ -85,11 +98,16 @@ export async function GET(request: Request) {
     if (result === 'pending') {
       return NextResponse.redirect(membershipPage(request, 'processing'));
     }
+    if (!verifiedPlan) {
+      return NextResponse.redirect(membershipPage(request, 'checkout-error'));
+    }
 
     revalidatePath('/member');
     revalidatePath('/member/membership');
     revalidatePath('/member/bookings');
-    return NextResponse.redirect(membershipPage(request, 'success'));
+    return NextResponse.redirect(
+      membershipPage(request, 'success', { plan: verifiedPlan, sessionId }),
+    );
   } catch (error) {
     console.error('Stripe checkout return fulfillment failed', {
       sessionId,

@@ -76,7 +76,7 @@ describe('membership checkout return', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.rhyzefitness.com');
     mocks.productFindFirst.mockResolvedValue({
       id: 'product_intro',
-      slug: 'intro-offer-7-days',
+      slug: 'intro-offer',
       kind: 'INTRO_TRIAL',
       billingInterval: 'ONE_TIME',
       priceCents: 700,
@@ -117,7 +117,49 @@ describe('membership checkout return', () => {
     });
     expect(mocks.checkoutCreate.mock.calls[0][0]).toMatchObject({
       success_url:
-        'https://www.rhyzefitness.com/api/checkout/membership/success?session_id={CHECKOUT_SESSION_ID}',
+        'https://www.rhyzefitness.com/api/checkout/membership/success?session_id={CHECKOUT_SESSION_ID}&plan=intro_7day',
+      cancel_url:
+        'https://www.rhyzefitness.com/member/membership?result=cancelled&plan=intro_7day',
     });
   });
+
+  it.each([
+    ['intro-offer', 'INTRO_TRIAL', 'ONE_TIME', 'intro_7day'],
+    ['drop-in', 'DROP_IN', 'ONE_TIME', 'single_class'],
+    ['elevate', 'LIMITED_MEMBERSHIP', 'MONTHLY', 'elevate'],
+    ['ritual', 'LIMITED_MEMBERSHIP', 'MONTHLY', 'ritual'],
+    ['vip-access-pass', 'VIP', 'MONTHLY', 'vip_access'],
+    ['eight-class-pack', 'CLASS_PACK', 'MONTHLY', 'pack_8'],
+  ])(
+    'returns %s with its exact advertising attribution value',
+    async (slug, kind, billingInterval, planValue) => {
+      mocks.productFindFirst.mockResolvedValue({
+        id: `product_${slug}`,
+        slug,
+        kind,
+        billingInterval,
+        priceCents: 7_00,
+        stripePriceId: `price_${slug}`,
+        isPublic: true,
+        isActive: true,
+      });
+      const formData = new FormData();
+      formData.set('productId', `product_${slug}`);
+      if (kind === 'INTRO_TRIAL') formData.set('trialPolicyAccepted', 'on');
+
+      await expect(startCheckoutAction(formData)).rejects.toThrow(
+        'redirect:https://checkout.stripe.com/c/pay/cs_intro',
+      );
+
+      const checkout = mocks.checkoutCreate.mock.calls.at(-1)?.[0];
+      const successDestination =
+        kind === 'INTRO_TRIAL'
+          ? `https://www.rhyzefitness.com/api/checkout/membership/success?session_id={CHECKOUT_SESSION_ID}&plan=${planValue}`
+          : `https://www.rhyzefitness.com/member/membership?result=success&plan=${planValue}&session_id={CHECKOUT_SESSION_ID}`;
+      expect(checkout).toMatchObject({
+        success_url: successDestination,
+        cancel_url: `https://www.rhyzefitness.com/member/membership?result=cancelled&plan=${planValue}`,
+      });
+    },
+  );
 });
