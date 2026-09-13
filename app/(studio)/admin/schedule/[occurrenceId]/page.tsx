@@ -6,7 +6,7 @@ import { occurrenceInstructorName, occurrenceLocalInputValue, occurrenceTitle } 
 import { assignableInstructorWhere, dedupeAssignableInstructors, instructorOptionLabel } from '@/lib/admin/assignable-instructors';
 
 export default async function ManageOccurrencePage(
-  props: { params: Promise<{ occurrenceId: string }>; searchParams: Promise<{ saved?: string; cancel?: string }> }
+  props: { params: Promise<{ occurrenceId: string }>; searchParams: Promise<{ saved?: string; cancel?: string; error?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
@@ -29,6 +29,7 @@ export default async function ManageOccurrencePage(
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrenceTitle(item)}</h1>
       {item.titleOverride && <p className="mt-2 text-sm font-bold text-rhyze-black/55">Template title: {item.template.name}</p>}
       {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">Class saved.</p>}
+      {searchParams.error === 'price' && <p className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Enter a valid client drop-in price.</p>}
       <form action={updateOccurrenceAction} className="mt-8 grid gap-4 border-t-4 border-rhyze-gold bg-white p-6 md:grid-cols-2">
         <input type="hidden" name="id" value={item.id}/>
         <Label text="Class title for this date"><input name="titleOverride" defaultValue={item.titleOverride || ''} placeholder={item.template.name} className="min-h-12 border px-3"/></Label>
@@ -40,6 +41,16 @@ export default async function ManageOccurrencePage(
         </label>
         <Label text="Start"><input name="startAt" type="datetime-local" defaultValue={occurrenceLocalInputValue(item.startAt)} required className="min-h-12 border px-3"/></Label>
         <Label text="Capacity"><input name="capacity" type="number" min="1" defaultValue={item.capacity} className="min-h-12 border px-3"/></Label>
+        <Label text="Client drop-in price">
+          <input
+            name="dropInPrice"
+            type="number"
+            min="1"
+            step="0.01"
+            defaultValue={((item.priceCents ?? item.template.dropInPriceCents ?? 2500) / 100).toFixed(2)}
+            className="min-h-12 border px-3"
+          />
+        </Label>
         <Label text="Public notes"><textarea name="publicNotes" defaultValue={item.publicNotes || ''} className="border p-3"/></Label>
         <Label text="Internal notes"><textarea name="internalNotes" defaultValue={item.internalNotes || ''} className="border p-3"/></Label>
         <Label text="Instructor payment method">
@@ -55,6 +66,9 @@ export default async function ManageOccurrencePage(
         <Label text="Pay note"><textarea name="instructorPayNote" defaultValue={item.instructorPayNote || ''} placeholder="Special event deal, adjusted rate, etc." className="border p-3"/></Label>
         <div className="border border-rhyze-gold/40 bg-[#fff8dc] p-4 text-sm font-bold">
           Current pay: {instructorPayLabel(item.instructorPayMethod)} · {item.instructorPayCents === null ? 'Amount not set' : `$${(item.instructorPayCents / 100).toFixed(2)}`}
+        </div>
+        <div className="border border-rhyze-gold/40 bg-[#fff8dc] p-4 text-sm font-bold">
+          Current client price: ${((item.priceCents ?? item.template.dropInPriceCents ?? 0) / 100).toFixed(2)}
         </div>
         <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">Save occurrence</button>
       </form>

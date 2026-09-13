@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
+import { parseClassPriceCents } from '@/lib/catalog/class-pricing';
 import { prisma } from '@/lib/db/prisma';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { normalizeInstructorPayMethod, parseDollarCents } from '@/lib/domain/instructors/pay-rates';
@@ -133,6 +134,10 @@ export async function updateOccurrenceAction(formData: FormData) {
   );
   const instructorPayMethod = normalizeInstructorPayMethod(formData.get('instructorPayMethod'));
   const instructorPayCents = parseDollarCents(formData.get('instructorPayAmount'));
+  const priceCents = parseClassPriceCents(formData.get('dropInPrice'));
+  if (priceCents === null) {
+    redirect(`/admin/schedule/${id}?error=price`);
+  }
   const endAt = new Date(startAt.getTime() + current.template.durationMinutes * 60_000);
   const data = {
     instructorId: String(formData.get('instructorId') || '') || null,
@@ -140,6 +145,7 @@ export async function updateOccurrenceAction(formData: FormData) {
     startAt,
     endAt,
     capacity: Math.max(1, Number(formData.get('capacity') || current.capacity)),
+    priceCents,
     titleOverride: cleanOptionalText(formData.get('titleOverride')),
     substituteInstructorName: cleanOptionalText(formData.get('substituteInstructorName')),
     isSubstitute: formData.get('isSubstitute') === 'on',
@@ -164,6 +170,7 @@ export async function updateOccurrenceAction(formData: FormData) {
           titleOverride: current.titleOverride,
           substituteInstructorName: current.substituteInstructorName,
           isSubstitute: current.isSubstitute,
+          priceCents: current.priceCents,
         },
         after: data,
       },
@@ -172,6 +179,7 @@ export async function updateOccurrenceAction(formData: FormData) {
   revalidatePath('/admin/schedule');
   revalidatePath(`/admin/schedule/${id}`);
   revalidatePath('/schedule');
+  revalidatePath(`/schedule/${id}`);
   redirect(`/admin/schedule/${id}?saved=1`);
 }
 
