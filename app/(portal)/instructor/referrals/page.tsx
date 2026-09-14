@@ -11,7 +11,7 @@ export default async function InstructorReferralsPage(
 ) {
   const searchParams = await props.searchParams;
   const user = await requireArea('instructor');
-  const period = periods.includes(searchParams.period as EarningsPeriod) ? searchParams.period as EarningsPeriod : 'week';
+  const period = periods.includes(searchParams.period as EarningsPeriod) ? searchParams.period as EarningsPeriod : 'month';
   const range = earningsDateRange(period, new Date(), searchParams.from, searchParams.to);
   const [code, commissions, attributedCount] = await Promise.all([
     prisma.referralCode.findFirst({ where: { instructorId: user.id, isActive: true } }),
