@@ -244,7 +244,7 @@ model User {
   credentialReviews        InstructorCredential[]      @relation("CredentialReviewer")
   referralAttribution      ReferralAttribution?        @relation("ReferredCustomer")
   instructorCommissions    ReferralCommission[]        @relation("CommissionInstructor")
-  referralCommission       ReferralCommission?         @relation("CommissionCustomer")
+  referralCommissions      ReferralCommission[]        @relation("CommissionCustomer")
   inAppNotifications       InAppNotification[]
   memberConversation       MemberConversation?         @relation("ConversationMember")
   conversationMessages     MemberConversationMessage[] @relation("ConversationSender")
@@ -1116,7 +1116,7 @@ model ReferralAttribution {
 
 model DiscountRedemption {
   id             String   @id @default(cuid())
-  userId         String   @unique
+  userId         String
   purchaseId     String   @unique
   referralCodeId String
   discountCents  Int
@@ -1124,13 +1124,14 @@ model DiscountRedemption {
 
   purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
 
+  @@index([userId, createdAt])
   @@index([referralCodeId, createdAt])
 }
 
 model ReferralCommission {
   id             String           @id @default(cuid())
   instructorId   String
-  referredUserId String           @unique
+  referredUserId String
   purchaseId     String           @unique
   amountCents    Int
   status         CommissionStatus @default(EARNED)
@@ -1143,6 +1144,7 @@ model ReferralCommission {
   purchase     Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
 
   @@index([instructorId, status, earnedAt])
+  @@index([referredUserId, earnedAt])
 }
 
 model NotificationPreference {

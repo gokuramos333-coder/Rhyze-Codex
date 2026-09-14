@@ -53,7 +53,7 @@ async function main() {
           stripeCustomerId: true,
           instructorApplication: { select: { id: true } },
           referralAttribution: { select: { id: true } },
-          referralCommission: { select: { id: true } },
+          referralCommissions: { select: { id: true } },
           memberConversation: { select: { id: true } },
           sombleClientProfile: { select: { id: true } },
           _count: {

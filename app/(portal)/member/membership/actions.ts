@@ -190,7 +190,7 @@ export async function startCheckoutAction(formData: FormData) {
   }
   const [redeemedDiscount, previousDiscountedPurchase] = referralCodeInput
     ? await Promise.all([
-        prisma.discountRedemption.findUnique({ where: { userId: user.id }, select: { id: true } }),
+        prisma.discountRedemption.findFirst({ where: { userId: user.id }, select: { id: true } }),
         prisma.purchase.findFirst({
           where: {
             userId: user.id,

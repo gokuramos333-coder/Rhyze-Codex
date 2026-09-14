@@ -40,6 +40,8 @@ describe('Rhyze email lifecycle wiring', () => {
     const helper = readFileSync('lib/notifications/admin-booking-cancellations.ts', 'utf8');
     const layout = readFileSync('app/(studio)/admin/layout.tsx', 'utf8');
     expect(actions).toContain('notifyAdminBookingCancellation');
+    expect(actions).toContain('attendanceRecord.deleteMany');
+    expect(actions).toContain('where: { bookingId: booking.id }');
     expect(helper).toContain("template: 'ADMIN_BOOKING_CANCELLED'");
     expect(helper).toContain("to: 'melissa@rhyzefit.com'");
     expect(helper).toContain("cc: ['vanessa@rhyzefit.com']");

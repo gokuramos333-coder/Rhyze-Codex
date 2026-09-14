@@ -127,6 +127,7 @@ describe('instructor operations', () => {
 
     expect(checkout).toContain('referralAttribution.upsert');
     expect(checkout).toContain('referralCodeId: referral.id');
+    expect(webhook).toContain('const redeemed = await tx.discountRedemption.findUnique({ where: { purchaseId: purchase.id } })');
     expect(webhook).toContain('instructorId: attribution.referralCode.instructorId');
     expect(webhook).toContain('referredUserId: purchase.userId');
     expect(webhook).toContain('purchaseId: purchase.id');

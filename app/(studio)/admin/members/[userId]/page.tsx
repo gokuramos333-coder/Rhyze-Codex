@@ -136,11 +136,12 @@ export default async function AdminMemberDetailPage(
             },
           },
         },
-        referralCommission: {
+        referralCommissions: {
           include: {
             instructor: { select: { name: true, email: true } },
             purchase: { include: { product: true } },
           },
+          orderBy: { earnedAt: 'desc' },
         },
         waiverAcceptances: {
           include: { waiverVersion: true },
@@ -217,7 +218,7 @@ export default async function AdminMemberDetailPage(
     }),
   ]);
   if (!member) notFound();
-  const referralCommission = member.referralCommission;
+  const referralCommission = member.referralCommissions[0];
   const now = new Date();
 
   const currentWaiver = activeWaiver

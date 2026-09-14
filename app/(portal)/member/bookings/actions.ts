@@ -442,6 +442,9 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       where: { id: booking.id },
       data: { status: decision.status, cancelledAt },
     });
+    await tx.attendanceRecord.deleteMany({
+      where: { bookingId: booking.id },
+    });
     await tx.emailMessage.updateMany({
       where: {
         dedupeKey: `class-reminder:${booking.id}:${booking.occurrenceId}`,

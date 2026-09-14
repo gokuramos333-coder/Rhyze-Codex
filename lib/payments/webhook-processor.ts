@@ -304,7 +304,7 @@ async function fulfillProductPurchase(
       where: { referredUserId: purchase.userId },
       include: { referralCode: true },
     });
-    const redeemed = await tx.discountRedemption.findUnique({ where: { userId: purchase.userId } });
+    const redeemed = await tx.discountRedemption.findUnique({ where: { purchaseId: purchase.id } });
     const commission = commissionCentsForProduct(purchase.product.kind);
     if (attribution && !redeemed && commission > 0) {
       await tx.discountRedemption.create({
