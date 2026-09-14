@@ -74,3 +74,12 @@ export async function resetPassword(
 
   return { userId: token.userId };
 }
+
+export async function isPasswordResetTokenUsable(
+  presentedToken: string,
+  repository: PasswordResetRepository,
+  now = new Date(),
+): Promise<boolean> {
+  const token = await repository.findTokenByHash(hashToken(presentedToken));
+  return Boolean(token && isTokenUsable(token, now));
+}

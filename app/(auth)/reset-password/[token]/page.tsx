@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { AuthFrame } from '@/components/domain/accounts/AuthFrame';
 import { ResetPasswordForm } from '@/components/domain/accounts/ResetPasswordForm';
+import { isPasswordResetTokenUsable } from '@/lib/domain/accounts/password-reset-service';
+import { prismaPasswordResetRepository } from '@/lib/domain/accounts/prisma-password-reset-repository';
 import { resetPasswordAction } from '../../actions';
 
 export default async function ResetPasswordPage(
@@ -11,6 +13,11 @@ export default async function ResetPasswordPage(
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
+  const tokenUsable = await isPasswordResetTokenUsable(
+    params.token,
+    prismaPasswordResetRepository,
+  );
+  const tokenError = searchParams.error === 'token' || !tokenUsable;
   return (
     <AuthFrame
       eyebrow="One final step"
@@ -28,14 +35,23 @@ export default async function ResetPasswordPage(
       <h2 className="mt-3 font-display text-5xl tracking-wider">
         NEW PASSWORD
       </h2>
-      {searchParams.error && (
+      {(searchParams.error || tokenError) && (
         <p className="mt-5 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-4 text-sm font-bold">
-          {searchParams.error === 'token'
+          {tokenError
             ? 'This reset link is invalid or expired. Request a new one.'
             : 'Use at least 9 characters with an uppercase letter, number, and symbol, and make sure both entries match.'}
         </p>
       )}
-      <ResetPasswordForm token={params.token} action={resetPasswordAction} />
+      {tokenUsable ? (
+        <ResetPasswordForm token={params.token} action={resetPasswordAction} />
+      ) : (
+        <Link
+          href="/forgot-password"
+          className="mt-6 inline-flex min-h-14 items-center justify-center bg-rhyze-gradient px-6 text-sm font-black uppercase tracking-[0.2em] text-rhyze-black"
+        >
+          Request a new link
+        </Link>
+      )}
     </AuthFrame>
   );
 }

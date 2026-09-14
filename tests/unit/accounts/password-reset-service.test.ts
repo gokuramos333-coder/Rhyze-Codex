@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isPasswordResetTokenUsable,
   requestPasswordReset,
   resetPassword,
   type PasswordResetRepository,
@@ -114,5 +115,21 @@ describe('forgot-password recovery', () => {
     await expect(
       resetPassword('unknown', 'NewSecure1!', repository(), NOW),
     ).rejects.toThrow('invalid or expired');
+  });
+
+  it('checks whether a presented reset token is usable without consuming it', async () => {
+    const repo = repository();
+    const token = await requestPasswordReset('member@example.com', repo, NOW);
+
+    await expect(isPasswordResetTokenUsable(token!, repo, NOW)).resolves.toBe(true);
+    expect(repo.consumed).toHaveLength(0);
+    await expect(isPasswordResetTokenUsable('unknown', repo, NOW)).resolves.toBe(false);
+    await expect(
+      isPasswordResetTokenUsable(
+        token!,
+        repo,
+        new Date('2026-07-27T18:00:00.000Z'),
+      ),
+    ).resolves.toBe(false);
   });
 });
