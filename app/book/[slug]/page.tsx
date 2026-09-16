@@ -19,6 +19,7 @@ import { ownedSchedule } from '@/lib/rhyze-platform';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { occurrenceInstructorName, occurrenceLocalTimeZone, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 
 export const metadata: Metadata = {
@@ -65,7 +66,7 @@ export default async function BookingPage(
         series: { select: { recurrenceRule: true } },
         _count: {
           select: {
-            bookings: { where: { status: 'CONFIRMED' } },
+            bookings: { where: confirmedRosterBookingWhere() },
             waitlistEntries: { where: { status: 'WAITING' } },
           },
         },

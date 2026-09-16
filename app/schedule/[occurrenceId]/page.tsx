@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { WAITLIST_CAPACITY } from '@/lib/domain/bookings/booking-rules';
 import { occurrenceInstructorName, occurrenceLocalTimeZone, occurrenceTitle, occurrenceTitleWithInstructor } from '@/lib/domain/schedule/occurrence-management';
 
@@ -17,7 +18,7 @@ export default async function ClassOccurrencePage(
     include: {
       template: { include: { category: true } },
       instructor: { include: { instructorProfile: true } },
-      _count: { select: { bookings: { where: { status: 'CONFIRMED' } }, waitlistEntries: { where: { status: 'WAITING' } } } },
+      _count: { select: { bookings: { where: confirmedRosterBookingWhere() }, waitlistEntries: { where: { status: 'WAITING' } } } },
     },
   });
   if (!occurrence) notFound();

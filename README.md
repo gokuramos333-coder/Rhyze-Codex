@@ -26,6 +26,7 @@ npm run build     # production build
 npm run start     # run the production build
 npm run lint      # next lint
 npm run typecheck # tsc --noEmit
+npm run deploy:production # full Netlify build and production deploy
 ```
 
 `pnpm` also works if preferred; the plan's first choice was pnpm but we fell
@@ -90,19 +91,19 @@ Most copy changes happen in `lib/*.ts`, not in JSX:
 Drop photos into the right `public/` folder and reference them via absolute
 paths (`/founders/whoever.jpg`).
 
-## Deployment (Vercel)
+## Deployment (Netlify)
 
-1. Push the repo to GitHub.
-2. Import the repo into Vercel.
-3. Framework preset: **Next.js** (auto-detected).
-4. Root directory: repo root.
-5. Add the production environment variables from `.env.example` under
-   **Project → Settings → Environment Variables**. Stripe, email, storage, auth,
-   and database secrets are required for their corresponding live features.
-6. On merge to `main`, Vercel rebuilds and deploys.
+Production is hosted by the linked Netlify project at
+`https://www.rhyzefitness.com`.
 
-OG image, sitemap, and robots are generated automatically by Next at build
-time, no extra config.
+1. Run `npm run typecheck`, `npm test`, and `npm run build`.
+2. Run `npm run deploy:production` from the repository root.
+3. Verify the live page and one generated `/_next/static/css/` asset return
+   HTTP 200.
+
+Always use the production deployment script. Do not deploy this Next.js site
+with Netlify's `--no-build` flag: it skips the adapter pipeline that maps
+generated assets into their public `/_next/static/` paths.
 
 ## Accessibility & SEO
 

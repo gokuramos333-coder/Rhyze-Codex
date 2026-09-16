@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { cancelAssignedClassAction, sendClassMessageAction } from './actions';
 
@@ -12,7 +13,7 @@ export default async function ClassMessagePage(
   const instructor = await requireArea('instructor');
   const occurrence = await prisma.classOccurrence.findFirst({
     where: { id: params.occurrenceId, instructorId: instructor.id },
-    include: { template: true, _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } }, classMessages: { orderBy: { createdAt: 'desc' }, take: 10 } },
+    include: { template: true, _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } }, classMessages: { orderBy: { createdAt: 'desc' }, take: 10 } },
   });
   if (!occurrence) notFound();
   const isCancelled = occurrence.status === 'CANCELLED';

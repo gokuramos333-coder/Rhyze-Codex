@@ -142,6 +142,7 @@ export async function updateInstructorDirectoryAction(formData: FormData) {
   const name = String(formData.get('name') || '').trim();
   const bio = String(formData.get('bio') || '').trim();
   const photo = formData.get('photo');
+  const removePhoto = formData.get('removePhoto') === 'true';
   const requestedStandardRate = dollarsToCents(formData.get('standardClassRate')) ?? 4_000;
   const specialtyEventRateCents = dollarsToCents(formData.get('specialtyEventRate'));
   const specialtyEventRateText = String(formData.get('specialtyEventRateText') || '').trim().slice(0, 500) || null;
@@ -153,7 +154,7 @@ export async function updateInstructorDirectoryAction(formData: FormData) {
   ]);
   const isOwnerInstructor = ['vanessa@rhyzefit.com', 'melissa@rhyzefit.com'].includes(instructorUser?.email.toLowerCase() || '');
   const standardClassRateCents = isOwnerInstructor ? 0 : requestedStandardRate;
-  let nextPhotoUrl = current?.photoUrl || null;
+  let nextPhotoUrl = removePhoto ? null : (current?.photoUrl || null);
   if (photo instanceof File && photo.size > 0) {
     try {
       nextPhotoUrl = await putPublicImage(photo);

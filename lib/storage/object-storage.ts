@@ -34,6 +34,7 @@ export async function putPublicImage(file: File) {
   const key = `profiles/${randomUUID()}.jpg`;
   const normalized = await normalizePublicImage(
     Buffer.from(await file.arrayBuffer()),
+    file.type,
   );
   await putObject(key, 'image/jpeg', normalized);
   return `/api/media/${key}`;

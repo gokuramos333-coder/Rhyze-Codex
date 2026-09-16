@@ -12,6 +12,10 @@ import {
 import { createProductAction, deleteProductAction, saveProductOrderAction, toggleProductAction } from './actions';
 import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControls';
 import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
+import {
+  netCollectedAmountCents,
+  PURCHASE_REVENUE_STATUSES,
+} from '@/lib/admin/net-revenue';
 import Link from 'next/link';
 
 export default async function AdminProductsPage(
@@ -33,7 +37,10 @@ export default async function AdminProductsPage(
         },
       }),
       prisma.purchase.findMany({
-        where: { status: 'PAID' },
+        where: {
+          status: { in: [...PURCHASE_REVENUE_STATUSES] },
+          product: { kind: { not: 'DROP_IN' } },
+        },
         select: {
           amountCents: true,
           refundedAmountCents: true,
@@ -57,7 +64,7 @@ export default async function AdminProductsPage(
       source: 'SOMBLE' as const,
     })),
     ...nativeRevenue.map((item) => ({
-      amountCents: item.amountCents - item.refundedAmountCents,
+      amountCents: netCollectedAmountCents(item),
       occurredAt: item.paidAt || item.createdAt,
       customerId: item.userId,
       type: item.product.name,

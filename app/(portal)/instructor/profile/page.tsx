@@ -2,7 +2,12 @@ import Link from 'next/link';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { BirthdayFields } from '@/components/domain/accounts/BirthdayFields';
-import { updateInstructorBirthdayAction, uploadCredentialAction } from './actions';
+import { InstructorPublicProfileForm } from '@/components/admin/InstructorPublicProfileForm';
+import {
+  updateInstructorBirthdayAction,
+  updateOwnInstructorDirectoryAction,
+  uploadCredentialAction,
+} from './actions';
 
 export default async function InstructorProfilePage(props: { searchParams: Promise<{ saved?: string; error?: string }> }) {
   const searchParams = await props.searchParams;
@@ -23,12 +28,23 @@ export default async function InstructorProfilePage(props: { searchParams: Promi
         <Link href="/instructor/profile#credentials" className="border border-rhyze-orange bg-orange-50 px-4 py-3 text-xs font-black uppercase tracking-widest">Upload credentials</Link>
         <Link href="/instructor/referrals" className="bg-rhyze-black px-4 py-3 text-xs font-black uppercase tracking-widest text-white">Referral commissions</Link>
       </div>
-      {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">{searchParams.saved === 'birthday' ? 'Birthday saved.' : 'Document uploaded for admin review.'}</p>}
-      {searchParams.error && <p className="mt-5 border-l-4 border-rhyze-coral bg-white p-4 font-bold text-rhyze-coral">{searchParams.error === 'birthday' ? 'Choose a valid birthday month and day.' : 'Use a valid PDF, JPG, or PNG. If provided, the expiration date must be in the future.'}</p>}
-      <div className="mt-8 grid gap-4 lg:grid-cols-2">
-        <section className="border-t-4 border-rhyze-gold bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Name</p><p className="mt-2 text-xl font-bold">{user.name || 'Name not set'}</p><p className="mt-6 text-xs font-black uppercase tracking-widest">Bio</p><p className="mt-2 text-rhyze-black/60">{profile?.bio || 'Your public bio can be completed with the studio.'}</p></section>
-        <Link href="/instructor/referrals" className="border-t-4 border-rhyze-coral bg-white p-6 transition hover:-translate-y-0.5 hover:shadow-lg"><p className="text-xs font-black uppercase tracking-widest">Referral code</p><p className="mt-3 font-display text-5xl tracking-wider">{code?.code || 'PENDING'}</p><p className="mt-2 text-sm text-rhyze-black/55">Open copy controls, referred clients, and commission details →</p></Link>
-      </div>
+      {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">{searchParams.saved === 'birthday' ? 'Birthday saved.' : searchParams.saved === 'profile' ? 'Your public instructor profile is updated.' : 'Document uploaded for admin review.'}</p>}
+      {searchParams.error && searchParams.error !== 'photo' && <p className="mt-5 border-l-4 border-rhyze-coral bg-white p-4 font-bold text-rhyze-coral">{searchParams.error === 'birthday' ? 'Choose a valid birthday month and day.' : searchParams.error === 'profile-access' ? 'Ask Rhyze Admin to enable profile editing for your account.' : searchParams.error === 'profile' ? 'Enter your public instructor name.' : 'Use a valid PDF, JPG, or PNG. If provided, the expiration date must be in the future.'}</p>}
+      {profile?.canEditOwnProfile && (
+        <div className="mt-8">
+          <InstructorPublicProfileForm
+            action={updateOwnInstructorDirectoryAction}
+            name={user.name || ''}
+            bio={profile.bio || ''}
+            currentPhotoUrl={profile.photoUrl}
+            initialPhotoError={searchParams.error === 'photo'
+              ? 'Use a HEIC, HEIF, JPG, PNG, or WebP image no larger than 8 MB.'
+              : null}
+            submitLabel="Save and publish my profile"
+          />
+        </div>
+      )}
+      <Link href="/instructor/referrals" className="mt-6 block border-t-4 border-rhyze-coral bg-white p-6 transition hover:-translate-y-0.5 hover:shadow-lg"><p className="text-xs font-black uppercase tracking-widest">Referral code</p><p className="mt-3 font-display text-5xl tracking-wider">{code?.code || 'PENDING'}</p><p className="mt-2 text-sm text-rhyze-black/55">Open copy controls, referred clients, and commission details →</p></Link>
       <section className="mt-6 border-t-4 border-rhyze-coral bg-white p-6">
         <h2 className="font-display text-4xl tracking-wider">BIRTHDAY</h2>
         <form action={updateInstructorBirthdayAction} className="mt-4 grid max-w-xl gap-4">

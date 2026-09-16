@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { cancelOccurrenceAction, cancelSeriesAction, duplicateOccurrenceAction, updateOccurrenceAction } from './actions';
 import { instructorPayLabel } from '@/lib/domain/instructors/pay-rates';
 import { occurrenceInstructorName, occurrenceLocalInputValue, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
@@ -16,7 +17,7 @@ export default async function ManageOccurrencePage(
       include: {
         template: true,
         instructor: { include: { instructorProfile: true } },
-        _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+        _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
       },
     }),
     prisma.user.findMany({ where: assignableInstructorWhere, orderBy: { name: 'asc' } }),

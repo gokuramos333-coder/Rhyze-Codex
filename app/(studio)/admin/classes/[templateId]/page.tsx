@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import {
   assignTemplateInstructorAction,
   updateClassTemplateAction,
@@ -20,7 +21,7 @@ export default async function EditTemplatePage(
           orderBy: { startAt: 'asc' },
           include: {
             instructor: { select: { id: true, name: true } },
-            _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+            _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
           },
         },
       },

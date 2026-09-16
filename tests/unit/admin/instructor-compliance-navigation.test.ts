@@ -32,6 +32,10 @@ describe('instructor directory and compliance navigation', () => {
       'app/(studio)/admin/instructors/[userId]/page.tsx',
       'utf8',
     );
+    const profileForm = readFileSync(
+      'components/admin/InstructorPublicProfileForm.tsx',
+      'utf8',
+    );
     const actions = readFileSync(
       'app/(studio)/admin/instructors/actions.ts',
       'utf8',
@@ -44,12 +48,12 @@ describe('instructor directory and compliance navigation', () => {
     expect(inviteForm).not.toContain('id="instructor-photo"\n            required');
     expect(directoryPage).not.toContain('name="photoUrl"');
     expect(directoryPage).not.toContain('Photo path or URL');
-    expect(profilePage).toContain('<Span>Upload photo</Span>');
-    expect(profilePage).toContain('name="photo"');
+    expect(profilePage).toContain('InstructorPublicProfileForm');
+    expect(profileForm).toContain('<Span>Instructor photo</Span>');
+    expect(profileForm).toContain('name="photo"');
     expect(profilePage).not.toContain('name="photoUrl"');
     expect(profilePage).not.toContain('Photo path or URL');
     expect(actions).toContain('let photoUrl: string | null = null;');
-    expect(actions).toContain('let nextPhotoUrl = current?.photoUrl || null;');
     expect(actions).not.toContain("formData.get('photoUrl')");
   });
 

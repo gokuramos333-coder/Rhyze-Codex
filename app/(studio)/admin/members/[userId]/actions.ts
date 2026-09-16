@@ -449,7 +449,7 @@ export async function refundMemberPurchaseAction(formData: FormData) {
         data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents },
       });
       await tx.paymentRecord.updateMany({
-        where: { purchaseId: purchase.id },
+        where: { stripePaymentIntentId: purchase.stripePaymentIntentId },
         data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents },
       });
       await tx.membership.updateMany({

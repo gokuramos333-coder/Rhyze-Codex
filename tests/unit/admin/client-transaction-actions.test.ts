@@ -26,10 +26,12 @@ describe('admin client transaction actions', () => {
 
     for (const source of [memberAction, paymentsAction]) {
       expect(source).toContain("data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents }");
+      expect(source).toContain("where: { stripePaymentIntentId: purchase.stripePaymentIntentId }");
       expect(source).toContain("data: { status: 'CANCELLED', cancelAtPeriodEnd: false");
       expect(source).toContain('sourcePurchaseId');
       expect(source).toContain("data: { validUntil:");
       expect(source).toContain("revalidatePath('/admin/activity')");
     }
+    expect(paymentsAction).toContain("where: { stripePaymentIntentId: order.stripePaymentIntentId }");
   });
 });

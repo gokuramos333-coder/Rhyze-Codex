@@ -1,14 +1,31 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { linkStripePaymentRecordToMember } from '@/lib/admin/stripe-payment-linking';
+import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
 
 function adminPaymentsPath(result?: string) {
   return `/admin/payments${result ? `?result=${result}` : ''}#native-payment-records`;
+}
+
+export async function refreshStripePaymentsAction() {
+  await requireArea('admin');
+  try {
+    await syncRecentStripePaymentRecords(prisma, { lookbackDays: 14, limit: 100 });
+  } catch (error) {
+    console.error('Manual Stripe payment sync failed', error);
+    redirect(adminPaymentsPath('sync-error'));
+  }
+  revalidatePath('/admin/payments');
+  revalidatePath('/admin');
+  revalidatePath('/admin/activity');
+  revalidatePath('/admin/events');
+  redirect(adminPaymentsPath('refreshed'));
 }
 
 export async function linkPaymentRecordToMemberAction(formData: FormData) {
@@ -55,7 +72,10 @@ export async function refundPurchaseAction(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     await tx.refund.create({ data: { purchaseId, amountCents: refundableAmount, stripeRefundId: refund.id, reason: 'Admin full refund' } });
     await tx.purchase.update({ where: { id: purchaseId }, data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents } });
-    await tx.paymentRecord.updateMany({ where: { purchaseId }, data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents } });
+    await tx.paymentRecord.updateMany({
+      where: { stripePaymentIntentId: purchase.stripePaymentIntentId },
+      data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents },
+    });
     await tx.membership.updateMany({ where: { purchaseId }, data: { status: 'CANCELLED', cancelAtPeriodEnd: false, currentPeriodEnd: closedAt } });
     await tx.creditAccount.updateMany({ where: { sourcePurchaseId: purchaseId }, data: { validUntil: closedAt } });
     await tx.referralCommission.updateMany({ where: { purchaseId }, data: { status: 'REVERSED', reversedAt: closedAt } });
@@ -108,7 +128,7 @@ export async function refundCommerceOrderAction(formData: FormData) {
       data: { status: 'REFUNDED', refundedAmountCents: refund.amount },
     });
     await tx.paymentRecord.updateMany({
-      where: { commerceOrderId: order.id },
+      where: { stripePaymentIntentId: order.stripePaymentIntentId },
       data: { status: 'REFUNDED', refundedAmountCents: refund.amount },
     });
     const recipient = order.user?.email || order.customerEmail;

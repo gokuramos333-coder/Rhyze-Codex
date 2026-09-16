@@ -28,9 +28,28 @@ async function loadSharp() {
   return mod.default;
 }
 
-export async function normalizePublicImage(input: Buffer) {
+type HeicConverter = (input: Buffer) => Promise<Buffer>;
+
+async function convertHeicToJpeg(input: Buffer) {
+  const mod = await import('heic-convert');
+  const converted = await mod.default({
+    buffer: input,
+    format: 'JPEG',
+    quality: 0.92,
+  });
+  return Buffer.from(converted);
+}
+
+export async function normalizePublicImage(
+  input: Buffer,
+  contentType = '',
+  convertHeic: HeicConverter = convertHeicToJpeg,
+) {
+  const source = ['image/heic', 'image/heif'].includes(contentType.toLowerCase())
+    ? await convertHeic(input)
+    : input;
   const sharp = await loadSharp();
-  return sharp(input, { failOn: 'error' })
+  return sharp(source, { failOn: 'error' })
     .rotate()
     .resize({
       width: 1_600,

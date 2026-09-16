@@ -4,14 +4,19 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { stripeIsConfigured } from '@/lib/payments/stripe';
 import { calculateSombleMetrics } from '@/lib/admin/somble-metrics';
-import { linkPaymentRecordToMemberAction, refundCommerceOrderAction, refundPurchaseAction } from './actions';
+import { linkPaymentRecordToMemberAction, refreshStripePaymentsAction, refundCommerceOrderAction, refundPurchaseAction } from './actions';
 import { splitCommerceOrders } from '@/lib/admin/payment-sections';
 import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
-import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { formatPaymentDateTime } from '@/lib/admin/payment-date-time';
 import { isVisiblePaymentHistoryPurchase } from '@/lib/payments/payment-history-visibility';
 import { RefundedBadge } from '@/components/admin/RefundedBadge';
+import {
+  COMMERCE_REVENUE_STATUSES,
+  netCollectedAmountCents,
+  paymentRecordFinancialTotals,
+  sumNetCollectedAmounts,
+} from '@/lib/admin/net-revenue';
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 export const dynamic = 'force-dynamic';
@@ -36,10 +41,10 @@ function paymentRecordSource(record: PaymentRecordRow) {
     record.kind.replaceAll('_', ' ');
 }
 
-export default async function PaymentsPage() {
-  await syncRecentStripePaymentRecords(prisma).catch((error) => {
-    console.error('Stripe payment sync failed', error);
-  });
+export default async function PaymentsPage({
+  searchParams,
+}: { searchParams: Promise<{ result?: string }> }) {
+  const result = (await searchParams).result;
   const [purchases, commerceOrders, paymentRecords, historical] = await Promise.all([
     prisma.purchase.findMany({
       include: { user: true, product: true, invoice: true },
@@ -78,10 +83,7 @@ export default async function PaymentsPage() {
   );
   const sombleBackedStripeRecordCount = paymentRecords.length - visiblePaymentRecords.length;
   const visiblePurchases = purchases.filter(isVisiblePaymentHistoryPurchase);
-  const nativePaidCents = verifiedPaymentRecords
-    .filter((record) => ['SUCCEEDED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(record.status))
-    .reduce((total, record) => total + record.amountCents, 0);
-  const nativeRefundedCents = verifiedPaymentRecords.reduce((total, record) => total + record.refundedAmountCents, 0);
+  const nativeFinancials = paymentRecordFinancialTotals(verifiedPaymentRecords);
   const { events, merchandise } = splitCommerceOrders(commerceOrders);
 
   return (
@@ -94,17 +96,36 @@ export default async function PaymentsPage() {
           </p>
           <h1 className="mt-3 font-display text-6xl tracking-wider">SALES</h1>
         </div>
-        <Link
-          href="/api/admin/somble-export?type=transactions"
-          className="inline-flex items-center gap-2 bg-rhyze-black px-5 py-3 text-xs font-black uppercase text-white"
-        >
-          <Download className="h-4 w-4" /> Export Somble Data
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <form action={refreshStripePaymentsAction}>
+            <button
+              type="submit"
+              disabled={!stripeIsConfigured()}
+              className="bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase text-rhyze-black disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Refresh from Stripe
+            </button>
+          </form>
+          <Link
+            href="/api/admin/somble-export?type=transactions"
+            className="inline-flex items-center gap-2 bg-rhyze-black px-5 py-3 text-xs font-black uppercase text-white"
+          >
+            <Download className="h-4 w-4" /> Export Somble Data
+          </Link>
+        </div>
       </div>
 
+      {result === 'refreshed' && (
+        <p className="mt-4 border-l-4 border-rhyze-gold bg-white p-4 text-sm font-bold">Stripe payment records were refreshed.</p>
+      )}
+      {result === 'sync-error' && (
+        <p className="mt-4 border-l-4 border-rhyze-coral bg-white p-4 text-sm font-bold text-red-800">Stripe refresh failed. Existing payment data has not been deleted; please try again or check the Stripe job log.</p>
+      )}
+
       <div className="mt-7 grid gap-3 md:grid-cols-3">
-        <Card label="Native Rhyze collected" value={money(nativePaidCents)} href="#native-collected" />
-        <Card label="Native refunds" value={money(nativeRefundedCents)} href="#native-refunds" />
+        <Card label="Native Rhyze gross" value={money(nativeFinancials.grossCents)} href="#native-collected" />
+        <Card label="Native refunds / disputes" value={money(nativeFinancials.adjustmentCents)} href="#native-refunds" />
+        <Card label="Native Rhyze net" value={money(nativeFinancials.netCents)} href="#native-collected" />
         <Card label="Native payment records" value={`${verifiedPaymentRecords.length}`} href="#native-payment-records" />
         <Card label="Unmatched Stripe review" value={`${unmatchedPaymentRecords.length}`} href="#native-payment-records" />
         <Card label="Somble transferred revenue" value={money(metrics.transferredRevenueCents)} href="#somble-history" />
@@ -289,13 +310,15 @@ function CommerceOrderSection({
   emptyLabel: string;
 }) {
   const totalCents = orders
-    .filter((order) => order.status === 'PAID' || order.status === 'FULFILLMENT_REVIEW')
-    .reduce((total, order) => total + order.amountCents - order.refundedAmountCents, 0);
+    .filter((order) =>
+      COMMERCE_REVENUE_STATUSES.some((status) => status === order.status) &&
+      order.status !== 'DISPUTED',
+    );
   return (
     <section className="mt-8 overflow-x-auto bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 p-5">
         <h2 className="font-display text-4xl tracking-wider">{title}</h2>
-        <strong className="font-display text-3xl tracking-wider">{money(totalCents)}</strong>
+        <strong className="font-display text-3xl tracking-wider">{money(sumNetCollectedAmounts(totalCents))}</strong>
       </div>
       <p className="border-b border-black/10 px-5 py-3 text-sm text-rhyze-black/55">
         Stripe Checkout orders appear after signed webhook confirmation.
@@ -309,7 +332,7 @@ function CommerceOrderSection({
               <td>{formatPaymentDateTime(order.paidAt || order.createdAt)}</td>
               <td>{order.occurrence?.template.name || order.items.map((item) => `${item.name} × ${item.quantity}`).join(', ')}</td>
               <td>{order.status.replaceAll('_', ' ')}</td>
-              <td>{money(order.amountCents - order.refundedAmountCents)}</td>
+              <td>{money(order.status === 'DISPUTED' ? 0 : netCollectedAmountCents(order))}</td>
               <td>
                 {(order.status === 'PAID' || order.status === 'FULFILLMENT_REVIEW') && order.stripePaymentIntentId && (
                   <form action={refundCommerceOrderAction}>

@@ -98,8 +98,39 @@ export async function syncRecentStripePaymentRecords(
       })
     ).map((transaction) => transaction.paymentId),
   );
+  const candidates = charges.data.filter((charge) =>
+    charge.paid && charge.currency.toLowerCase() === 'usd' && !sombleBackedPaymentIds.has(charge.id)
+  );
+  const existingPaymentRecords = candidates.length
+    ? await prisma.paymentRecord.findMany({
+        where: {
+          OR: [
+            { stripePaymentIntentId: { in: candidates.map(paymentIntentIdentifier) } },
+            { stripeEventId: { in: candidates.map((charge) => `stripe-sync-charge-${charge.id}`) } },
+          ],
+        },
+        select: {
+          id: true,
+          stripePaymentIntentId: true,
+          stripeEventId: true,
+          status: true,
+          amountCents: true,
+          refundedAmountCents: true,
+          purchaseId: true,
+          purchase: { select: { status: true } },
+          commerceOrderId: true,
+          commerceOrder: { select: { status: true } },
+          membershipId: true,
+        },
+      })
+    : [];
+  const recordByPaymentIntent = new Map(existingPaymentRecords
+    .filter((record) => record.stripePaymentIntentId)
+    .map((record) => [record.stripePaymentIntentId, record]));
+  const recordByEventId = new Map(existingPaymentRecords.map((record) => [record.stripeEventId, record]));
 
   let synced = 0;
+  let unchanged = 0;
   let fulfilledCheckoutSessions = 0;
   let skippedSombleBacked = 0;
   for (const charge of charges.data) {
@@ -108,6 +139,28 @@ export async function syncRecentStripePaymentRecords(
       skippedSombleBacked += 1;
       continue;
     }
+    const status = paymentStatus(charge);
+    const paymentIntentId = paymentIntentIdentifier(charge);
+    const amountCents = charge.amount_captured || charge.amount;
+    const existingByCharge = recordByPaymentIntent.get(paymentIntentId) ||
+      recordByEventId.get(`stripe-sync-charge-${charge.id}`);
+    const purchaseResolved = existingByCharge?.purchase?.status === (
+      status === 'SUCCEEDED' ? 'PAID' : status
+    );
+    const commerceResolved = existingByCharge?.commerceOrder?.status === (
+      status === 'SUCCEEDED' ? 'PAID' : status
+    ) || (status === 'SUCCEEDED' && existingByCharge?.commerceOrder?.status === 'FULFILLMENT_REVIEW');
+    if (
+      existingByCharge &&
+      existingByCharge.status === status &&
+      existingByCharge.amountCents === amountCents &&
+      existingByCharge.refundedAmountCents === charge.amount_refunded &&
+      (purchaseResolved || commerceResolved || (status === 'SUCCEEDED' && Boolean(existingByCharge.membershipId)))
+    ) {
+      unchanged += 1;
+      continue;
+    }
+
     const customerEmail = emailFromCharge(charge);
     const customerName = nameFromCharge(charge);
     const user = customerEmail
@@ -116,23 +169,17 @@ export async function syncRecentStripePaymentRecords(
           select: { id: true },
         })
       : null;
-    const status = paymentStatus(charge);
-    const paymentIntentId = paymentIntentIdentifier(charge);
 
     const checkoutSession = await paidCheckoutSessionForPaymentIntent(stripe, paymentIntentId);
-    const existingPaymentRecord = await prisma.paymentRecord.findFirst({
-      where: {
-        OR: [
-          { stripePaymentIntentId: paymentIntentId },
-          { stripeEventId: `stripe-sync-charge-${charge.id}` },
-          ...(checkoutSession ? [{ stripeCheckoutSessionId: checkoutSession.id }] : []),
-        ],
-      },
-      select: { id: true },
-    });
+    const existingPaymentRecord = existingByCharge || (checkoutSession
+      ? await prisma.paymentRecord.findFirst({
+          where: { stripeCheckoutSessionId: checkoutSession.id },
+          select: { id: true },
+        })
+      : null);
     const paymentRecordData = {
       status,
-      amountCents: charge.amount_captured || charge.amount,
+      amountCents,
       refundedAmountCents: charge.amount_refunded,
       receiptUrl: charge.receipt_url || null,
       occurredAt: fromUnix(charge.created),
@@ -168,5 +215,5 @@ export async function syncRecentStripePaymentRecords(
     synced += 1;
   }
 
-  return { attempted: true, synced, fulfilledCheckoutSessions, skippedSombleBacked, ...diagnostics };
+  return { attempted: true, synced, unchanged, fulfilledCheckoutSessions, skippedSombleBacked, ...diagnostics };
 }

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { createClassTemplateAction, deleteClassTemplateAction } from '../classes/actions';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import {
@@ -17,8 +18,10 @@ import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControl
 import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
 import { resolveScheduleOccurrenceRange } from '@/lib/admin/schedule-occurrence-range';
 import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
-import { collectedEventRevenueCents } from '@/lib/admin/event-revenue';
-import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
+import {
+  activeEventBookingValueCents,
+} from '@/lib/admin/event-revenue';
+import { netCollectedAmountCents } from '@/lib/admin/net-revenue';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -30,9 +33,6 @@ export default async function AdminEventsPage(
   const range = resolveAnalyticsRange(searchParams);
   const occurrenceRange = resolveScheduleOccurrenceRange(searchParams);
   const now = new Date();
-  await syncRecentStripePaymentRecords(prisma).catch((error) => {
-    console.error('Unable to refresh Stripe payment records before loading event revenue', error);
-  });
   const [eventRows, categories, sombleRevenue, nativeEventOrders, nativeBookers, scheduledOccurrences] = await Promise.all([
     prisma.classTemplate.findMany({
       where: { isEvent: true },
@@ -42,7 +42,7 @@ export default async function AdminEventsPage(
           take: 1,
           include: {
             instructor: { include: { instructorProfile: true } },
-            _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+            _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
           },
         },
         _count: { select: { occurrences: true } },
@@ -62,7 +62,14 @@ export default async function AdminEventsPage(
     prisma.commerceOrder.findMany({
       where: {
         kind: 'EVENT',
-        status: { in: ['PAID', 'FULFILLMENT_REVIEW'] },
+        status: {
+          in: [
+            'PAID',
+            'FULFILLMENT_REVIEW',
+            'PARTIALLY_REFUNDED',
+            'REFUNDED',
+          ],
+        },
       },
       select: {
         amountCents: true,
@@ -93,11 +100,31 @@ export default async function AdminEventsPage(
         commerceOrders: {
           where: {
             kind: 'EVENT',
-            status: { in: ['PAID', 'FULFILLMENT_REVIEW'] },
+            status: {
+              in: [
+                'PAID',
+                'FULFILLMENT_REVIEW',
+                'PARTIALLY_REFUNDED',
+                'REFUNDED',
+              ],
+            },
           },
-          select: { amountCents: true, refundedAmountCents: true },
+          select: {
+            userId: true,
+            customerEmail: true,
+            amountCents: true,
+            refundedAmountCents: true,
+            paidAt: true,
+          },
         },
-        _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+        bookings: {
+          where: confirmedRosterBookingWhere(),
+          select: {
+            userId: true,
+            user: { select: { email: true } },
+          },
+        },
+        _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
       },
       orderBy: { startAt: 'asc' },
     }),
@@ -112,7 +139,7 @@ export default async function AdminEventsPage(
       source: 'SOMBLE' as const,
     })),
     ...nativeEventOrders.map((item) => ({
-      amountCents: item.amountCents - item.refundedAmountCents,
+      amountCents: netCollectedAmountCents(item),
       occurredAt: item.paidAt ?? item.updatedAt,
       customerId: item.userId ?? item.customerEmail ?? 'guest',
       type: 'Event',
@@ -240,18 +267,26 @@ function EventScheduleRangeControls({ active }: { active: string }) {
     </div>
   );
 }
-function EventOccurrenceSection({ title, occurrences, past = false }: { title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; commerceOrders: Array<{ amountCents: number; refundedAmountCents: number }>; _count: { bookings: number } }>; past?: boolean }) {
+function EventOccurrenceSection({ title, occurrences, past = false }: { title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; commerceOrders: Array<{ userId: string | null; customerEmail: string | null; amountCents: number; refundedAmountCents: number; paidAt: Date | null }>; bookings: Array<{ userId: string; user: { email: string } }>; _count: { bookings: number } }>; past?: boolean }) {
   if (!occurrences.length) return null;
   return (
     <section>
       <h3 className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-black/45">{title}</h3>
       <div className="mt-3 grid gap-3">
-        {occurrences.map((occurrence) => (
+        {occurrences.map((occurrence) => {
+          const activeBookingValue = activeEventBookingValueCents({
+            bookings: occurrence.bookings.map((booking) => ({
+              userId: booking.userId,
+              email: booking.user.email,
+            })),
+            orders: occurrence.commerceOrders,
+          });
+          return (
             <article key={occurrence.id} className={`grid gap-3 border border-black/10 p-4 md:grid-cols-[1fr_auto] md:items-center ${past ? 'bg-rhyze-black/5' : 'bg-white'}`}>
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.template.category.name}</p>
                 <h3 className="mt-1 font-display text-3xl tracking-wider">{occurrence.template.name}</h3>
-                <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups · Revenue: ${(collectedEventRevenueCents(occurrence.commerceOrders) / 100).toFixed(0)}</p>
+                <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups · Active booking value: ${(activeBookingValue / 100).toFixed(0)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Manage</Link>
@@ -259,7 +294,8 @@ function EventOccurrenceSection({ title, occurrences, past = false }: { title: s
                 <Link href={`/admin/schedule/${occurrence.id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>
               </div>
             </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

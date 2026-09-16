@@ -2,11 +2,13 @@
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   reactStrictMode: true,
-  serverExternalPackages: ['@node-rs/argon2'],
+  serverExternalPackages: ['@node-rs/argon2', 'heic-convert'],
   outputFileTracingIncludes: {
     '/*': [
       './node_modules/.prisma/client/libquery_engine-rhel-openssl-3.0.x.so.node',
       './node_modules/@node-rs/argon2-linux-x64-gnu/**/*',
+      './node_modules/@img/sharp-linux-x64/**/*',
+      './node_modules/@img/sharp-libvips-linux-x64/**/*',
     ],
   },
   images: {

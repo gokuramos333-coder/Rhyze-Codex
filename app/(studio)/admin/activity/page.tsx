@@ -22,7 +22,7 @@ export default async function AdminActivityPage() {
       take: 100,
     }),
     prisma.commerceOrder.findMany({
-      where: { status: { in: ['PAID', 'FULFILLMENT_REVIEW', 'REFUNDED'] } },
+      where: { status: { in: ['PAID', 'FULFILLMENT_REVIEW', 'PARTIALLY_REFUNDED', 'REFUNDED', 'DISPUTED'] } },
       include: { user: true, items: true },
       orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
       take: 100,

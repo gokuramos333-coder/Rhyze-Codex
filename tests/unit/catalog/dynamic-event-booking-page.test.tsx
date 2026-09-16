@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   templateFindFirst: vi.fn(),
   occurrenceFindFirst: vi.fn(),
+  bookingFindMany: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/lib/db/prisma', () => ({
   prisma: {
     classTemplate: { findFirst: mocks.templateFindFirst },
     classOccurrence: { findFirst: mocks.occurrenceFindFirst },
+    booking: { findMany: mocks.bookingFindMany },
   },
 }));
 
@@ -30,6 +32,7 @@ import EventBookingPage from '@/app/book/event/[slug]/page';
 
 describe('dynamic event booking page', () => {
   beforeEach(() => {
+    mocks.bookingFindMany.mockResolvedValue([]);
     mocks.templateFindFirst.mockResolvedValue({
       id: 'mommy_template',
       slug: 'mommy-and-me-dennisse',

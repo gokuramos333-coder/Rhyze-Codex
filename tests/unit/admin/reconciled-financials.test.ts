@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { recordsInRange, summarizeFinancials } from '@/lib/admin/dashboard-analytics';
-import { buildReconciledRevenueRecords } from '@/lib/admin/reconciled-financials';
+import {
+  buildReconciledRefundRecords,
+  buildReconciledRevenueRecords,
+} from '@/lib/admin/reconciled-financials';
 
 describe('reconciled ADMIN revenue', () => {
   it('counts purchases, event orders, and standalone membership renewals exactly once', () => {
@@ -152,5 +155,152 @@ describe('reconciled ADMIN revenue', () => {
       refundCents: 0,
       netCents: 9_200,
     });
+  });
+
+  it('counts Stripe-recorded refunds without duplicating explicit refund rows', () => {
+    const refundAt = new Date('2026-09-12T15:00:00.000Z');
+    const refunds = buildReconciledRefundRecords({
+      purchases: [{
+        id: 'purchase-1',
+        amountCents: 9_200,
+        paidAt: new Date('2026-09-01T14:00:00.000Z'),
+        createdAt: new Date('2026-09-01T14:00:00.000Z'),
+        userId: 'member-1',
+        product: { name: 'Elevate' },
+      }],
+      commerceOrders: [{
+        id: 'order-1',
+        amountCents: 3_000,
+        paidAt: new Date('2026-09-02T14:00:00.000Z'),
+        createdAt: new Date('2026-09-02T14:00:00.000Z'),
+        userId: 'member-2',
+        kind: 'EVENT',
+      }],
+      purchaseRefunds: [{
+        id: 'refund-1',
+        purchaseId: 'purchase-1',
+        amountCents: 9_200,
+        createdAt: refundAt,
+      }],
+      commerceRefunds: [],
+      paymentRecords: [{
+        id: 'payment-purchase',
+        amountCents: 9_200,
+        refundedAmountCents: 9_200,
+        occurredAt: new Date('2026-09-01T14:00:00.000Z'),
+        updatedAt: refundAt,
+        userId: 'member-1',
+        membershipId: 'membership-1',
+        purchaseId: 'purchase-1',
+        commerceOrderId: null,
+        stripeEventId: 'event-1',
+        stripePaymentIntentId: 'pi-1',
+        kind: 'MEMBERSHIP_RENEWAL',
+      }, {
+        id: 'payment-order',
+        amountCents: 3_000,
+        refundedAmountCents: 3_000,
+        occurredAt: new Date('2026-09-02T14:00:00.000Z'),
+        updatedAt: refundAt,
+        userId: 'member-2',
+        membershipId: null,
+        purchaseId: null,
+        commerceOrderId: 'order-1',
+        stripeEventId: 'event-2',
+        stripePaymentIntentId: 'pi-2',
+        kind: 'EVENT',
+      }],
+    });
+
+    expect(refunds.map((item) => [item.id, item.amountCents])).toEqual([
+      ['purchase-refund-refund-1', 9_200],
+      ['payment-refund-payment-order', 3_000],
+    ]);
+    expect(refunds.reduce((total, item) => total + item.amountCents, 0)).toBe(12_200);
+  });
+
+  it('keeps separate refunded subscription renewals as separate money movements', () => {
+    const refunds = buildReconciledRefundRecords({
+      purchases: [{
+        id: 'subscription-purchase',
+        amountCents: 9_200,
+        paidAt: new Date('2026-08-01T14:00:00.000Z'),
+        createdAt: new Date('2026-08-01T14:00:00.000Z'),
+        userId: 'member-1',
+        product: { name: 'Elevate' },
+      }],
+      commerceOrders: [],
+      purchaseRefunds: [],
+      commerceRefunds: [],
+      paymentRecords: [
+        {
+          id: 'renewal-august', amountCents: 9_200, refundedAmountCents: 9_200,
+          occurredAt: new Date('2026-08-01T14:00:00.000Z'), updatedAt: new Date('2026-08-03T14:00:00.000Z'),
+          userId: 'member-1', membershipId: 'membership-1', purchaseId: 'subscription-purchase', commerceOrderId: null,
+          stripeEventId: 'event-august', stripePaymentIntentId: 'pi-august', kind: 'MEMBERSHIP_RENEWAL',
+        },
+        {
+          id: 'renewal-september', amountCents: 9_200, refundedAmountCents: 9_200,
+          occurredAt: new Date('2026-09-01T14:00:00.000Z'), updatedAt: new Date('2026-09-03T14:00:00.000Z'),
+          userId: 'member-1', membershipId: 'membership-1', purchaseId: 'subscription-purchase', commerceOrderId: null,
+          stripeEventId: 'event-september', stripePaymentIntentId: 'pi-september', kind: 'MEMBERSHIP_RENEWAL',
+        },
+      ],
+    });
+
+    expect(refunds.map((item) => item.amountCents)).toEqual([9_200, 9_200]);
+  });
+
+  it('falls back to a refunded order balance when an older row has no refund transaction or payment record', () => {
+    const refundedAt = new Date('2026-07-27T01:09:40.000Z');
+    const refunds = buildReconciledRefundRecords({
+      purchases: [],
+      commerceOrders: [{
+        id: 'legacy-order',
+        amountCents: 3_000,
+        refundedAmountCents: 3_000,
+        paidAt: new Date('2026-07-27T01:07:11.000Z'),
+        createdAt: new Date('2026-07-27T01:07:11.000Z'),
+        updatedAt: refundedAt,
+        userId: 'member-1',
+        kind: 'EVENT',
+      }],
+      purchaseRefunds: [],
+      commerceRefunds: [],
+      paymentRecords: [],
+    });
+
+    expect(refunds.map((item) => [item.id, item.amountCents, item.occurredAt])).toEqual([
+      ['commerce-balance-refund-legacy-order', 3_000, refundedAt],
+    ]);
+  });
+
+  it('treats a disputed Stripe charge as a financial outflow even before a refund amount is recorded', () => {
+    const disputedAt = new Date('2026-09-13T15:00:00.000Z');
+    const adjustments = buildReconciledRefundRecords({
+      purchases: [],
+      commerceOrders: [],
+      purchaseRefunds: [],
+      commerceRefunds: [],
+      paymentRecords: [{
+        id: 'disputed-payment',
+        amountCents: 3_000,
+        refundedAmountCents: 0,
+        status: 'DISPUTED',
+        occurredAt: new Date('2026-09-10T15:00:00.000Z'),
+        updatedAt: disputedAt,
+        userId: 'member-1',
+        membershipId: null,
+        purchaseId: null,
+        commerceOrderId: null,
+        stripeEventId: 'event-dispute',
+        stripePaymentIntentId: 'pi-dispute',
+        kind: 'EVENT',
+      }],
+    });
+
+    expect(adjustments.map((item) => [item.amountCents, item.adjustmentType])).toEqual([
+      [3_000, 'DISPUTE'],
+    ]);
   });
 });

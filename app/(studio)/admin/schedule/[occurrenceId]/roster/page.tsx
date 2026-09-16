@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
+import {
+  confirmedRosterBookingWhere,
+  reconcileKnownCancelledBookings,
+} from '@/lib/domain/bookings/known-cancellations';
 import { Roster } from '@/components/attendance/Roster';
 import { rosterPaymentDetails } from '@/lib/domain/bookings/roster-payment';
 import { importedBookingParty } from '@/lib/domain/bookings/imported-booking-party';
@@ -35,13 +39,14 @@ export default async function AdminRosterPage(props: {
   const params = await props.params;
   const searchParams = props.searchParams ? await props.searchParams : {};
   const resultMessage = searchParams.result ? addMemberMessages[searchParams.result] : null;
+  await reconcileKnownCancelledBookings(prisma);
   const occurrence = await prisma.classOccurrence.findUnique({
     where: { id: params.occurrenceId },
     include: {
       template: true,
       instructor: true,
       bookings: {
-        where: { status: 'CONFIRMED' },
+        where: confirmedRosterBookingWhere(),
         include: {
           user: {
             include: {

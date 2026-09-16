@@ -9,6 +9,10 @@ import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { MOMMY_AND_ME_SLUG } from '@/lib/payments/commerce-orders';
 import { prisma } from '@/lib/db/prisma';
+import {
+  confirmedRosterBookingWhere,
+  reconcileKnownCancelledBookings,
+} from '@/lib/domain/bookings/known-cancellations';
 import { WAITLIST_CAPACITY } from '@/lib/domain/bookings/booking-rules';
 
 export const metadata: Metadata = {
@@ -27,6 +31,7 @@ export default async function EventBookingPage(
   }
 ) {
   const params = await props.params;
+  await reconcileKnownCancelledBookings(prisma);
   const fallback = getOwnedEvent(params.slug);
   const event = await prisma.classTemplate.findFirst({
     where: {
@@ -41,7 +46,7 @@ export default async function EventBookingPage(
     where: { template: { slug: params.slug, isEvent: true }, status: 'SCHEDULED', startAt: { gt: new Date() } },
     include: {
       instructor: { select: { name: true } },
-      _count: { select: { bookings: { where: { status: 'CONFIRMED' } }, waitlistEntries: { where: { status: 'WAITING' } } } },
+      _count: { select: { bookings: { where: confirmedRosterBookingWhere() }, waitlistEntries: { where: { status: 'WAITING' } } } },
     },
     orderBy: { startAt: 'asc' },
   });

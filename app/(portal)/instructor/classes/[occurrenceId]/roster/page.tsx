@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { Roster } from '@/components/attendance/Roster';
 import Link from 'next/link';
@@ -24,7 +25,7 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
       template: true,
       room: true,
       bookings: {
-        where: { status: 'CONFIRMED' },
+        where: confirmedRosterBookingWhere(),
         include: {
           user: {
             include: {

@@ -5,9 +5,62 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { putPrivateDocument } from '@/lib/storage/object-storage';
+import {
+  deleteObject,
+  putPrivateDocument,
+  putPublicImage,
+} from '@/lib/storage/object-storage';
 import { parseOptionalExpiration } from '@/lib/domain/credentials/credential-upload';
 import { birthdayDateFromMonthDay } from '@/lib/domain/birthdays/birthday-reminders';
+
+export async function updateOwnInstructorDirectoryAction(formData: FormData) {
+  const user = await requireArea('instructor');
+  const name = String(formData.get('name') || '').trim();
+  const bio = String(formData.get('bio') || '').trim();
+  const photo = formData.get('photo');
+  const removePhoto = formData.get('removePhoto') === 'true';
+  if (!name) redirect('/instructor/profile?error=profile');
+
+  const current = await prisma.instructorProfile.findUnique({
+    where: { userId: user.id },
+    select: { photoUrl: true, canEditOwnProfile: true },
+  });
+  if (!current?.canEditOwnProfile) {
+    redirect('/instructor/profile?error=profile-access');
+  }
+
+  let nextPhotoUrl = removePhoto ? null : current.photoUrl;
+  if (photo instanceof File && photo.size > 0) {
+    try {
+      nextPhotoUrl = await putPublicImage(photo);
+    } catch {
+      redirect('/instructor/profile?error=photo');
+    }
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      name,
+      image: nextPhotoUrl,
+      instructorProfile: {
+        update: { bio, photoUrl: nextPhotoUrl },
+      },
+    },
+  });
+  if (
+    nextPhotoUrl !== current.photoUrl &&
+    (current.photoUrl?.startsWith('/uploads/profiles/') ||
+      current.photoUrl?.startsWith('/api/media/'))
+  ) {
+    await deleteObject(current.photoUrl);
+  }
+  revalidatePath('/instructor/profile');
+  revalidatePath(`/admin/instructors/${user.id}`);
+  revalidatePath('/admin/instructors');
+  revalidatePath('/instructors');
+  redirect('/instructor/profile?saved=profile');
+}
 
 export async function updateInstructorBirthdayAction(formData: FormData) {
   const user = await requireArea('instructor');

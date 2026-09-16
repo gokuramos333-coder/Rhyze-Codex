@@ -50,15 +50,33 @@ describe('instructor operations', () => {
   it('replaces waiver and booked-value cards with status and pay rates', () => {
     const admin = readFileSync('app/(studio)/admin/instructors/[userId]/page.tsx', 'utf8');
     const instructor = readFileSync('app/(portal)/instructor/profile/page.tsx', 'utf8');
+    const editor = readFileSync('components/admin/InstructorPublicProfileForm.tsx', 'utf8');
 
     expect(admin).not.toContain('BOOKED CLASS VALUE');
+    expect(admin).not.toContain('Metric label="Booked seats"');
+    expect(admin).not.toContain('Assigned class dates');
     expect(admin).not.toContain('Current studio waiver');
+    expect(admin).toContain('Classes taught this month');
+    expect(admin).toContain('instructorClassStats');
     expect(admin).toContain('Instructor status');
-    expect(admin).toContain('Standard class pay rate');
-    expect(admin).toContain('Specialty event pay rate');
+    expect(editor).toContain('Standard class pay rate');
+    expect(editor).toContain('Specialty event pay rate');
     expect(admin).toContain('<Metric label="Specialty event pay rate"');
     expect(instructor).toContain('Standard Classes');
     expect(instructor).toContain('Specialty Events');
+  });
+
+  it('allows every approved instructor profile to update its public photo and bio', () => {
+    const page = readFileSync('app/(portal)/instructor/profile/page.tsx', 'utf8');
+    const actions = readFileSync('app/(portal)/instructor/profile/actions.ts', 'utf8');
+
+    expect(page).toContain('InstructorPublicProfileForm');
+    expect(page).toContain('updateOwnInstructorDirectoryAction');
+    expect(actions).toContain('current?.canEditOwnProfile');
+    expect(actions).toContain('putPublicImage(photo)');
+    expect(actions).toContain("revalidatePath('/instructors')");
+    expect(actions).toContain('image: nextPhotoUrl');
+    expect(actions).toContain('photoUrl: nextPhotoUrl');
   });
 
   it('does not show per-offering direct revenue estimates on class or event cards', () => {
@@ -76,6 +94,7 @@ describe('instructor operations', () => {
 
     expect(schedule).toContain('isTriciaJohnsen');
     expect(schedule).toContain('Class revenue');
+    expect(schedule).toContain('activeEventBookingValueCents');
     expect(schedule).toContain('text-emerald-700');
   });
 
@@ -106,10 +125,14 @@ describe('instructor operations', () => {
     expect(actions).toContain("template: 'CLASS_CANCELLED'");
   });
 
-  it('shows only selected referral range controls and detailed referrals', () => {
+  it('shows only selected referral range controls and detailed referrals, defaulting admin/instructor views to monthly earnings', () => {
     const admin = readFileSync('app/(studio)/admin/instructors/[userId]/page.tsx', 'utf8');
     const instructor = readFileSync('app/(portal)/instructor/referrals/page.tsx', 'utf8');
 
+    expect(admin).toContain(": 'month';");
+    expect(instructor).toContain(": 'month';");
+    expect(readFileSync('lib/domain/bookings/known-cancellations.ts', 'utf8')).toContain('careesonnett@gmail.com');
+    expect(readFileSync('app/(studio)/admin/schedule/[occurrenceId]/roster/page.tsx', 'utf8')).toContain('reconcileKnownCancelledBookings(prisma)');
     for (const source of [admin, instructor]) {
       expect(source).toContain('Bi-weekly');
       expect(source).toContain('From date');

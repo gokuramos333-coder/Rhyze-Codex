@@ -2,8 +2,10 @@ import Link from 'next/link';
 import { instructorRosterHref } from '@/lib/admin/assigned-roster-navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
+import { activeEventBookingValueCents } from '@/lib/admin/event-revenue';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -32,10 +34,34 @@ export default async function InstructorSchedulePage() {
       template: true,
       room: true,
       bookings: {
-        where: { status: 'CONFIRMED' },
-        select: { id: true },
+        where: confirmedRosterBookingWhere(),
+        select: {
+          id: true,
+          userId: true,
+          user: { select: { email: true } },
+        },
       },
-      _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+      commerceOrders: {
+        where: {
+          kind: 'EVENT',
+          status: {
+            in: [
+              'PAID',
+              'FULFILLMENT_REVIEW',
+              'PARTIALLY_REFUNDED',
+              'REFUNDED',
+            ],
+          },
+        },
+        select: {
+          userId: true,
+          customerEmail: true,
+          amountCents: true,
+          refundedAmountCents: true,
+          paidAt: true,
+        },
+      },
+      _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
     },
     orderBy: { startAt: 'asc' },
     take: 60,
@@ -84,10 +110,19 @@ export default async function InstructorSchedulePage() {
       <h1 className="mt-3 font-display text-6xl tracking-wider">MY CLASSES</h1>
       <div className="mt-8 grid gap-3">
         {classes.map((item) => {
-          const classRevenueCents = item.bookings.reduce(
-            (total, booking) => total + (revenueByBookingId.get(booking.id) || 0),
-            0,
-          );
+          const classRevenueCents = item.template.isEvent
+            ? activeEventBookingValueCents({
+                bookings: item.bookings.map((booking) => ({
+                  userId: booking.userId,
+                  email: booking.user.email,
+                })),
+                orders: item.commerceOrders,
+              })
+            : item.bookings.reduce(
+                (total, booking) =>
+                  total + (revenueByBookingId.get(booking.id) || 0),
+                0,
+              );
           return (
           <Link key={item.id} href={instructorRosterHref(item.id)} className={`grid gap-2 border-l-4 bg-white p-5 transition hover:bg-orange-50 md:grid-cols-[1fr_auto] ${item.status === 'CANCELLED' ? 'border-red-700 opacity-80' : 'border-rhyze-gold hover:border-rhyze-coral'}`}>
             <span>

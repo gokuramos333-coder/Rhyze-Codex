@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { evaluateTransferWindow } from '@/lib/domain/transfers/transfer-policy';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { RescheduleClassPicker } from '@/components/member/RescheduleClassPicker';
@@ -55,7 +56,7 @@ export default async function MemberReschedulePage(
     include: {
       template: true,
       instructor: true,
-      _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+      _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
     },
     orderBy: { startAt: 'asc' },
   });

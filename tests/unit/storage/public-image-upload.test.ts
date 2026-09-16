@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import sharp from 'sharp';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 // @ts-expect-error The runtime Next config is intentionally authored as ESM JavaScript.
 import nextConfig from '../../../next.config.mjs';
 import {
@@ -9,6 +10,23 @@ import {
 } from '@/lib/storage/public-image';
 
 describe('public profile image uploads', () => {
+  it('stages the Linux Sharp runtime required by Netlify image uploads', () => {
+    execFileSync(process.execPath, ['scripts/stage-netlify-native-bindings.mjs'], {
+      stdio: 'pipe',
+    });
+
+    expect(
+      existsSync(
+        'node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.4.node',
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        'node_modules/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.8.18.6',
+      ),
+    ).toBe(true);
+  });
+
   it('allows an 8 MB phone photo through the Server Action boundary', () => {
     expect(nextConfig.experimental?.serverActions?.bodySizeLimit).toBe('10mb');
     expect(
@@ -38,6 +56,30 @@ describe('public profile image uploads', () => {
     expect(metadata.format).toBe('jpeg');
     expect(metadata.width).toBe(24);
     expect(metadata.height).toBe(16);
+  });
+
+  it('converts HEIC input before normalizing it with sharp', async () => {
+    const jpeg = await sharp({
+      create: {
+        width: 12,
+        height: 18,
+        channels: 3,
+        background: '#ffb51b',
+      },
+    }).jpeg().toBuffer();
+    const convertHeic = vi.fn(async () => jpeg);
+
+    const normalized = await normalizePublicImage(
+      Buffer.from('phone-heic'),
+      'image/heic',
+      convertHeic,
+    );
+    const metadata = await sharp(normalized).metadata();
+
+    expect(convertHeic).toHaveBeenCalledOnce();
+    expect(metadata.format).toBe('jpeg');
+    expect(metadata.width).toBe(12);
+    expect(metadata.height).toBe(18);
   });
 
   it('keeps member profile photos in sync with the account default image', () => {

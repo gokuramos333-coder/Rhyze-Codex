@@ -6,6 +6,10 @@ import { ArrowLeft, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { getOwnedEvent } from '@/lib/rhyze-platform';
 import { Button } from '@/components/ui/Button';
 import { prisma } from '@/lib/db/prisma';
+import {
+  confirmedRosterBookingWhere,
+  reconcileKnownCancelledBookings,
+} from '@/lib/domain/bookings/known-cancellations';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
@@ -18,6 +22,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
 
 export default async function EventDetailPage(props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
+  await reconcileKnownCancelledBookings(prisma);
   const event = await prisma.classTemplate.findFirst({
     where: { slug: params.slug, isEvent: true, isActive: true, archivedAt: null },
     include: {
@@ -27,7 +32,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
           instructor: true,
           _count: {
             select: {
-              bookings: { where: { status: 'CONFIRMED' } },
+              bookings: { where: confirmedRosterBookingWhere() },
             },
           },
         },

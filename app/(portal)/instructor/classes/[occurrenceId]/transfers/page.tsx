@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { transferBookingAction } from './actions';
 
@@ -17,7 +18,7 @@ export default async function TransferPage(
   if (!booking) notFound();
   const destinations = await prisma.classOccurrence.findMany({
     where: { id: { not: booking.occurrenceId }, status: 'SCHEDULED', startAt: { gte: new Date(), lte: new Date(booking.occurrence.startAt.getTime() + 14 * 24 * 60 * 60_000) } },
-    include: { template: true, instructor: true, _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } } },
+    include: { template: true, instructor: true, _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } } },
     orderBy: { startAt: 'asc' },
   });
   return (

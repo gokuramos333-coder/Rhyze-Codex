@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireApprovedOwner } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { netCollectedAmountCents } from '@/lib/admin/net-revenue';
 
 function csvCell(value: unknown) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`;
@@ -15,7 +16,16 @@ export async function GET(_request: Request, props: { params: Promise<{ report: 
     rows = [['Member','Email','Class','Date','Status'], ...data.map((item) => [item.user.name,item.user.email,item.occurrence.template.name,item.occurrence.startAt.toISOString(),item.status])];
   } else if (params.report === 'revenue') {
     const data = await prisma.purchase.findMany({ include: { user: true, product: true }, orderBy: { createdAt: 'desc' } });
-    rows = [['Member','Email','Product','Amount','Status','Date'], ...data.map((item) => [item.user.name,item.user.email,item.product.name,(item.amountCents/100).toFixed(2),item.status,item.createdAt.toISOString()])];
+    rows = [['Member','Email','Product','Gross amount','Refunded amount','Net amount','Status','Date'], ...data.map((item) => [
+      item.user.name,
+      item.user.email,
+      item.product.name,
+      (item.amountCents / 100).toFixed(2),
+      (item.refundedAmountCents / 100).toFixed(2),
+      (netCollectedAmountCents(item) / 100).toFixed(2),
+      item.status,
+      item.createdAt.toISOString(),
+    ])];
   } else {
     const data = await prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
     rows = [['Name','Email','Role','Status','Joined'], ...data.map((item) => [item.name,item.email,item.role,item.status,item.createdAt.toISOString()])];

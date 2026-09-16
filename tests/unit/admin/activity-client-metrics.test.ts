@@ -217,13 +217,12 @@ describe('admin activity feed and client metrics', () => {
     expect(source).toContain('activityWaitlistEntries');
     expect(source).toContain('activityAttendanceRecords');
     expect(source).toContain('activityPaymentRecords');
-    expect(source).toContain('syncRecentStripePaymentRecords');
+    expect(source).not.toContain('syncRecentStripePaymentRecords');
     expect(source).toContain('excludeSombleBackedStripePaymentRecords');
     expect(source).toContain('visiblePaymentRecords');
-    expect(source).toContain('directRevenuePaymentRecords');
-    expect(source).toContain('(record) => record.userId || record.membershipId');
+    expect(source).toContain('buildReconciledRefundRecords');
     expect(source).toContain('Verified direct Stripe');
-    expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("schedule: '* * * * *'");
+    expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("schedule: '7 * * * *'");
     expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("runProtectedJob('/api/jobs/stripe-sync')");
     expect(source).toContain('paymentRecords: visiblePaymentRecords');
     expect(source).toContain('bookings: activityBookings');
@@ -231,10 +230,10 @@ describe('admin activity feed and client metrics', () => {
     expect(source).toContain('attendanceRecords: activityAttendanceRecords');
     expect(source).toContain('SYNCED SALES LEDGER');
     expect(source).toContain('Total revenue');
-    expect(source).toContain('Somble transferred revenue + verified Rhyze memberships, class packs, events, merchandise, and direct Stripe charges - refunds');
+    expect(source).toContain('Somble transferred revenue + verified Rhyze memberships, class packs, events, merchandise, and direct Stripe charges - refunds / disputes');
     expect(source).toContain("status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] }");
     expect(source).toContain('directStripeGrossRevenueCents');
-    expect(source).toContain('directStripeRefundedRevenueCents');
+    expect(source).toContain('totalRevenueCents = totalGrossRevenueCents - refundTotalCents');
     const paymentsSource = readFileSync('app/(studio)/admin/payments/page.tsx', 'utf8');
     expect(paymentsSource).toContain('excludeSombleBackedStripePaymentRecords(paymentRecords, historical)');
     expect(paymentsSource).toContain('verifiedPaymentRecords');
@@ -245,7 +244,7 @@ describe('admin activity feed and client metrics', () => {
     expect(source).toContain('user: { select: { name: true, email: true } }');
     expect(source).toContain('{item.user.name || item.user.email}');
     expect(source).toContain('id="refunds"');
-    expect(source).toContain('Refund records');
+    expect(source).toContain('Refund and dispute records');
   });
 
   it('uses the regular site font for attendee names instead of the condensed heading font', () => {

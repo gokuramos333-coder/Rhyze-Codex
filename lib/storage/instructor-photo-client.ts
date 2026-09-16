@@ -1,5 +1,5 @@
 const MAX_SOURCE_PHOTO_BYTES = 25 * 1024 * 1024;
-const MAX_DIRECT_UPLOAD_BYTES = 3.5 * 1024 * 1024;
+const MAX_DIRECT_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_PHOTO_EDGE = 1_600;
 
 const supportedExtensions = new Set([
@@ -10,7 +10,21 @@ const supportedExtensions = new Set([
   'png',
   'webp',
 ]);
-const browserSafeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const directUploadTypes = new Set([
+  'image/heic',
+  'image/heif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+const mimeTypeByExtension: Record<string, string> = {
+  heic: 'image/heic',
+  heif: 'image/heif',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
 
 export function validateInstructorPhotoSource(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase() || '';
@@ -43,10 +57,20 @@ export async function prepareInstructorPhoto(
 ) {
   const validation = validateInstructorPhotoSource(file);
   if (!validation.valid) throw new Error(validation.error);
-  if (file.size <= MAX_DIRECT_UPLOAD_BYTES && browserSafeTypes.has(file.type)) {
-    return file;
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  const directFile = file.type
+    ? file
+    : new File([file], file.name, {
+        type: mimeTypeByExtension[extension] || file.type,
+        lastModified: file.lastModified,
+      });
+  if (
+    directFile.size <= MAX_DIRECT_UPLOAD_BYTES &&
+    directUploadTypes.has(directFile.type)
+  ) {
+    return directFile;
   }
-  const optimized = await compressor(file);
+  const optimized = await compressor(directFile);
   if (!optimized.size || optimized.size > MAX_DIRECT_UPLOAD_BYTES) {
     throw new Error('The optimized photo is still too large. Try a different photo.');
   }

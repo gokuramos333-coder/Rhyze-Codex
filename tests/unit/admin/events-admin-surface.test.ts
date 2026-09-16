@@ -14,12 +14,12 @@ describe('admin events surface', () => {
     expect(source).toContain('template: { isEvent: true }');
   });
 
-  it('separates upcoming and past event occurrences with collected per-occurrence revenue', () => {
+  it('separates upcoming and past event occurrences with active booking value', () => {
     expect(source).toContain('UPCOMING');
     expect(source).toContain('PAST');
     expect(source).toContain('bg-rhyze-black/5');
     expect(source).toContain('commerceOrders');
-    expect(source).toContain('collectedEventRevenueCents');
-    expect(source).toContain('Revenue:');
+    expect(source).toContain('activeEventBookingValueCents');
+    expect(source).toContain('Active booking value:');
   });
 });

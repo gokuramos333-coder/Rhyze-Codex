@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import {
   archiveClassTemplateAction,
   createClassTemplateAction,
@@ -30,6 +31,10 @@ import {
   occurrenceTitle,
   occurrenceTitleWithInstructor,
 } from '@/lib/domain/schedule/occurrence-management';
+import {
+  netCollectedAmountCents,
+  PURCHASE_REVENUE_STATUSES,
+} from '@/lib/admin/net-revenue';
 
 export default async function AdminClassesPage(
   props: {
@@ -59,7 +64,7 @@ export default async function AdminClassesPage(
           take: 1,
           include: {
             instructor: { include: { instructorProfile: true } },
-            _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+            _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
           },
         },
       },
@@ -81,7 +86,10 @@ export default async function AdminClassesPage(
       },
     }),
     prisma.purchase.findMany({
-      where: { status: 'PAID', product: { kind: 'DROP_IN' } },
+      where: {
+        status: { in: [...PURCHASE_REVENUE_STATUSES] },
+        product: { kind: 'DROP_IN' },
+      },
       select: {
         amountCents: true,
         refundedAmountCents: true,
@@ -134,7 +142,7 @@ export default async function AdminClassesPage(
       source: 'SOMBLE' as const,
     })),
     ...nativeRevenue.map((item) => ({
-      amountCents: item.amountCents - item.refundedAmountCents,
+      amountCents: netCollectedAmountCents(item),
       occurredAt: item.paidAt || item.createdAt,
       customerId: item.userId,
       type: item.product.name,

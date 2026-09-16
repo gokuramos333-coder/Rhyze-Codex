@@ -2,8 +2,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
+import { InstructorPublicProfileForm } from '@/components/admin/InstructorPublicProfileForm';
 import { adminRosterHref } from '@/lib/admin/assigned-roster-navigation';
 import { prisma } from '@/lib/db/prisma';
+import {
+  confirmedRosterBookingWhere,
+  instructorTaughtBookingWhere,
+} from '@/lib/domain/bookings/known-cancellations';
+import { instructorClassStats } from '@/lib/domain/instructors/instructor-class-stats';
 import {
   earningsDateRange,
   type EarningsPeriod,
@@ -46,7 +52,7 @@ export default async function InstructorReviewPage(
   const params = await props.params;
   const period = referralPeriods.includes(searchParams.period as EarningsPeriod)
     ? searchParams.period as EarningsPeriod
-    : 'week';
+    : 'month';
   const range = earningsDateRange(period, new Date(), searchParams.from, searchParams.to);
   const instructor = await prisma.user.findFirst({
       where: { id: params.userId, instructorProfile: { isNot: null } },
@@ -75,8 +81,12 @@ export default async function InstructorReviewPage(
         classOccurrences: {
           include: {
             template: true,
+            bookings: {
+              where: instructorTaughtBookingWhere(),
+              select: { id: true },
+            },
             _count: {
-              select: { bookings: { where: { status: 'CONFIRMED' } } },
+              select: { bookings: { where: confirmedRosterBookingWhere() } },
             },
           },
           orderBy: { startAt: 'asc' },
@@ -97,19 +107,15 @@ export default async function InstructorReviewPage(
     .filter((item) => item.status === 'PAID')
     .reduce((sum, item) => sum + item.amountCents, 0);
   const commissionTotal = availableCommissionTotal + paidCommissionTotal;
-  const upcoming = instructor.classOccurrences.filter(
-    (occurrence) =>
-      occurrence.startAt >= new Date() && occurrence.status === 'SCHEDULED',
-  );
-  const completed = instructor.classOccurrences.filter(
-    (occurrence) =>
-      occurrence.startAt < new Date() || occurrence.status === 'COMPLETED',
-  );
-  const bookedSeats = instructor.classOccurrences.reduce(
-    (total, occurrence) =>
-      total + occurrence._count.bookings + occurrence.historicalSignupCount,
-    0,
-  );
+  const classStats = instructorClassStats({
+    now: new Date(),
+    instructorName: instructor.name || '',
+    occurrences: instructor.classOccurrences.map((occurrence) => ({
+      ...occurrence,
+      attendeeCount:
+        occurrence.bookings.length + occurrence.historicalSignupCount,
+    })),
+  });
   const referralCode = instructor.referralCodes[0];
   const isOwnerInstructor = ['vanessa@rhyzefit.com', 'melissa@rhyzefit.com'].includes(instructor.email.toLowerCase());
   const standardRateCents = isOwnerInstructor ? 0 : (instructor.instructorProfile?.standardClassRateCents ?? 4_000);
@@ -165,20 +171,14 @@ export default async function InstructorReviewPage(
             : 'Public instructor profile updated.'}
         </p>
       )}
-      {searchParams.error === 'photo' && (
-        <p className="mt-5 border-l-4 border-rhyze-coral bg-white p-4 font-bold">
-          Use a JPG or PNG image within the upload size limit.
-        </p>
-      )}
       {searchParams.error === 'document' && (
         <p className="mt-5 border-l-4 border-rhyze-coral bg-white p-4 font-bold">
           Use a PDF, JPG, or PNG no larger than 8 MB.
         </p>
       )}
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric label="Assigned class dates" value={`${instructor.classOccurrences.length}`} detail={`${upcoming.length} upcoming · ${completed.length} past`} href="#assigned-classes" />
-        <Metric label="Booked seats" value={`${bookedSeats}`} detail="Confirmed named rosters" href="#assigned-classes" />
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Classes taught this month" value={`${classStats.taughtThisMonth}`} detail={`${classStats.pastTaught} total taught classes · ${classStats.upcoming} upcoming`} href="#assigned-classes" />
         <Metric label="Referral commission" value={money(commissionTotal)} detail={`${money(availableCommissionTotal)} available for payout · ${money(paidCommissionTotal)} paid`} href="#referrals" />
         <Metric label="Standard class pay" value={money(standardRateCents)} detail="Admin-set rate per standard class" href="#pay-rates" />
         <Metric label="Specialty event pay rate" value={instructor.instructorProfile?.specialtyEventRateText || (instructor.instructorProfile?.specialtyEventRateCents == null ? 'Not set' : money(instructor.instructorProfile.specialtyEventRateCents))} detail="Admin-set event agreement" href="#pay-rates" compact />
@@ -186,54 +186,20 @@ export default async function InstructorReviewPage(
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[1.2fr_.8fr]">
         <div className="grid gap-6">
-          <form
+          <InstructorPublicProfileForm
             action={updateInstructorDirectoryAction}
-            className="grid gap-4 border-t-4 border-rhyze-orange bg-white p-6 md:grid-cols-2"
-          >
-            <input type="hidden" name="userId" value={instructor.id} />
-            <label className="grid gap-2">
-              <Span>Public name</Span>
-              <input
-                name="name"
-                defaultValue={instructor.name || ''}
-                required
-                className="min-h-12 border px-3"
-              />
-            </label>
-            <label className="grid gap-2">
-              <Span>Upload photo</Span>
-              <input
-                type="file"
-                name="photo"
-                accept="image/jpeg,image/png"
-                className="min-h-12 border bg-rhyze-orange/10 p-3"
-              />
-            </label>
-            <label className="grid gap-2 md:col-span-2">
-              <Span>Public bio</Span>
-              <textarea
-                name="bio"
-                defaultValue={instructor.instructorProfile?.bio || ''}
-                className="min-h-48 border p-3"
-              />
-            </label>
-            <div id="pay-rates" className="grid gap-4 md:col-span-2 md:grid-cols-2">
-              <label className="grid gap-2">
-                <Span>Standard class pay rate</Span>
-                <div className="flex min-h-12 items-center border bg-white px-3">
-                  <span className="mr-2 font-bold">$</span>
-                  <input name="standardClassRate" type="number" min="0" step="0.01" defaultValue={(standardRateCents / 100).toFixed(2)} readOnly={isOwnerInstructor} className="min-w-0 flex-1 outline-none read-only:cursor-not-allowed read-only:opacity-60" />
-                </div>
-              </label>
-              <label className="grid gap-2">
-                <Span>Specialty event pay rate</Span>
-                <textarea name="specialtyEventRateText" rows={3} maxLength={500} defaultValue={instructor.instructorProfile?.specialtyEventRateText || (instructor.instructorProfile?.specialtyEventRateCents == null ? '' : money(instructor.instructorProfile.specialtyEventRateCents))} placeholder="Example: 30% of net ticket sales, or $75 flat rate" className="border p-3" />
-              </label>
-            </div>
-            <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">
-              Save and publish profile
-            </button>
-          </form>
+            userId={instructor.id}
+            name={instructor.name || ''}
+            bio={instructor.instructorProfile?.bio || ''}
+            currentPhotoUrl={instructor.instructorProfile?.photoUrl}
+            initialPhotoError={searchParams.error === 'photo'
+              ? 'Use a HEIC, HEIF, JPG, PNG, or WebP image no larger than 8 MB.'
+              : null}
+            standardClassRate={(standardRateCents / 100).toFixed(2)}
+            specialtyEventRateText={instructor.instructorProfile?.specialtyEventRateText || (instructor.instructorProfile?.specialtyEventRateCents == null ? '' : money(instructor.instructorProfile.specialtyEventRateCents))}
+            standardRateReadOnly={isOwnerInstructor}
+            submitLabel="Save and publish profile"
+          />
 
           <section id="assigned-classes" className="scroll-mt-24 border-t-4 border-rhyze-gold bg-white p-5">
             <h2 className="font-display text-4xl tracking-wider">ASSIGNED CLASSES</h2>
@@ -502,8 +468,4 @@ function StatusRow({
     </div>
   );
   return href ? <Link href={href} className="block hover:text-rhyze-coral">{content}</Link> : content;
-}
-
-function Span({ children }: { children: React.ReactNode }) {
-  return <span className="text-xs font-black uppercase tracking-widest">{children}</span>;
 }

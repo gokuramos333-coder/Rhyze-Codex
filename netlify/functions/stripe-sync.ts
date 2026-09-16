@@ -6,4 +6,4 @@ export default async () => {
   return Response.json({ stripe });
 };
 
-export const config = { schedule: '* * * * *' };
+export const config = { schedule: '7 * * * *' };

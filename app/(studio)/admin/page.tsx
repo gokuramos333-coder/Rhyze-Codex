@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react';
 import { prisma } from '@/lib/db/prisma';
+import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { calculateSombleMetrics } from '@/lib/admin/somble-metrics';
 import {
   buildDailyFinancialSeries,
@@ -25,11 +26,14 @@ import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControl
 import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
 import { buildAdminActivityItems } from '@/lib/admin/activity-client-metrics';
 import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
-import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { activeMembershipUserWhere } from '@/lib/domain/memberships/active-membership';
-import { buildReconciledRevenueRecords } from '@/lib/admin/reconciled-financials';
+import {
+  buildReconciledRefundRecords,
+  buildReconciledRevenueRecords,
+} from '@/lib/admin/reconciled-financials';
 import { RefundedBadge } from '@/components/admin/RefundedBadge';
+import { netCollectedAmountCents } from '@/lib/admin/net-revenue';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,15 +67,11 @@ export default async function AdminHomePage(
     ? searchParams.panel!
     : 'activity';
   const now = new Date();
-  await syncRecentStripePaymentRecords(prisma).catch((error) => {
-    console.error('Stripe payment sync failed', error);
-  });
   const [
     profiles,
     transactions,
     upcoming,
     activeMembershipCount,
-    nativeRevenue,
     productCount,
     classCount,
     nativePurchases,
@@ -107,25 +107,24 @@ export default async function AdminHomePage(
       include: {
         template: true,
         instructor: { include: { instructorProfile: true } },
-        _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
+        _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
       },
       orderBy: { startAt: 'asc' },
       take: 8,
     }),
     prisma.user.count({ where: activeMembershipUserWhere }),
-    prisma.purchase.aggregate({
-      where: { status: 'PAID' },
-      _sum: { amountCents: true },
-    }),
     prisma.product.count({ where: { isActive: true } }),
     prisma.classTemplate.count({ where: { isActive: true } }),
     prisma.purchase.findMany({
       where: { status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
       select: {
+        id: true,
         amountCents: true,
         refundedAmountCents: true,
         paidAt: true,
         createdAt: true,
+        updatedAt: true,
+        stripePaymentIntentId: true,
         userId: true,
         user: { select: { name: true, email: true } },
         product: { select: { name: true } },
@@ -213,9 +212,6 @@ export default async function AdminHomePage(
   const unlinkedPaymentRecords = visiblePaymentRecords.filter(
     (record) => !record.purchaseId && !record.commerceOrderId,
   );
-  const directRevenuePaymentRecords = unlinkedPaymentRecords.filter(
-    (record) => record.userId || record.membershipId,
-  );
   const range = resolveAnalyticsRange(searchParams);
   const allRevenueRecords = buildReconciledRevenueRecords({
     sombleTransactions: transactions,
@@ -223,43 +219,13 @@ export default async function AdminHomePage(
     commerceOrders: activityCommerceOrders,
     paymentRecords: activityPaymentRecords,
   });
-  const directRefundRecords = directRevenuePaymentRecords
-    .filter((item) => item.refundedAmountCents > 0)
-    .map((item) => ({
-      amountCents: item.refundedAmountCents,
-      occurredAt: item.updatedAt,
-      customerId: item.userId || `guest-stripe-${item.id}`,
-      type: item.kind.replaceAll('_', ' '),
-      source: 'RHYZE' as const,
-    }));
-  const commerceRefundRecords = commerceRefunds
-    ? commerceRefunds.map((item) => ({
-        amountCents: item.amountCents,
-        occurredAt: item.createdAt,
-        customerId: item.commerceOrder.userId || `guest-order-${item.commerceOrderId}`,
-        type: item.commerceOrder.kind,
-        source: 'RHYZE' as const,
-      }))
-    : activityCommerceOrders
-        .filter((item) => item.refundedAmountCents > 0)
-        .map((item) => ({
-          amountCents: item.refundedAmountCents,
-          occurredAt: item.updatedAt,
-          customerId: item.userId || `guest-order-${item.id}`,
-          type: item.kind,
-          source: 'RHYZE' as const,
-        }));
-  const allRefundRecords = [
-    ...refunds.map((item) => ({
-      amountCents: item.amountCents,
-      occurredAt: item.createdAt,
-      customerId: item.purchase.userId,
-      type: item.purchase.product.name,
-      source: 'RHYZE' as const,
-    })),
-    ...commerceRefundRecords,
-    ...directRefundRecords,
-  ];
+  const allRefundRecords = buildReconciledRefundRecords({
+    purchases: nativePurchases,
+    commerceOrders: activityCommerceOrders,
+    purchaseRefunds: refunds,
+    commerceRefunds: commerceRefunds ?? [],
+    paymentRecords: visiblePaymentRecords,
+  });
   const revenueRecords = recordsInRange(allRevenueRecords, range.start, range.end);
   const refundRecords = recordsInRange(allRefundRecords, range.start, range.end);
   const revenueSummary = summarizeRevenue(revenueRecords);
@@ -275,8 +241,25 @@ export default async function AdminHomePage(
     recordsInRange(allRevenueRecords, monthRange.start, monthRange.end),
     recordsInRange(allRefundRecords, monthRange.start, monthRange.end),
   );
-  const commerceRefundDetails = commerceRefunds
-    ? commerceRefunds.map((item) => ({
+  const explicitPurchaseRefundDetails = new Map(
+    refunds.map((item) => [
+      `purchase-refund-${item.id}`,
+      {
+        id: `purchase-refund-${item.id}`,
+        amountCents: item.amountCents,
+        occurredAt: item.createdAt,
+        name: item.purchase.user.name || item.purchase.user.email,
+        itemName: item.purchase.product.name,
+        reason: item.reason || 'Purchase refund',
+        href: `/admin/members/${item.purchase.userId}`,
+        adjustmentType: 'REFUND' as const,
+      },
+    ]),
+  );
+  const explicitCommerceRefundDetails = new Map(
+    (commerceRefunds ?? []).map((item) => [
+      `commerce-refund-${item.id}`,
+      {
         id: `commerce-${item.id}`,
         amountCents: item.amountCents,
         occurredAt: item.createdAt,
@@ -284,41 +267,37 @@ export default async function AdminHomePage(
         itemName: item.commerceOrder.items.map((orderItem) => orderItem.name).join(', ') || item.commerceOrder.kind,
         reason: item.reason || 'Commerce refund',
         href: item.commerceOrder.userId ? `/admin/members/${item.commerceOrder.userId}` : '/admin/payments',
-      }))
-    : activityCommerceOrders
-        .filter((item) => item.refundedAmountCents > 0)
-        .map((item) => ({
-          id: `commerce-legacy-${item.id}`,
-          amountCents: item.refundedAmountCents,
-          occurredAt: item.updatedAt,
-          name: item.user?.name || item.customerName || item.customerEmail || 'Guest customer',
-          itemName: item.items.map((orderItem) => orderItem.name).join(', ') || item.kind,
-          reason: 'Historical commerce refund',
-          href: item.userId ? `/admin/members/${item.userId}` : '/admin/payments',
-        }));
-  const allRefundDetails = [
-    ...refunds.map((item) => ({
-      id: `purchase-${item.id}`,
-      amountCents: item.amountCents,
-      occurredAt: item.createdAt,
-      name: item.purchase.user.name || item.purchase.user.email,
-      itemName: item.purchase.product.name,
-      reason: item.reason || 'Purchase refund',
-      href: `/admin/members/${item.purchase.userId}`,
-    })),
-    ...commerceRefundDetails,
-    ...directRevenuePaymentRecords
-      .filter((item) => item.refundedAmountCents > 0)
-      .map((item) => ({
-        id: `direct-${item.id}`,
-        amountCents: item.refundedAmountCents,
-        occurredAt: item.updatedAt,
-        name: item.user?.name || item.customerName || item.customerEmail || 'Stripe customer',
-        itemName: item.kind.replaceAll('_', ' '),
-        reason: 'Direct Stripe refund',
-        href: item.userId ? `/admin/members/${item.userId}` : '/admin/payments',
-      })),
-  ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+        adjustmentType: 'REFUND' as const,
+      },
+    ]),
+  );
+  const purchasesById = new Map(nativePurchases.map((item) => [item.id, item]));
+  const commerceOrdersById = new Map(activityCommerceOrders.map((item) => [item.id, item]));
+  const paymentRecordsById = new Map(visiblePaymentRecords.map((item) => [item.id, item]));
+  const allRefundDetails = allRefundRecords.map((refund) => {
+    const explicit = explicitPurchaseRefundDetails.get(refund.id) ||
+      explicitCommerceRefundDetails.get(refund.id);
+    if (explicit) return explicit;
+    const purchase = refund.purchaseId ? purchasesById.get(refund.purchaseId) : null;
+    const order = refund.commerceOrderId ? commerceOrdersById.get(refund.commerceOrderId) : null;
+    const payment = refund.paymentRecordId ? paymentRecordsById.get(refund.paymentRecordId) : null;
+    const userId = purchase?.userId || order?.userId || payment?.userId || null;
+    return {
+      id: refund.id,
+      amountCents: refund.amountCents,
+      occurredAt: refund.occurredAt,
+      name: purchase?.user.name || purchase?.user.email || order?.user?.name ||
+        order?.customerName || order?.customerEmail || payment?.user?.name ||
+        payment?.customerName || payment?.customerEmail || 'Stripe customer',
+      itemName: purchase?.product.name ||
+        order?.items.map((orderItem) => orderItem.name).join(', ') || refund.type,
+      reason: refund.adjustmentType === 'DISPUTE'
+        ? 'Stripe payment dispute'
+        : 'Stripe refund sync',
+      href: userId ? `/admin/members/${userId}` : '/admin/payments',
+      adjustmentType: refund.adjustmentType,
+    };
+  }).sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
   const rangeRefundDetails = allRefundDetails.filter(
     (item) => item.occurredAt >= range.start && item.occurredAt <= range.end,
   );
@@ -328,16 +307,16 @@ export default async function AdminHomePage(
   const refundTotalCents = allRefundRecords.reduce((total, item) => total + item.amountCents, 0);
   const sombleTransferRevenueCents = transactions.reduce((total, item) => total + item.amountCents, 0);
   const nativeGrossRevenueCents = nativePurchases.reduce((total, item) => total + item.amountCents, 0);
-  const nativeRefundedRevenueCents = nativePurchases.reduce((total, item) => total + item.refundedAmountCents, 0);
   const nativeCommerceGrossRevenueCents = activityCommerceOrders.reduce((total, item) => total + item.amountCents, 0);
-  const nativeCommerceRefundedRevenueCents = commerceRefundRecords.reduce((total, item) => total + item.amountCents, 0);
   const totalGrossRevenueCents = allRevenueRecords.reduce((total, item) => total + item.amountCents, 0);
   const directStripeGrossRevenueCents = Math.max(
     0,
     totalGrossRevenueCents - sombleTransferRevenueCents - nativeGrossRevenueCents - nativeCommerceGrossRevenueCents,
   );
-  const directStripeRefundedRevenueCents = directRevenuePaymentRecords.reduce((total, item) => total + item.refundedAmountCents, 0);
-  const totalRevenueCents = totalGrossRevenueCents - nativeRefundedRevenueCents - nativeCommerceRefundedRevenueCents - directStripeRefundedRevenueCents;
+  const totalRevenueCents = totalGrossRevenueCents - refundTotalCents;
+  const nativeStripeNetRevenueCents = allRevenueRecords
+    .filter((item) => item.source === 'RHYZE')
+    .reduce((total, item) => total + item.amountCents, 0) - refundTotalCents;
   const activity = buildAdminActivityItems({
     users: activityUsers,
     purchases: activityPurchases,
@@ -392,9 +371,9 @@ export default async function AdminHomePage(
           icon={<CircleDollarSign />}
         />
         <Metric
-          label="Refunds this month"
+          label="Refunds / disputes this month"
           value={money(monthFinancialSummary.refundCents)}
-          detail="Issued during the current New York calendar month"
+          detail="Financial outflows recorded during the current New York calendar month"
           href="/admin?analytics=earnings&panel=sales&range=month#refunds-analytics"
           icon={<CircleDollarSign />}
         />
@@ -465,7 +444,7 @@ export default async function AdminHomePage(
             />
             <dl className="mt-5 grid gap-3 md:grid-cols-3">
               <Stat label="Gross revenue" value={money(financialSummary.grossCents)} />
-              <Stat label="Refunds issued" value={money(financialSummary.refundCents)} />
+              <Stat label="Refunds / disputes" value={money(financialSummary.refundCents)} />
               <Stat label="Net revenue" value={money(financialSummary.netCents)} />
             </dl>
             <div className="mt-5 grid gap-5 xl:grid-cols-[1.6fr_.8fr]">
@@ -486,8 +465,8 @@ export default async function AdminHomePage(
             </div>
             <div id="refunds-analytics" className="mt-5 scroll-mt-24">
               <RevenueAreaChart
-                title={`Refunds · ${range.label}`}
-                emptyLabel="No refunds were issued during this period."
+                title={`Refunds / disputes · ${range.label}`}
+                emptyLabel="No refunds or disputes were recorded during this period."
                 href="/admin?panel=sales#refunds"
                 points={financialSeries.map((point) => ({
                   label: point.label,
@@ -496,7 +475,7 @@ export default async function AdminHomePage(
               />
               <section className="border-t border-black/10 bg-white p-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                  <h3 className="font-display text-3xl tracking-wider">REFUND DETAILS · {range.label}</h3>
+                  <h3 className="font-display text-3xl tracking-wider">FINANCIAL ADJUSTMENTS · {range.label}</h3>
                   <strong>{rangeRefundDetails.length} records</strong>
                 </div>
                 <div className="mt-4 grid gap-2">
@@ -504,7 +483,11 @@ export default async function AdminHomePage(
                     <Link key={refund.id} href={refund.href} className="grid gap-1 border-b border-black/10 py-3 hover:text-rhyze-coral md:grid-cols-[1fr_auto]">
                       <span>
                         <span className="flex flex-wrap items-center gap-2">
-                          <RefundedBadge />
+                          {refund.adjustmentType === 'DISPUTE' ? (
+                            <span className="bg-red-900 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">Disputed</span>
+                          ) : (
+                            <RefundedBadge />
+                          )}
                           <strong>{refund.itemName}</strong>
                         </span>
                         <small className="mt-1 block">{refund.name} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
@@ -512,7 +495,7 @@ export default async function AdminHomePage(
                       <strong>{money(refund.amountCents)}</strong>
                     </Link>
                   ))}
-                  {!rangeRefundDetails.length && <p className="py-3 text-sm font-bold text-rhyze-black/45">No refunds were issued during this period.</p>}
+                  {!rangeRefundDetails.length && <p className="py-3 text-sm font-bold text-rhyze-black/45">No refunds or disputes were recorded during this period.</p>}
                 </div>
               </section>
             </div>
@@ -590,8 +573,8 @@ export default async function AdminHomePage(
                   value={money(metrics.averagePerCustomerCents)}
                 />
                 <Stat
-                  label="Native Stripe revenue"
-                  value={money(nativeRevenue._sum.amountCents ?? 0)}
+                  label="Native Stripe net revenue"
+                  value={money(nativeStripeNetRevenueCents)}
                 />
               </dl>
               <Link
@@ -733,20 +716,20 @@ export default async function AdminHomePage(
             <section className="mb-5 border-t-4 border-rhyze-orange bg-rhyze-black p-5 text-rhyze-cream">
               <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-gold">Total revenue</p>
               <strong className="mt-2 block font-display text-6xl tracking-wider">{money(totalRevenueCents)}</strong>
-              <p className="mt-2 text-sm font-bold text-rhyze-cream/60">Somble transferred revenue + verified Rhyze memberships, class packs, events, merchandise, and direct Stripe charges - refunds. Charges already represented elsewhere are excluded so money is counted once.</p>
+              <p className="mt-2 text-sm font-bold text-rhyze-cream/60">Somble transferred revenue + verified Rhyze memberships, class packs, events, merchandise, and direct Stripe charges - refunds / disputes. Charges already represented elsewhere are excluded so money is counted once.</p>
               <div className="mt-4 grid gap-3 md:grid-cols-6">
                 <Stat label="Somble transfers" value={money(sombleTransferRevenueCents)} />
                 <Stat label="Memberships + class packs" value={money(nativeGrossRevenueCents)} />
                 <Stat label="Events + merchandise" value={money(nativeCommerceGrossRevenueCents)} />
                 <Stat label="Verified direct Stripe" value={money(directStripeGrossRevenueCents)} />
-                <Stat label="Refunds deducted" value={money(nativeRefundedRevenueCents + nativeCommerceRefundedRevenueCents + directStripeRefundedRevenueCents)} />
+                <Stat label="Refunds / disputes deducted" value={money(refundTotalCents)} />
                 <Stat label="Synced rows" value={`${transactions.length + nativePurchases.length + activityCommerceOrders.length + unlinkedPaymentRecords.length}`} />
               </div>
             </section>
             <div className="mb-5 grid gap-3 md:grid-cols-3">
               <Stat label="Gross synced revenue" value={money(totalGrossRevenueCents)} />
               <Stat label="Net synced revenue" value={money(totalRevenueCents)} />
-              <Stat label="Refunds issued" value={money(refundTotalCents)} />
+              <Stat label="Refunds / disputes" value={money(refundTotalCents)} />
             </div>
             <table className="w-full min-w-[48rem] text-left text-sm">
               <thead>
@@ -764,7 +747,7 @@ export default async function AdminHomePage(
                     <td className="p-3">{dateTime(item.paidAt || item.createdAt)}</td>
                     <td><Link className="font-bold text-rhyze-coral" href={`/admin/members/${item.userId}`}>{item.user.name || item.user.email}</Link></td>
                     <td>{item.product.name}</td>
-                    <td className="font-black">{money(item.amountCents - item.refundedAmountCents)}</td>
+                    <td className="font-black">{money(netCollectedAmountCents(item))}</td>
                     <td className="font-mono text-xs">Rhyze native</td>
                   </tr>
                 ))}
@@ -784,17 +767,21 @@ export default async function AdminHomePage(
             <section id="refunds" className="mt-8 scroll-mt-24 border-t-4 border-rhyze-coral bg-[#f5f0e6] p-5">
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Refund records</p>
-                  <h3 className="font-display text-4xl tracking-wider">REFUNDS</h3>
+                  <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Refund and dispute records</p>
+                  <h3 className="font-display text-4xl tracking-wider">FINANCIAL ADJUSTMENTS</h3>
                 </div>
-                <strong>{money(refundTotalCents)} total refunded</strong>
+                <strong>{money(refundTotalCents)} total deducted</strong>
               </div>
               <div className="grid gap-3">
                 {allRefundDetails.map((refund) => (
                   <Link key={refund.id} href={refund.href} className="grid gap-2 bg-white p-4 hover:bg-rhyze-gold/10 md:grid-cols-[1fr_auto]">
                     <span>
                       <span className="flex flex-wrap items-center gap-2">
-                        <RefundedBadge />
+                        {refund.adjustmentType === 'DISPUTE' ? (
+                          <span className="bg-red-900 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">Disputed</span>
+                        ) : (
+                          <RefundedBadge />
+                        )}
                         <strong>{refund.itemName}</strong>
                       </span>
                       <small className="mt-1 block text-rhyze-black/55">{refund.name} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
@@ -802,7 +789,7 @@ export default async function AdminHomePage(
                     <strong>{money(refund.amountCents)}</strong>
                   </Link>
                 ))}
-                {!allRefundDetails.length && <p className="bg-white p-4 text-sm font-bold text-rhyze-black/45">No refunds recorded yet.</p>}
+                {!allRefundDetails.length && <p className="bg-white p-4 text-sm font-bold text-rhyze-black/45">No refunds or disputes recorded yet.</p>}
               </div>
             </section>
           </div>
