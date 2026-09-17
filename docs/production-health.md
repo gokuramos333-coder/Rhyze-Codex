@@ -24,9 +24,11 @@ Limits: no provider-level Stripe reconciliation, cancellation-policy/credit-ledg
 1. `npm test`, `npm run typecheck`, `npm run lint`, `npx netlify build --context production`.
 2. Confirm site ID `e7002b82-50f2-4760-8a35-e4f9591bec4f` and canonical `https://www.rhyzefitness.com` before deploy.
 3. Keep dependencies local to worktree (never symlink all node_modules); inspect packaged Next runtime.
-4. Deploy with `npx netlify deploy --prod --no-build --skip-functions-cache` after a successful matching build.
-5. Run the read-only scanner, inspect protected redirects, rendered mobile/desktop schedule, plan-specific membership links, and recent function error logs. Capture immutable deploy ID and fresh database readback.
-6. Preserve scoped changes in git; do not merge unrelated dirty branches or rewrite financial history to make the dashboard green.
+4. Create a draft with an integrated adapter build: `npx netlify deploy --context production --skip-functions-cache`. Do NOT use the former separate-build `--prod --no-build` recipe: it published HTTP-200 HTML with missing `_next/static` assets. Generated `.netlify/netlify.toml` names `.next` while the adapter stages public assets in `.netlify/static`; the integrated deploy preserves adapter handling. A build success or printed publish directory alone is not proof.
+5. A CLI draft remains deploy-preview runtime context even with production build context. Verify its Prisma-backed public pages before promotion. If managed DB binding is invalid, obtain the exact site's production connection in memory using `netlify api getSiteDatabase`; validate its PostgreSQL scheme and absence of masking, and supply deploy-scoped `--secret-env` bindings for `NETLIFY_DB_URL`, `NETLIFY_DATABASE_URL`, and `DATABASE_URL` through a subprocess without printing credentials. Do not use the read-only monitor credential for application runtime, nor persist credentials in git/logs.
+6. Before promotion, verify immutable public/protected routes, every discovered JS/CSS asset (HTTP 200, nonempty, correct non-HTML type), and desktop/mobile rendering. Promote that exact verified artifact with `netlify api restoreSiteDeploy --data '{"site_id":"e7002b82-50f2-4760-8a35-e4f9591bec4f","deploy_id":"<verified-draft-id>"}'`, not a rebuild. Read back the published deploy ID.
+7. Run the canonical read-only scanner, inspect protected redirects, rendered mobile/desktop schedule, plan-specific membership links, and recent function error logs. Capture immutable deploy ID and fresh database readback.
+8. Preserve scoped changes in git; do not merge unrelated dirty branches or rewrite financial history to make the dashboard green.
 
 ## Assignment safety
 
