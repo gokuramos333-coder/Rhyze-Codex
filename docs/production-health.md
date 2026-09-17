@@ -24,7 +24,7 @@ Limits: no provider-level Stripe reconciliation, cancellation-policy/credit-ledg
 1. `npm test`, `npm run typecheck`, `npm run lint`, `npx netlify build --context production`.
 2. Confirm site ID `e7002b82-50f2-4760-8a35-e4f9591bec4f` and canonical `https://www.rhyzefitness.com` before deploy.
 3. Keep dependencies local to worktree (never symlink all node_modules); inspect packaged Next runtime.
-4. Deploy with `npx netlify deploy --prod --context production --no-build --skip-functions-cache` after a successful matching build.
+4. Deploy with `npx netlify deploy --prod --no-build --skip-functions-cache` after a successful matching build.
 5. Run the read-only scanner, inspect protected redirects, rendered mobile/desktop schedule, plan-specific membership links, and recent function error logs. Capture immutable deploy ID and fresh database readback.
 6. Preserve scoped changes in git; do not merge unrelated dirty branches or rewrite financial history to make the dashboard green.
 
