@@ -5,6 +5,9 @@ import { ownedEvents } from '../lib/rhyze-platform';
 import { instructors } from '../lib/instructors';
 import { generateReferralCode } from '../lib/domain/onboarding/referral-code';
 
+import { assertLocalDatabase } from '../lib/import/local-database-only';
+
+assertLocalDatabase(process.env.DATABASE_URL);
 const prisma = new PrismaClient();
 const categoryNames = {
   dance: 'Dance',

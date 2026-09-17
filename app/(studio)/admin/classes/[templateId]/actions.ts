@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { requireAssignableInstructor } from '@/lib/domain/instructors/assignment';
 import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
 import {
   parseClassPriceCents,
@@ -94,18 +95,14 @@ export async function assignTemplateInstructorAction(formData: FormData) {
   await requireArea('admin');
   const templateId = String(formData.get('templateId') || '');
   const instructorId = String(formData.get('instructorId') || '') || null;
-  const instructor = instructorId
-    ? await prisma.user.findFirst({
-        where: { id: instructorId, instructorProfile: { isNot: null } },
-        select: { id: true },
-      })
-    : null;
-  if (instructorId && !instructor) {
+  try {
+    await requireAssignableInstructor(instructorId);
+  } catch {
     redirect(`/admin/classes/${templateId}?error=instructor`);
   }
   await prisma.$transaction([
     prisma.classOccurrence.updateMany({
-      where: { templateId, status: 'SCHEDULED' },
+      where: { templateId, status: 'SCHEDULED', startAt: { gte: new Date() } },
       data: { instructorId },
     }),
     prisma.classSeries.updateMany({

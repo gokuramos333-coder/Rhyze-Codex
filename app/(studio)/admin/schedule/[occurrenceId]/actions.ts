@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { parseClassPriceCents } from '@/lib/catalog/class-pricing';
 import { prisma } from '@/lib/db/prisma';
+import { requireAssignableInstructor } from '@/lib/domain/instructors/assignment';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { normalizeInstructorPayMethod, parseDollarCents } from '@/lib/domain/instructors/pay-rates';
 import { cleanOptionalText, occurrenceLocalTimeZone, occurrenceTitle, parseOccurrenceLocalStart } from '@/lib/domain/schedule/occurrence-management';
@@ -139,8 +140,17 @@ export async function updateOccurrenceAction(formData: FormData) {
     redirect(`/admin/schedule/${id}?error=price`);
   }
   const endAt = new Date(startAt.getTime() + current.template.durationMinutes * 60_000);
+  const instructorId = String(formData.get('instructorId') || '') || null;
+  // Historical/cancelled rows may retain legacy ownership; scheduled rows may not.
+  if (current.status === 'SCHEDULED' && endAt > new Date()) {
+    try {
+      await requireAssignableInstructor(instructorId);
+    } catch {
+      redirect(`/admin/schedule/${id}?error=instructor`);
+    }
+  }
   const data = {
-    instructorId: String(formData.get('instructorId') || '') || null,
+    instructorId,
     roomId: formData.has('roomId') ? String(formData.get('roomId') || '') || null : current.roomId,
     startAt,
     endAt,
@@ -188,6 +198,11 @@ export async function duplicateOccurrenceAction(formData: FormData) {
   const id = String(formData.get('id') || '');
   const item = await prisma.classOccurrence.findUnique({ where: { id } });
   if (!item) return;
+  try {
+    await requireAssignableInstructor(item.instructorId);
+  } catch {
+    redirect(`/admin/schedule/${id}?error=instructor`);
+  }
   const requestedStart = String(formData.get('duplicateStartAt') || '').trim();
   const parsedStart = requestedStart ? parseOccurrenceLocalStart(requestedStart, item.timezone || studioTimezone) : null;
   const startAt = parsedStart && !Number.isNaN(parsedStart.getTime())

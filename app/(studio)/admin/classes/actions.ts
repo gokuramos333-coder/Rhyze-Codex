@@ -13,6 +13,7 @@ import { defaultInstructorPayForOccurrence } from '@/lib/domain/instructors/pay-
 import { parseOccurrenceLocalStart } from '@/lib/domain/schedule/occurrence-management';
 import { classTemplateHasProtectedHistory } from '@/lib/domain/classes/class-template-deletion';
 import { assignableInstructorWhere } from '@/lib/admin/assignable-instructors';
+import { requireAssignableInstructor } from '@/lib/domain/instructors/assignment';
 
 const slugify = (value: string) =>
   value
@@ -116,6 +117,11 @@ export async function createClassTemplateAction(
     (startAt) => new Date(startAt.getTime() + durationMinutes * 60_000),
   );
   if (!isEvent) {
+    try {
+      await requireAssignableInstructor(instructorId);
+    } catch {
+      redirect('/admin/classes?error=instructor');
+    }
     const instructor = await prisma.user.findFirst({
       where: {
         id: instructorId,
@@ -306,6 +312,11 @@ export async function createOccurrenceAction(
   const actor = await requireArea('admin');
   const templateId = String(formData.get('templateId') || '');
   const instructorId = String(formData.get('instructorId') || '') || null;
+  try {
+    await requireAssignableInstructor(instructorId);
+  } catch {
+    redirect('/admin/schedule?error=instructor');
+  }
   let roomId = String(formData.get('roomId') || '') || null;
   const startAt = parseOccurrenceLocalStart(String(formData.get('startAt') || ''));
   const template = await prisma.classTemplate.findUnique({
@@ -386,6 +397,11 @@ export async function createRecurringOccurrencesAction(formData: FormData): Prom
   const actor = await requireArea('admin');
   const templateId = String(formData.get('templateId') || '');
   const instructorId = String(formData.get('instructorId') || '') || null;
+  try {
+    await requireAssignableInstructor(instructorId);
+  } catch {
+    redirect('/admin/schedule?error=instructor');
+  }
   let roomId = String(formData.get('roomId') || '') || null;
   const startLocal = String(formData.get('startAt') || '');
   const count = Math.min(52, Math.max(2, Number(formData.get('count') || 4)));

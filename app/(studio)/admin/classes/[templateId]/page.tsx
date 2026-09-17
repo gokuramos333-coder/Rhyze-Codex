@@ -65,10 +65,11 @@ export default async function EditTemplatePage(
           <Span>Instructor for every scheduled date</Span>
           <select
             name="instructorId"
+            required
             defaultValue={item.occurrences[0]?.instructor?.id || ''}
             className="min-h-12 border px-3"
           >
-            <option value="">Instructor TBA</option>
+            <option value="">Choose an instructor account</option>
             {instructors.map((instructor) => (
               <option key={instructor.id} value={instructor.id}>
                 {instructor.name || instructor.email}

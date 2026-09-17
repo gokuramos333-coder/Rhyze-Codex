@@ -37,7 +37,7 @@ export default async function AdminSchedulePage(
       </p>
       {searchParams.error && (
         <p className="mt-5 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-4 text-sm font-bold">
-          {searchParams.error === 'conflict' ? 'That room or instructor already has a class at this time.' : 'Check the schedule details.'}
+          {searchParams.error === 'instructor' ? 'Choose an active instructor account with portal access. A display name alone does not assign a class.' : searchParams.error === 'conflict' ? 'That room or instructor already has a class at this time.' : 'Check the schedule details.'}
         </p>
       )}
 
@@ -91,7 +91,7 @@ function Select({ name, label, options }: { name: string; label: string; options
   return (
     <label className="grid gap-2">
       <span className="text-xs font-black uppercase tracking-widest">{label}</span>
-      <select name={name} className="min-h-12 border px-3">
+      <select name={name} required className="min-h-12 border px-3">
         <option value="">Select {label.toLowerCase()}</option>
         {options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
       </select>

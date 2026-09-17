@@ -3,6 +3,9 @@ import { SEPTEMBER_2026_SCHEDULE } from '../lib/domain/schedule/september-2026-s
 import { parseOccurrenceLocalStart } from '../lib/domain/schedule/occurrence-management';
 import { defaultInstructorPayForOccurrence } from '../lib/domain/instructors/pay-rates';
 
+import { assertLocalDatabase } from '../lib/import/local-database-only';
+
+assertLocalDatabase(process.env.DATABASE_URL);
 const prisma = new PrismaClient();
 const SEPTEMBER_START = new Date('2026-09-01T04:00:00.000Z');
 const OCTOBER_START = new Date('2026-10-01T04:00:00.000Z');

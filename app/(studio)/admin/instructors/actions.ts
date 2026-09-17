@@ -316,11 +316,16 @@ export async function approveInstructorAction(formData: FormData) {
       include: { user: true },
     });
     if (!application) return;
+    if (application.user.status !== 'ACTIVE' || !application.user.passwordHash || application.user.email.toLowerCase().endsWith('@rhyze.local')) {
+      throw new Error('Instructor must activate their real account and set a password before approval.');
+    }
     const directoryMatch = application.user.name
       ? await tx.user.findFirst({
           where: {
             id: { not: application.userId },
             name: { equals: application.user.name, mode: 'insensitive' },
+            email: { endsWith: '@rhyze.local', mode: 'insensitive' },
+            passwordHash: null,
             instructorProfile: { is: { isActive: true } },
           },
           include: { instructorProfile: true },
@@ -347,10 +352,9 @@ export async function approveInstructorAction(formData: FormData) {
       },
     });
     if (directoryMatch) {
-      await tx.classOccurrence.updateMany({ where: { instructorId: directoryMatch.id }, data: { instructorId: application.userId } });
+      // Name matching is only a directory hint, never authority to rewrite pay history.
+      await tx.classOccurrence.updateMany({ where: { instructorId: directoryMatch.id, status: 'SCHEDULED', startAt: { gte: new Date() } }, data: { instructorId: application.userId } });
       await tx.classSeries.updateMany({ where: { instructorId: directoryMatch.id }, data: { instructorId: application.userId } });
-      await tx.referralCode.updateMany({ where: { instructorId: directoryMatch.id }, data: { instructorId: application.userId } });
-      await tx.referralCommission.updateMany({ where: { instructorId: directoryMatch.id }, data: { instructorId: application.userId } });
       await tx.instructorProfile.update({ where: { userId: directoryMatch.id }, data: { isActive: false } });
     }
     let referral = await tx.referralCode.findFirst({

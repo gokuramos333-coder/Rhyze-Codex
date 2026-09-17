@@ -31,10 +31,11 @@ export default async function ManageOccurrencePage(
       {item.titleOverride && <p className="mt-2 text-sm font-bold text-rhyze-black/55">Template title: {item.template.name}</p>}
       {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">Class saved.</p>}
       {searchParams.error === 'price' && <p className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Enter a valid client drop-in price.</p>}
+      {searchParams.error === 'instructor' && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Choose an active instructor account with portal access. A display name alone does not assign a class.</p>}
       <form action={updateOccurrenceAction} className="mt-8 grid gap-4 border-t-4 border-rhyze-gold bg-white p-6 md:grid-cols-2">
         <input type="hidden" name="id" value={item.id}/>
         <Label text="Class title for this date"><input name="titleOverride" defaultValue={item.titleOverride || ''} placeholder={item.template.name} className="min-h-12 border px-3"/></Label>
-        <Label text="Instructor"><select name="instructorId" defaultValue={item.instructorId || ''} className="min-h-12 border px-3"><option value="">TBA</option>{assignableInstructors.map((user) => <option key={user.id} value={user.id}>{instructorOptionLabel(user)}</option>)}</select></Label>
+        <Label text="Instructor"><select name="instructorId" required={item.status === 'SCHEDULED' && item.endAt > new Date()} defaultValue={item.instructorId || ''} className="min-h-12 border px-3"><option value="">Choose an instructor account</option>{item.instructorId && !assignableInstructors.some((user) => user.id === item.instructorId) && <option value={item.instructorId}>Historical assignment — {item.instructor?.name || 'Legacy account'}</option>}{assignableInstructors.map((user) => <option key={user.id} value={user.id}>{instructorOptionLabel(user)}</option>)}</select></Label>
         <Label text="Substitute instructor display"><input name="substituteInstructorName" defaultValue={item.substituteInstructorName || ''} placeholder={occurrenceInstructorName(item)} className="min-h-12 border px-3"/></Label>
         <label className="flex items-center gap-3 border border-rhyze-coral/30 bg-rhyze-coral/10 p-3 text-xs font-black uppercase tracking-widest">
           <input name="isSubstitute" type="checkbox" defaultChecked={item.isSubstitute} className="h-5 w-5"/>

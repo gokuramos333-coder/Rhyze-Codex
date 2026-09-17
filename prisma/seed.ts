@@ -1,6 +1,9 @@
 import { PrismaClient, Role } from '@prisma/client';
 import { hashPassword, validatePassword } from '../lib/auth/password';
 
+import { assertLocalDatabase } from '../lib/import/local-database-only';
+
+assertLocalDatabase(process.env.DATABASE_URL);
 const prisma = new PrismaClient();
 
 async function main() {

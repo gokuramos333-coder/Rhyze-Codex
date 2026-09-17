@@ -1,11 +1,17 @@
+import type { Prisma } from '@prisma/client';
+
 export const ownerInstructorEmails = ['vanessa@rhyzefit.com', 'melissa@rhyzefit.com'] as const;
 
 export const assignableInstructorWhere = {
+  status: 'ACTIVE',
+  role: { in: ['INSTRUCTOR', 'OWNER', 'ADMIN', 'MANAGER'] },
+  passwordHash: { not: null },
+  NOT: { email: { endsWith: '@rhyze.local', mode: 'insensitive' } },
   OR: [
     { instructorProfile: { is: { isActive: true } } },
     { email: { in: [...ownerInstructorEmails] } },
   ],
-};
+} satisfies Prisma.UserWhereInput;
 
 type AssignableInstructor = {
   id: string;
