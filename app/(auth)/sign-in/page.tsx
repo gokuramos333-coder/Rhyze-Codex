@@ -11,7 +11,7 @@ const errorMessages: Record<string, string> = {
 
 export default async function SignInPage(
   props: {
-    searchParams: Promise<{ error?: string; reset?: string; claimed?: string; callbackUrl?: string }>;
+    searchParams: Promise<{ error?: string; reset?: string; claimed?: string; callbackUrl?: string; plan?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -22,7 +22,9 @@ export default async function SignInPage(
     searchParams.callbackUrl?.startsWith('/') &&
     !searchParams.callbackUrl.startsWith('//')
       ? searchParams.callbackUrl
-      : '';
+      : searchParams.plan
+        ? `/member/membership?plan=${encodeURIComponent(searchParams.plan)}#available-plans`
+        : '';
   const signUpHref = callbackUrl
     ? `/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`
     : '/sign-up';
