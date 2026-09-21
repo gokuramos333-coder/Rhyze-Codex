@@ -186,6 +186,185 @@ function fixture() {
   return { tx, state };
 }
 describe('Somble payment-first fulfillment', () => {
+  describe('lifecycle event ordering', () => {
+    it.each([
+      ['paused', 'PAUSED'],
+      ['canceled', 'CANCELLED'],
+    ])(
+      'remembers a newer pending %s without granting access before initial settlement',
+      async (status, expected) => {
+        const f = fixture();
+        const restriction = {
+          ...event(
+            status === 'canceled'
+              ? 'customer.subscription.deleted'
+              : 'customer.subscription.updated',
+            {
+              id: 'sub_recovered',
+              customer: 'cus_verified',
+              metadata,
+              status,
+              items: {
+                data: [
+                  {
+                    current_period_start: 1790013600,
+                    current_period_end: 1791043200,
+                  },
+                ],
+              },
+            },
+          ),
+          created: 1790013780,
+        };
+        await processStripeEvent(f.tx, restriction);
+        expect(f.state.purchase.status).toBe('PENDING');
+        expect(f.state.membership.purchaseId).toBeNull();
+        expect(f.state.membership.status).toBe('ACTIVE');
+        expect(f.state.account).toBeNull();
+        await processStripeEvent(f.tx, event('invoice.paid', invoice()));
+        expect(f.state.membership.status).toBe(expected);
+        expect(f.state.records).toHaveLength(1);
+      },
+    );
+    const start = new Date('2026-10-03T16:00Z').getTime() / 1000;
+    const end = new Date('2026-11-03T16:00Z').getTime() / 1000;
+    const paid = () =>
+      event(
+        'invoice.paid',
+        invoice({
+          id: 'in_october',
+          billing_reason: 'subscription_cycle',
+          payments: {
+            data: [
+              {
+                payment: {
+                  type: 'payment_intent',
+                  payment_intent: 'pi_october',
+                },
+              },
+            ],
+          },
+          status_transitions: { paid_at: start + 120 },
+          lines: {
+            data: [
+              {
+                amount: 9200,
+                parent: { type: 'subscription_item_details' },
+                period: { start, end },
+              },
+            ],
+          },
+        }),
+      );
+    const snapshot = (status: string, created: number, withPeriod = true) => ({
+      ...event(
+        status === 'canceled'
+          ? 'customer.subscription.deleted'
+          : 'customer.subscription.updated',
+        {
+          id: 'sub_recovered',
+          customer: 'cus_verified',
+          metadata,
+          status,
+          cancel_at_period_end: false,
+          ...(withPeriod
+            ? {
+                items: {
+                  data: [
+                    { current_period_start: start, current_period_end: end },
+                  ],
+                },
+              }
+            : {}),
+        },
+      ),
+      created,
+    });
+
+    it.each([true, false])(
+      'ignores an older past_due snapshot after settlement (period supplied: %s)',
+      async (withPeriod) => {
+        const f = fixture();
+        await processStripeEvent(f.tx, event('invoice.paid', invoice()));
+        await processStripeEvent(f.tx, paid());
+        await processStripeEvent(
+          f.tx,
+          snapshot('past_due', start + 60, withPeriod),
+        );
+        expect(f.state.membership.status).toBe('ACTIVE');
+        await processStripeEvent(f.tx, snapshot('active', start + 180));
+        await processStripeEvent(f.tx, paid());
+        expect(f.state.membership.status).toBe('ACTIVE');
+        expect(f.state.membership.currentPeriodEnd).toEqual(
+          new Date(end * 1000),
+        );
+        expect(f.state.ledger).toHaveLength(3);
+      },
+    );
+    it('settles correctly when the older past_due snapshot arrives before the payment', async () => {
+      const f = fixture();
+      await processStripeEvent(f.tx, event('invoice.paid', invoice()));
+      await processStripeEvent(f.tx, snapshot('past_due', start + 60));
+      expect(f.state.membership.status).toBe('PAST_DUE');
+      await processStripeEvent(f.tx, snapshot('active', start + 180));
+      expect(f.state.membership.status).toBe('PAST_DUE');
+      await processStripeEvent(f.tx, paid());
+      expect(f.state.membership.status).toBe('ACTIVE');
+    });
+    it.each([
+      ['past_due', 'PAST_DUE'],
+      ['paused', 'PAUSED'],
+      ['canceled', 'CANCELLED'],
+    ])(
+      'preserves a genuinely newer %s after active snapshots and paid replay',
+      async (status, expected) => {
+        const f = fixture();
+        await processStripeEvent(f.tx, event('invoice.paid', invoice()));
+        await processStripeEvent(f.tx, paid());
+        await processStripeEvent(f.tx, snapshot(status, start + 180));
+        await processStripeEvent(f.tx, snapshot('active', start + 240));
+        await processStripeEvent(f.tx, paid());
+        expect(f.state.membership.status).toBe(expected);
+      },
+    );
+    it.each([
+      ['past_due', 'PAST_DUE'],
+      ['paused', 'PAUSED'],
+      ['canceled', 'CANCELLED'],
+    ])(
+      'does not undo a newer %s when an older paid invoice arrives late',
+      async (status, expected) => {
+        const f = fixture();
+        await processStripeEvent(f.tx, event('invoice.paid', invoice()));
+        await processStripeEvent(f.tx, snapshot(status, start + 180));
+        await processStripeEvent(f.tx, paid());
+        expect(f.state.membership.status).toBe(expected);
+        expect(
+          f.state.records.find((p: any) => p.stripeInvoiceId === 'in_october')
+            .status,
+        ).toBe('SUCCEEDED');
+      },
+    );
+    it('does not regress a newer cancellation with an older same-period failure', async () => {
+      const f = fixture();
+      await processStripeEvent(f.tx, event('invoice.paid', invoice()));
+      await processStripeEvent(f.tx, paid());
+      await processStripeEvent(f.tx, snapshot('canceled', start + 300));
+      await processStripeEvent(f.tx, snapshot('past_due', start + 240));
+      expect(f.state.membership.status).toBe('CANCELLED');
+    });
+    it.each(['active', 'trialing'])(
+      'does not grant unpaid recovery access from a %s snapshot',
+      async (status) => {
+        const f = fixture();
+        await processStripeEvent(f.tx, snapshot(status, start + 60));
+        expect(f.state.membership.purchaseId).toBeNull();
+        expect(f.state.purchase.status).toBe('PENDING');
+        expect(f.state.account).toBeNull();
+        expect(f.state.records).toHaveLength(0);
+      },
+    );
+  });
   it.each([
     [
       'charge.refunded',

@@ -84,13 +84,17 @@ export async function processSombleRecoveryEvent(
       id(object.parent?.subscription_details?.subscription));
   if (
     !subscriptionId ||
+    (acceptance.subscriptionId &&
+      acceptance.subscriptionId !== subscriptionId) ||
     (membership.stripeSubscriptionId &&
       membership.stripeSubscriptionId !== subscriptionId)
   )
     throw new Error('Recovery subscription mismatch.');
+  const lastPaidAt = Number(acceptance.lastPaidAt || 0);
+  const lastLifecycleEventAt = Number(acceptance.lastLifecycleEventAt || 0);
+  const lastRestrictiveEventAt = Number(acceptance.lastRestrictiveEventAt || 0);
 
   if (event.type.startsWith('customer.subscription.')) {
-    if (membership.purchaseId !== purchase.id) return true;
     // Periods are set exclusively by successful invoices; trialing is a billing deferral, not free access.
     const status =
       object.status === 'canceled'
@@ -100,6 +104,11 @@ export async function processSombleRecoveryEvent(
           : object.status === 'paused'
             ? 'PAUSED'
             : null;
+    if (
+      event.created < Math.max(lastPaidAt, lastLifecycleEventAt) ||
+      (status === 'PAST_DUE' && event.created === lastPaidAt)
+    )
+      return true;
     const item = object.items?.data?.[0];
     const incomingEnd = object.current_period_end ?? item?.current_period_end;
     if (
@@ -108,11 +117,28 @@ export async function processSombleRecoveryEvent(
       incomingEnd * 1000 < membership.currentPeriodEnd.getTime()
     )
       return true;
-    await tx.membership.update({
-      where: { id: membership.id },
+    if (membership.purchaseId === purchase.id)
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: {
+          ...(status ? { status } : {}),
+          cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
+        },
+      });
+    await tx.purchase.update({
+      where: { id: purchase.id },
       data: {
-        ...(status ? { status } : {}),
-        cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
+        policyAcceptance: {
+          ...acceptance,
+          subscriptionId,
+          lastLifecycleEventAt: event.created,
+          ...(status
+            ? {
+                lastRestrictiveEventAt: event.created,
+                lastRestrictiveStatus: status,
+              }
+            : {}),
+        },
       },
     });
     return true;
@@ -121,11 +147,24 @@ export async function processSombleRecoveryEvent(
     if (
       membership.purchaseId === purchase.id &&
       membership.currentPeriodEnd &&
+      event.created > lastPaidAt &&
+      event.created >= lastLifecycleEventAt &&
       event.created * 1000 >= membership.currentPeriodEnd.getTime()
     ) {
       await tx.membership.update({
         where: { id: membership.id },
         data: { status: 'PAST_DUE' },
+      });
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          policyAcceptance: {
+            ...acceptance,
+            lastLifecycleEventAt: event.created,
+            lastRestrictiveEventAt: event.created,
+            lastRestrictiveStatus: 'PAST_DUE',
+          },
+        },
       });
     }
     return true;
@@ -252,28 +291,41 @@ export async function processSombleRecoveryEvent(
   }
   // A delayed old invoice still belongs in financial history, but must not reset a newer paid period.
   if (!first && start < membership.currentPeriodStart) return true;
-  if (first) {
-    await tx.purchase.update({
-      where: { id: purchase.id },
-      data: {
-        status: 'PAID',
-        paidAt,
-        stripePaymentIntentId: paymentIntentId,
-        policyAcceptance: {
-          ...acceptance,
-          firstInvoiceId: object.id,
-          subscriptionId,
-        },
+  await tx.purchase.update({
+    where: { id: purchase.id },
+    data: {
+      ...(first
+        ? {
+            status: 'PAID' as const,
+            paidAt,
+            stripePaymentIntentId: paymentIntentId,
+          }
+        : {}),
+      policyAcceptance: {
+        ...acceptance,
+        ...(first ? { firstInvoiceId: object.id, subscriptionId } : {}),
+        lastPaidAt: Math.max(lastPaidAt, paidAt.getTime() / 1000),
       },
-    });
-  }
+    },
+  });
+  // Payment settles its financial period, but cannot undo a later restriction.
+  // Same-second pause/cancellation wins the tie; a paid invoice resolves past_due.
+  const restrictiveStatus = ['PAST_DUE', 'PAUSED', 'CANCELLED'].includes(
+    acceptance.lastRestrictiveStatus,
+  )
+    ? (acceptance.lastRestrictiveStatus as 'PAST_DUE' | 'PAUSED' | 'CANCELLED')
+    : membership.status;
+  const retainRestriction =
+    lastRestrictiveEventAt > paidAt.getTime() / 1000 ||
+    (lastRestrictiveEventAt === paidAt.getTime() / 1000 &&
+      ['PAUSED', 'CANCELLED'].includes(restrictiveStatus));
   await tx.membership.update({
     where: { id: membership.id },
     data: {
       purchaseId: purchase.id,
       productId: r.productId,
       stripeSubscriptionId: subscriptionId,
-      status: 'ACTIVE',
+      status: retainRestriction ? restrictiveStatus : 'ACTIVE',
       currentPeriodStart: start,
       currentPeriodEnd: end,
     },
