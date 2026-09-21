@@ -158,7 +158,7 @@ export async function processSombleRecoveryEvent(
     },
   });
   if (
-    existingPayment?.stripeInvoiceId === object.id &&
+    existingPayment && existingPayment.stripeInvoiceId === object.id &&
     existingPayment.membershipId === membership.id &&
     membership.purchaseId === purchase.id &&
     ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(
