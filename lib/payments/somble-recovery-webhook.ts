@@ -158,7 +158,8 @@ export async function processSombleRecoveryEvent(
     },
   });
   if (
-    existingPayment && existingPayment.stripeInvoiceId === object.id &&
+    existingPayment &&
+    existingPayment.stripeInvoiceId === object.id &&
     existingPayment.membershipId === membership.id &&
     membership.purchaseId === purchase.id &&
     ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(
@@ -197,11 +198,9 @@ export async function processSombleRecoveryEvent(
     if (purchase.status !== 'PENDING')
       throw new Error('Recovery purchase is not pending.');
   } else {
-    if (
-      !acceptance.firstInvoiceId ||
-      membership.purchaseId !== purchase.id ||
-      purchase.status !== 'PAID'
-    )
+    // The shared Purchase retains refund/dispute history from older cycles.
+    // This independently verified paid invoice owns the new period's access.
+    if (!acceptance.firstInvoiceId || membership.purchaseId !== purchase.id)
       throw new Error(
         'Recovery renewal arrived before initial payment was reconciled.',
       );

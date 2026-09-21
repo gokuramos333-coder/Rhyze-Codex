@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import { processSombleRecoveryEvent } from '@/lib/payments/somble-recovery-webhook';
+import { processStripeEvent } from '@/lib/payments/webhook-processor';
 
 const pid = 'somble-september-2026-v1:cms446vaw0069l709pi1gr4yo';
 const metadata = {
@@ -155,6 +156,10 @@ function fixture() {
       },
     },
     paymentRecord: {
+      findUnique: async ({ where }: any) =>
+        state.records.find(
+          (r: any) => r.stripePaymentIntentId === where.stripePaymentIntentId,
+        ) ?? null,
       findFirst: async ({ where }: any) =>
         state.records.find((r: any) =>
           where.OR.some((w: any) =>
@@ -181,6 +186,77 @@ function fixture() {
   return { tx, state };
 }
 describe('Somble payment-first fulfillment', () => {
+  it.each([
+    [
+      'charge.refunded',
+      { payment_intent: 'pi_first', amount_refunded: 100, refunded: false },
+      'PARTIALLY_REFUNDED',
+      'PARTIALLY_REFUNDED',
+    ],
+    [
+      'charge.refunded',
+      { payment_intent: 'pi_first', amount_refunded: 9200, refunded: true },
+      'REFUNDED',
+      'REFUNDED',
+    ],
+    [
+      'charge.dispute.created',
+      { payment_intent: 'pi_first', amount: 9200 },
+      'DISPUTED',
+      'FAILED',
+    ],
+  ] as const)(
+    'honors a fresh paid renewal after %s without erasing historical payment state',
+    async (type, object, recordStatus, purchaseStatus) => {
+      const f = fixture();
+      await processStripeEvent(f.tx, event('invoice.paid', invoice()));
+      await processStripeEvent(f.tx, event(type, object));
+      expect(f.state.purchase.status).toBe(purchaseStatus);
+      expect(f.state.records[0].status).toBe(recordStatus);
+      const start = new Date('2026-10-03T16:00Z').getTime() / 1000;
+      const end = new Date('2026-11-03T16:00Z').getTime() / 1000;
+      const renewal = invoice({
+        id: 'in_october',
+        billing_reason: 'subscription_cycle',
+        payments: {
+          data: [
+            {
+              payment: { type: 'payment_intent', payment_intent: 'pi_october' },
+            },
+          ],
+        },
+        status_transitions: { paid_at: start },
+        lines: {
+          data: [
+            {
+              amount: 9200,
+              parent: { type: 'subscription_item_details' },
+              period: { start, end },
+            },
+          ],
+        },
+      });
+      await processStripeEvent(f.tx, event('invoice.paid', renewal));
+      expect(f.state.membership.currentPeriodEnd).toEqual(
+        new Date('2026-11-03T16:00Z'),
+      );
+      expect(f.state.membership.status).toBe('ACTIVE');
+      expect(f.state.account.validUntil).toEqual(new Date('2026-11-03T16:00Z'));
+      expect(
+        f.state.ledger.reduce((total: number, e: any) => total + e.quantity, 0),
+      ).toBe(8);
+      expect(f.state.purchase.status).toBe(purchaseStatus);
+      expect(f.state.records[0].status).toBe(recordStatus);
+      expect(f.state.records[1]).toMatchObject({
+        stripeInvoiceId: 'in_october',
+        status: 'SUCCEEDED',
+        amountCents: 9200,
+      });
+      await processStripeEvent(f.tx, event('invoice.paid', renewal));
+      expect(f.state.records).toHaveLength(2);
+      expect(f.state.ledger).toHaveLength(3);
+    },
+  );
   it.each(['REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'])(
     'preserves %s renewal state when an already settled invoice replays',
     async (status) => {

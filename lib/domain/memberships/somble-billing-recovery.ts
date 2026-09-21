@@ -89,6 +89,14 @@ export function recoveryVipMaintenance(
   now: Date,
 ) {
   const r = recoveryForUser(membership.userId);
+  // September's approved legacy benefits remain untouched, but these exact
+  // unpaid recovery memberships must not gain another free calendar month.
+  const awaitingRecovery = Boolean(
+    r &&
+    r.kind === 'VIP' &&
+    membership.id === r.membershipId &&
+    membership.purchaseId === null,
+  );
   const recovered = Boolean(
     r &&
     r.kind === 'VIP' &&
@@ -97,9 +105,12 @@ export function recoveryVipMaintenance(
   );
   return {
     purchaseOwnsClasses: recovered,
-    benefitsEligible:
-      !recovered ||
-      Boolean(membership.currentPeriodEnd && membership.currentPeriodEnd > now),
+    benefitsEligible: awaitingRecovery
+      ? now < new Date('2026-10-01T04:00:00Z')
+      : !recovered ||
+        Boolean(
+          membership.currentPeriodEnd && membership.currentPeriodEnd > now,
+        ),
   };
 }
 export function recoveryPeriod(r: Recovery) {
