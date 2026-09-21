@@ -1,0 +1,397 @@
+import type Stripe from 'stripe';
+import { describe, expect, it } from 'vitest';
+import { processSombleRecoveryEvent } from '@/lib/payments/somble-recovery-webhook';
+
+const pid = 'somble-september-2026-v1:cms446vaw0069l709pi1gr4yo';
+const metadata = {
+  recovery: 'somble-september-2026-v1',
+  purchaseId: pid,
+  userId: 'cmryg3hyo000zw9wrhuigtu3y',
+  membershipId: 'cms446vaw0069l709pi1gr4yo',
+  productId: 'rhyze-og-tribe-private-2026',
+};
+function event(type: string, object: any): Stripe.Event {
+  return {
+    id: 'evt_recovery',
+    created: 1790013600,
+    type,
+    data: { object },
+  } as Stripe.Event;
+}
+function invoice(overrides: any = {}) {
+  return {
+    id: 'in_first',
+    status: 'paid',
+    amount_paid: 9200,
+    amount_due: 9200,
+    currency: 'usd',
+    customer: 'cus_verified',
+    billing_reason: 'subscription_create',
+    parent: {
+      subscription_details: { subscription: 'sub_recovered', metadata },
+    },
+    payments: {
+      data: [
+        { payment: { type: 'payment_intent', payment_intent: 'pi_first' } },
+      ],
+    },
+    status_transitions: { paid_at: 1790013600 },
+    lines: {
+      data: [
+        {
+          amount: 0,
+          parent: { type: 'subscription_item_details' },
+          period: { start: 1790013600, end: 1791043200 },
+        },
+        { amount: 9200, period: { start: 1790013600, end: 1790013600 } },
+      ],
+    },
+    ...overrides,
+  };
+}
+function fixture() {
+  const state: any = {
+    purchase: {
+      id: pid,
+      userId: metadata.userId,
+      productId: metadata.productId,
+      status: 'PENDING',
+      amountCents: 9200,
+      currency: 'usd',
+      policyAcceptance: {
+        recovery: metadata.recovery,
+        membershipId: metadata.membershipId,
+        customerId: 'cus_verified',
+      },
+      product: {
+        id: metadata.productId,
+        slug: 'og-rhyze-tribe-2026',
+        name: 'OG Rhyze Tribe',
+        priceCents: 9200,
+        kind: 'LIMITED_MEMBERSHIP',
+        billingInterval: 'MONTHLY',
+        includedCredits: 8,
+        isUnlimited: false,
+        isActive: true,
+        isPublic: false,
+      },
+    },
+    membership: {
+      id: metadata.membershipId,
+      userId: metadata.userId,
+      productId: 'legacy',
+      purchaseId: null,
+      stripeSubscriptionId: null,
+      status: 'ACTIVE',
+      currentPeriodStart: new Date('2026-08-03T04:00Z'),
+      currentPeriodEnd: new Date('2026-09-03T04:00Z'),
+      activatedAt: new Date('2026-07-03T04:00Z'),
+      product: {
+        id: 'legacy',
+        slug: 'somble-og-rhyze-tribe',
+        kind: 'LIMITED_MEMBERSHIP',
+        billingInterval: 'MONTHLY',
+      },
+    },
+    account: null,
+    ledger: [],
+    records: [],
+    emails: [],
+    legacyEntries: [],
+    bookings: [],
+  };
+  const user = {
+    id: metadata.userId,
+    name: 'Jolie',
+    email: 'jolielampkin@gmail.com',
+    stripeCustomerId: 'cus_verified',
+  };
+  const tx: any = {
+    $queryRaw: async () => [],
+    purchase: {
+      findUnique: async () => state.purchase,
+      update: async ({ data }: any) => Object.assign(state.purchase, data),
+    },
+    user: {
+      findUnique: async () => ({ ...user, memberships: [state.membership] }),
+    },
+    membership: {
+      findUnique: async () => state.membership,
+      findMany: async () => [state.membership],
+      update: async ({ data }: any) => Object.assign(state.membership, data),
+    },
+    booking: { findMany: async () => state.bookings },
+    creditAccount: {
+      findUnique: async () => state.account,
+      upsert: async ({ create, update }: any) => {
+        state.account = state.account
+          ? { ...state.account, ...update }
+          : { ...create, id: 'credit_native', entries: state.ledger };
+        return state.account;
+      },
+      update: async ({ data }: any) => Object.assign(state.account, data),
+    },
+    creditLedgerEntry: {
+      findMany: async () => state.legacyEntries,
+      updateMany: async ({ where, data }: any) => {
+        const moved = state.legacyEntries.filter((e: any) =>
+          where.id.in.includes(e.id),
+        );
+        for (const entry of moved) {
+          Object.assign(entry, data);
+          state.ledger.push(entry);
+        }
+        return { count: moved.length };
+      },
+      upsert: async ({ create }: any) => {
+        const key = create.sourceStripeInvoiceId || create.sourceReturnKey;
+        if (
+          !state.ledger.some(
+            (e: any) => (e.sourceStripeInvoiceId || e.sourceReturnKey) === key,
+          )
+        )
+          state.ledger.push(create);
+        return create;
+      },
+    },
+    paymentRecord: {
+      findFirst: async ({ where }: any) =>
+        state.records.find((r: any) =>
+          where.OR.some((w: any) =>
+            Object.entries(w).every(([k, v]) => r[k] === v),
+          ),
+        ),
+      create: async ({ data }: any) => {
+        state.records.push({ id: `record${state.records.length}`, ...data });
+        return data;
+      },
+      update: async ({ where, data }: any) =>
+        Object.assign(
+          state.records.find((r: any) => r.id === where.id),
+          data,
+        ),
+    },
+    emailMessage: {
+      upsert: async ({ create }: any) => {
+        state.emails.push(create);
+        return create;
+      },
+    },
+  };
+  return { tx, state };
+}
+describe('Somble payment-first fulfillment', () => {
+  it.each(['REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'])(
+    'preserves %s renewal state when an already settled invoice replays',
+    async (status) => {
+      const f = fixture();
+      await processSombleRecoveryEvent(f.tx, event('invoice.paid', invoice()));
+      const start = new Date('2026-10-03T16:00Z').getTime() / 1000;
+      const end = new Date('2026-11-03T16:00Z').getTime() / 1000;
+      const renewal = invoice({
+        id: 'in_october',
+        billing_reason: 'subscription_cycle',
+        payments: {
+          data: [
+            {
+              payment: { type: 'payment_intent', payment_intent: 'pi_october' },
+            },
+          ],
+        },
+        status_transitions: { paid_at: start },
+        lines: {
+          data: [
+            {
+              amount: 9200,
+              parent: { type: 'subscription_item_details' },
+              period: { start, end },
+            },
+          ],
+        },
+      });
+      await processSombleRecoveryEvent(f.tx, event('invoice.paid', renewal));
+      const record = f.state.records.find(
+        (r: any) => r.stripeInvoiceId === 'in_october',
+      );
+      record.status = status;
+      record.refundedAmountCents = 9200;
+      await processSombleRecoveryEvent(f.tx, event('invoice.paid', renewal));
+      expect(record.status).toBe(status);
+      expect(record.refundedAmountCents).toBe(9200);
+      expect(f.state.ledger).toHaveLength(3);
+    },
+  );
+  it('keeps covered OG booking reservations linked to the native account so cancellation can restore the correct credit', async () => {
+    const f = fixture();
+    f.state.legacyEntries = [
+      {
+        id: 'reserve_og',
+        creditAccountId: 'cmsoujv7l001dkz09yrcubhj5',
+        bookingId: 'booking_og',
+        type: 'RESERVE',
+        quantity: -1,
+      },
+      {
+        id: 'reserve_free',
+        creditAccountId: 'cmu8knx1i0001jq09k1wqfy9x',
+        bookingId: 'booking_free',
+        type: 'RESERVE',
+        quantity: -1,
+      },
+    ];
+    f.state.bookings = [
+      {
+        id: 'booking_og',
+        occurrence: { startAt: new Date('2026-09-25T15:00Z') },
+      },
+      {
+        id: 'booking_free',
+        occurrence: { startAt: new Date('2026-09-19T15:00Z') },
+      },
+    ];
+    await processSombleRecoveryEvent(f.tx, event('invoice.paid', invoice()));
+    expect(
+      f.state.ledger.find((e: any) => e.id === 'reserve_og'),
+    ).toMatchObject({
+      creditAccountId: 'credit_native',
+      bookingId: 'booking_og',
+      type: 'RESERVE',
+      quantity: -1,
+    });
+    expect(
+      f.state.ledger.reduce((n: number, e: any) => n + e.quantity, 0),
+    ).toBe(7);
+    expect(
+      f.state.legacyEntries.find((e: any) => e.id === 'reserve_free')
+        .creditAccountId,
+    ).toBe('cmu8knx1i0001jq09k1wqfy9x');
+  });
+  it('does not fulfill Checkout completion even when Stripe labels the trial no_payment_required', async () => {
+    const f = fixture();
+    expect(
+      await processSombleRecoveryEvent(
+        f.tx,
+        event('checkout.session.completed', {
+          metadata,
+          payment_status: 'no_payment_required',
+        }),
+      ),
+    ).toBe(true);
+    expect(f.state.purchase.status).toBe('PENDING');
+    expect(f.state.account).toBeNull();
+  });
+  it('links the original membership only on a valid paid invoice and preserves September access/activation', async () => {
+    const f = fixture();
+    await processSombleRecoveryEvent(f.tx, event('invoice.paid', invoice()));
+    expect(f.state.membership.id).toBe(metadata.membershipId);
+    expect(f.state.membership.purchaseId).toBe(pid);
+    expect(f.state.membership.activatedAt).toEqual(
+      new Date('2026-07-03T04:00Z'),
+    );
+    expect(f.state.membership.currentPeriodStart).toEqual(
+      new Date('2026-09-03T04:00Z'),
+    );
+    expect(f.state.membership.currentPeriodEnd).toEqual(
+      new Date('2026-10-03T16:00Z'),
+    );
+    expect(
+      f.state.ledger.reduce((sum: number, e: any) => sum + e.quantity, 0),
+    ).toBe(8);
+    expect(f.state.records).toHaveLength(1);
+    expect(f.state.records[0].amountCents).toBe(9200);
+    await processSombleRecoveryEvent(f.tx, event('invoice.paid', invoice()));
+    await processSombleRecoveryEvent(
+      f.tx,
+      event('checkout.session.completed', { metadata, payment_status: 'paid' }),
+    );
+    expect(f.state.ledger).toHaveLength(1);
+    expect(f.state.records).toHaveLength(1);
+  });
+  it.each([
+    { amount_paid: 0 },
+    { currency: 'eur' },
+    { customer: 'cus_other' },
+    { status: 'open' },
+    { amount_paid: 9609 },
+  ])(
+    'rejects an unverified first payment %j without access',
+    async (override) => {
+      const f = fixture();
+      await expect(
+        processSombleRecoveryEvent(
+          f.tx,
+          event('invoice.paid', invoice(override)),
+        ),
+      ).rejects.toThrow();
+      expect(f.state.purchase.status).toBe('PENDING');
+      expect(f.state.account).toBeNull();
+    },
+  );
+  it('ignores stale trial period updates and uses actual paid renewal periods without rollover', async () => {
+    const f = fixture();
+    await processSombleRecoveryEvent(f.tx, event('invoice.paid', invoice()));
+    await processSombleRecoveryEvent(
+      f.tx,
+      event('customer.subscription.updated', {
+        id: 'sub_recovered',
+        customer: 'cus_verified',
+        metadata,
+        status: 'trialing',
+        items: {
+          data: [
+            {
+              current_period_start: 1790013600,
+              current_period_end: 1791043200,
+            },
+          ],
+        },
+      }),
+    );
+    expect(f.state.membership.currentPeriodStart).toEqual(
+      new Date('2026-09-03T04:00Z'),
+    );
+    expect(f.state.membership.status).toBe('ACTIVE');
+    const start = new Date('2026-10-03T16:00Z').getTime() / 1000;
+    const end = new Date('2026-11-03T16:00Z').getTime() / 1000;
+    await processSombleRecoveryEvent(
+      f.tx,
+      event(
+        'invoice.paid',
+        invoice({
+          id: 'in_october',
+          billing_reason: 'subscription_cycle',
+          payments: {
+            data: [
+              {
+                payment: {
+                  type: 'payment_intent',
+                  payment_intent: 'pi_october',
+                },
+              },
+            ],
+          },
+          status_transitions: { paid_at: start + 10 },
+          lines: {
+            data: [
+              {
+                amount: 9200,
+                parent: { type: 'subscription_item_details' },
+                period: { start, end },
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    expect(f.state.membership.currentPeriodStart).toEqual(
+      new Date('2026-10-03T16:00Z'),
+    );
+    expect(f.state.membership.currentPeriodEnd).toEqual(
+      new Date('2026-11-03T16:00Z'),
+    );
+    expect(
+      f.state.ledger.reduce((sum: number, e: any) => sum + e.quantity, 0),
+    ).toBe(8);
+    expect(f.state.records).toHaveLength(2);
+  });
+});

@@ -32,6 +32,25 @@ import { queueEmail } from '@/lib/notifications/email-queue';
 import { membershipWaiverDestination } from '@/lib/domain/waivers/acceptance';
 import { parseTrialPolicyConsent } from '@/lib/domain/memberships/trial-policy-consent';
 import { checkoutPlanValue } from '@/lib/payments/checkout-attribution';
+import { recoveryForUser } from '@/lib/domain/memberships/somble-billing-recovery';
+import { startSombleRecoveryCheckout } from '@/lib/payments/somble-recovery-checkout';
+
+export async function startSombleRecoveryAction(formData: FormData) {
+  const user = await requireArea('member');
+  const recovery = recoveryForUser(user.id);
+  if (!recovery || recovery.membershipId !== formData.get('membershipId')) redirect('/member/membership?result=recovery-unavailable');
+  const activeWaiver = await prisma.waiverVersion.findFirst({ where: { isActive: true, requiresSign: true }, select: { id: true }, orderBy: { effectiveAt: 'desc' } });
+  const acceptance = activeWaiver ? await prisma.waiverAcceptance.findUnique({ where: { waiverVersionId_userId: { waiverVersionId: activeWaiver.id, userId: user.id } }, select: { id: true } }) : null;
+  if (!activeWaiver || !acceptance) redirect(membershipWaiverDestination());
+  let url: string;
+  try {
+    url = await startSombleRecoveryCheckout(prisma, getStripe(), { userId: user.id, consent: formData.get('recurringConsent') === 'on', retryExpired: formData.get('retryExpired') === 'on', origin: (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '') });
+  } catch (error) {
+    console.error('Somble recovery checkout requires attention', { userId: user.id, message: error instanceof Error ? error.message : 'Unknown error' });
+    redirect('/member/membership?result=recovery-review');
+  }
+  redirect(url);
+}
 
 export async function requestMembershipChangeAction(formData: FormData) {
   const user = await requireArea('member');
@@ -128,8 +147,7 @@ export async function startCheckoutAction(formData: FormData) {
         stripeCustomerId: true,
         memberships: {
           where: { status: { in: ['ACTIVE', 'TRIALING', 'PAUSED', 'PAST_DUE'] } },
-          select: { id: true },
-          take: 1,
+          select: { id: true, purchaseId: true, stripeSubscriptionId: true },
         },
       },
     }),
@@ -144,6 +162,10 @@ export async function startCheckoutAction(formData: FormData) {
   );
   if (!product || !productIsAvailable) {
     redirect('/member/membership?result=unavailable');
+  }
+  const recovery = recoveryForUser(user.id);
+  if (product.billingInterval !== 'ONE_TIME' && recovery && customer?.memberships.some((m) => m.id === recovery.membershipId && !m.purchaseId && !m.stripeSubscriptionId)) {
+    redirect('/member/membership?result=recovery-required#billing-recovery');
   }
 
   const activeWaiver = await prisma.waiverVersion.findFirst({

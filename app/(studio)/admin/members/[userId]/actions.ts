@@ -9,6 +9,15 @@ import { queueEmail } from '@/lib/notifications/email-queue';
 import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
 import { getStripe } from '@/lib/payments/stripe';
 import { stripeIsConfigured } from '@/lib/payments/stripe';
+import { queueSombleRecoveryInvitation } from '@/lib/notifications/somble-recovery-invitation';
+
+export async function sendSombleRecoveryInvitationAction(formData: FormData) {
+  const actor = await requireApprovedOwner();
+  const userId = String(formData.get('userId') || '');
+  await prisma.$transaction((tx) => queueSombleRecoveryInvitation(tx, { userId, actor }));
+  revalidatePath(`/admin/members/${userId}`);
+  redirect(`/admin/members/${userId}?sent=recovery#billing-recovery`);
+}
 import {
   returnedCreditTerms,
   returnedCreditTransactionKey,

@@ -25,6 +25,7 @@ import {
 } from '@/lib/domain/credits/credit-balances';
 import { introTrialIsExpired } from '@/lib/domain/memberships/membership-display';
 import { giftedVipAccessNote } from '@/lib/domain/memberships/gifted-vip';
+import { eligibleRecovery, recoveryForUser, recoveryPurchaseId } from '@/lib/domain/memberships/somble-billing-recovery';
 import {
   manualCreditAccountCanBeDeleted,
   manualCreditKindForLabel,
@@ -38,6 +39,7 @@ import {
   reviewMembershipChangeRequestAction,
   scheduleMembershipFreezeAction,
   sendMemberMessageAction,
+  sendSombleRecoveryInvitationAction,
   startAdminMembershipCheckoutAction,
   updateManualMemberCreditsAction,
   updateAdminMemberProfilePhotoAction,
@@ -218,6 +220,9 @@ export default async function AdminMemberDetailPage(
     }),
   ]);
   if (!member) notFound();
+  const recovery = eligibleRecovery(member, member.memberships);
+  const reviewedRecovery = recoveryForUser(member.id);
+  const recoveryInvitation = reviewedRecovery ? await prisma.emailMessage.findUnique({ where: { dedupeKey: `${recoveryPurchaseId(reviewedRecovery)}:invitation` }, select: { status: true, sentAt: true } }) : null;
   const referralCommission = member.referralCommissions[0];
   const now = new Date();
 
@@ -333,6 +338,16 @@ export default async function AdminMemberDetailPage(
 
   return (
     <>
+      {reviewedRecovery && <section id="billing-recovery" className="mb-6 border-t-4 border-rhyze-coral bg-white p-6">
+        <h2 className="font-display text-3xl">Somble billing recovery</h2>
+        <p className="mt-2">{reviewedRecovery.name}: ${reviewedRecovery.amountCents / 100} for September {reviewedRecovery.day}–October {reviewedRecovery.day}; monthly ${reviewedRecovery.amountCents / 100} beginning October {reviewedRecovery.day}.</p>
+        <p className="mt-2 text-sm font-bold">Invitation: {recoveryInvitation?.status || 'Not queued'}{recoveryInvitation?.sentAt ? ` · ${dateTime(recoveryInvitation.sentAt)}` : ''}.</p>
+        {recovery ? <form action={sendSombleRecoveryInvitationAction} className="mt-4">
+          <input type="hidden" name="userId" value={member.id} />
+          <button className="bg-rhyze-black px-5 py-3 text-sm font-black text-white" type="submit">Approve reviewed copy & queue recovery invitation</button>
+          <p className="mt-2 text-sm">Owner approval applies only to this recovery email. A repeat click will not send a second invitation. The member must sign in, accept recurring billing and complete Stripe checkout; access changes only after confirmed payment.</p>
+        </form> : <p className="mt-3 text-sm">Recovery checkout is no longer eligible or the membership is already connected. Review the membership and Stripe state before any further billing action.</p>}
+      </section>}
       <Link
         href="/admin/members"
         className="text-xs font-black uppercase tracking-widest text-rhyze-coral"

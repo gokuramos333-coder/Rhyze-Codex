@@ -44,6 +44,18 @@ const booking = {
 };
 
 export const emailTemplateCatalog = {
+  SOMBLE_BILLING_RECOVERY: {
+    label: 'Somble founding membership billing recovery', category: 'Memberships & payments', trigger: 'Only after an owner explicitly approves and queues a reviewed member recovery invitation',
+    subject: () => 'Action needed: reconnect your Rhyze membership billing',
+    sample: { firstName: 'Jolie', amount: '$92', day: '3', ordinal: '3rd', planName: 'OG Rhyze Tribe', benefits: 'Your eight-class monthly allowance remains connected.', recoveryUrl: '/member/membership' },
+    present: (p) => ({ eyebrow: 'Founding member billing', headline: 'Reconnect your membership billing', greeting: `Hi ${text(p, 'firstName', 'Rhyzer')},`, paragraphs: [
+      "During our move from Somble to Rhyze, your automatic membership billing didn't carry over correctly. We're sorry for the inconvenience.",
+      `Your August payment of ${text(p, 'amount', '$92')} is recorded. Your September ${text(p, 'day', '3')} renewal was not charged.`,
+      `Please use the secure link below to enter your card and pay ${text(p, 'amount', '$92')} for September ${text(p, 'day', '3')}–October ${text(p, 'day', '3')}, and authorize future ${text(p, 'planName', 'OG Rhyze Tribe')} renewals of ${text(p, 'amount', '$92')} on the ${text(p, 'ordinal', '3rd')} of each month, beginning October ${text(p, 'day', '3')}.`,
+      `Your existing account and history remain connected. ${text(p, 'benefits', 'Your eight-class monthly allowance remains connected.')} You will not be charged again for August.`,
+      'Thank you for being one of our founding members!',
+    ], cta: { label: 'Complete my membership billing setup', href: text(p, 'recoveryUrl', '/member/membership') }, closing: 'With love, The Rhyze Fitness Team.' }),
+  },
   WELCOME: {
     label: 'Welcome to Rhyze', category: 'Accounts', trigger: 'Immediately after a member creates an account',
     subject: () => 'Welcome to Rhyze Fitness', sample: member,

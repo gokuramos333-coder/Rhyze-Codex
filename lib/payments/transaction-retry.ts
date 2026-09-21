@@ -1,5 +1,8 @@
 function isSerializableTransactionConflict(error: unknown) {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034';
+  if (typeof error !== 'object' || error === null || !('code' in error)) return false;
+  if (error.code === 'P2034') return true;
+  if (error.code !== 'P2010' || !('meta' in error) || typeof error.meta !== 'object' || error.meta === null || !('code' in error.meta)) return false;
+  return error.meta.code === '40001' || error.meta.code === '40P01';
 }
 
 export async function retrySerializableTransaction<T>(operation: () => Promise<T>): Promise<T> {

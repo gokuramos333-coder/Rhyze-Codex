@@ -3,6 +3,7 @@ import type { MembershipStatus, Prisma } from '@prisma/client';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { commissionCentsForProduct } from '@/lib/domain/referrals/referral-service';
 import { renewalCreditReset } from '@/lib/domain/credits/membership-renewal';
+import { processSombleRecoveryEvent } from '@/lib/payments/somble-recovery-webhook';
 
 type StripeObject = Record<string, any>;
 
@@ -487,6 +488,7 @@ async function fulfillCommerceOrder(
 }
 
 export async function processStripeEvent(tx: Prisma.TransactionClient, event: Stripe.Event) {
+  if (await processSombleRecoveryEvent(tx, event)) return;
   const action = deriveStripeEventAction(event);
   if (action.type === 'IGNORE') return;
   if (action.type === 'CHECKOUT_PAID') {

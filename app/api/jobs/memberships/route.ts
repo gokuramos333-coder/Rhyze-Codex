@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import { ERIKA_GIFTED_VIP } from '@/lib/domain/memberships/gifted-vip';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
+import { recoveryVipMaintenance } from '@/lib/domain/memberships/somble-billing-recovery';
 
 export async function POST(request: Request) {
   if (
@@ -143,7 +144,9 @@ export async function POST(request: Request) {
   let vipUnlimitedCreditsSynced = 0;
   let vipEventCreditsGranted = 0;
   for (const membership of activeVipMemberships) {
-    const existingUnlimited = await prisma.creditAccount.findFirst({
+    const recoveryBenefits = recoveryVipMaintenance(membership, now);
+    if (!recoveryBenefits.benefitsEligible) continue;
+    const existingUnlimited = recoveryBenefits.purchaseOwnsClasses ? { id: membership.purchaseId! } : await prisma.creditAccount.findFirst({
       where: {
         userId: membership.userId,
         label: vipWindow.classCreditLabel,

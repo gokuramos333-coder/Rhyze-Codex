@@ -1,6 +1,8 @@
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { startCheckoutAction } from './actions';
+import { startCheckoutAction, startSombleRecoveryAction } from './actions';
+import { eligibleRecovery, recoveryForUser } from '@/lib/domain/memberships/somble-billing-recovery';
+import { SombleRecoveryPanel } from '@/components/memberships/SombleRecoveryPanel';
 import {
   isProductActiveInWindow,
   isProductAvailable,
@@ -32,6 +34,10 @@ import {
 } from '@/lib/domain/memberships/rhyze-2026-promo';
 
 const resultMessages: Record<string, string> = {
+  'recovery-required': 'Please use the founding-member recovery setup below to reconnect your existing membership.',
+  'recovery-unavailable': 'This recovery link is not available for your signed-in account. Sign in to the account that received the invitation, or contact the studio.',
+  'recovery-review': 'Secure recovery checkout could not continue. If your previous unpaid checkout expired, confirm the replacement option below. Otherwise, contact the studio before attempting another payment; we will verify the billing state.',
+  'recovery-cancelled': 'You left recovery checkout. Your membership setup is not complete. No access has been granted by this return page.',
   stripe: 'This plan is ready, but secure payments are not connected yet. Please contact the studio.',
   success: 'Thanks! Stripe is confirming your purchase now.',
   processing: 'Your payment is confirmed and your access is still syncing. Please refresh this page in a moment.',
@@ -57,7 +63,7 @@ function date(value: Date | null) {
     : 'Ongoing';
 }
 
-export default async function MemberMembershipPage(props: { searchParams: Promise<{ result?: string; plan?: string; privatePlan?: string }> }) {
+export default async function MemberMembershipPage(props: { searchParams: Promise<{ result?: string; plan?: string; privatePlan?: string; recovery?: string }> }) {
   const searchParams = await props.searchParams;
   const user = await requireArea('member');
   const now = new Date();
@@ -121,6 +127,8 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
     }),
   ]);
   const firstTrialClassAt = firstTrialBooking?.occurrence.startAt ?? null;
+  const recovery = eligibleRecovery(user, memberships, now);
+  const requestedRecoveryMatches = !searchParams.recovery || searchParams.recovery === recoveryForUser(user.id)?.membershipId;
   const displayMemberships = memberships.filter((membership) =>
     ['ACTIVE', 'TRIALING', 'PAUSED', 'PAST_DUE'].includes(membership.status) &&
     (membership.product.kind !== 'INTRO_TRIAL' ||
@@ -202,6 +210,9 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
         <div className="border-t-4 border-rhyze-coral bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Active plans</p><p className="mt-2 font-display text-6xl">{displayMemberships.filter((item) => ['ACTIVE','TRIALING'].includes(item.status)).length}</p></div>
       </div>
       {searchParams.result && <p className="mt-6 border-l-4 border-rhyze-coral bg-white p-4 font-bold">{resultMessages[searchParams.result] || 'Membership updated.'}</p>}
+      {!requestedRecoveryMatches && <p className="mt-6 bg-white p-4">Sign in to the account that received this recovery invitation, or contact the studio.</p>}
+      {recovery && requestedRecoveryMatches && <SombleRecoveryPanel recovery={recovery} action={startSombleRecoveryAction} />}
+      {!recovery && recoveryForUser(user.id) && memberships.some((m) => m.id === recoveryForUser(user.id)?.membershipId && !m.purchaseId) && <p id="billing-recovery" className="mt-6 bg-white p-4">Your founding-member billing recovery requires studio review. Do not start a replacement membership; contact us so your existing history and anniversary stay connected.</p>}
       <section className="mt-8 border-t-4 border-rhyze-coral bg-white p-6">
         <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">Current membership</p>
         {currentMembership ? (
