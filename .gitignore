@@ -40,5 +40,8 @@ public/uploads/
 # Local Netlify folder
 .netlify
 
+# Local immutable release snapshots, recovery bundles and verification receipts
+.releases/
+
 # Local automation credentials
 .hermes/

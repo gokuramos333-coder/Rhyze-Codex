@@ -6,3 +6,6 @@
   NODE_VERSION = "20"
   STORAGE_DRIVER = "netlify"
   NETLIFY_NEXT_SKEW_PROTECTION = "true"
+
+[[plugins]]
+  package = "./plugins/release-safety"
