@@ -48,6 +48,14 @@ describe('admin membership Stripe checkout', () => {
     expect(deps.createPurchase).not.toHaveBeenCalled();
   });
 
+  it('uses the client source on admin-assisted checkout, never a staff source', async () => {
+    const deps = dependencies({ findClient: vi.fn().mockResolvedValue({
+      ...client, source_label: 'Meta Ad', source_fbclid: 'abc123',
+    }) });
+    await startAdminMembershipCheckout({ clientId: client.id, productId: product.id, origin: 'https://www.rhyzefitness.com' }, deps);
+    expect(deps.createCheckoutSession.mock.calls[0][0].metadata).toMatchObject({ source_label: 'Meta Ad', source_fbclid: 'abc123' });
+  });
+
   it('marks the pending purchase failed when Stripe checkout fails', async () => {
     const deps = dependencies({ createCheckoutSession: vi.fn().mockRejectedValue(new Error('Stripe unavailable')) });
     await expect(startAdminMembershipCheckout({

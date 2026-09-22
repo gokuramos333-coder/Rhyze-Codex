@@ -1,7 +1,8 @@
 'use server';
 
 import { AuthError } from 'next-auth';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { ATTRIBUTION_COOKIE, attributionFromCookie } from '@/lib/attribution/first-touch';
 import { redirect } from 'next/navigation';
 import { signIn, signOut } from '@/auth';
 import {
@@ -79,6 +80,10 @@ export async function signUpAction(formData: FormData): Promise<void> {
         waiverVersionId: activeWaiver.id,
         ipAddress: forwardedFor?.split(',')[0]?.trim() || null,
         userAgent: requestHeaders.get('user-agent'),
+        sourceAttribution: attributionFromCookie(
+          (await cookies()).get(ATTRIBUTION_COOKIE)?.value,
+          process.env.NEXT_PUBLIC_APP_URL || 'https://www.rhyzefitness.com',
+        ),
       },
       prismaAccountRepository,
     );

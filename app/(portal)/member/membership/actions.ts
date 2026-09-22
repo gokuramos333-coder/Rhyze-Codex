@@ -1,5 +1,7 @@
 'use server';
 
+import { attributionMetadata, sourceAttributionSelect } from '@/lib/attribution/first-touch';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -145,6 +147,7 @@ export async function startCheckoutAction(formData: FormData) {
       where: { id: user.id },
       select: {
         stripeCustomerId: true,
+        ...sourceAttributionSelect,
         memberships: {
           where: { status: { in: ['ACTIVE', 'TRIALING', 'PAUSED', 'PAST_DUE'] } },
           select: { id: true, purchaseId: true, stripeSubscriptionId: true },
@@ -311,6 +314,7 @@ export async function startCheckoutAction(formData: FormData) {
         productId: product.id,
         userId: user.id,
         referralCodeId: attribution?.referralCodeId || '',
+        ...attributionMetadata(customer),
         customerName: user.name || '',
         customerEmail: user.email,
       },

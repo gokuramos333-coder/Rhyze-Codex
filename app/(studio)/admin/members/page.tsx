@@ -200,6 +200,7 @@ export default async function AdminMembersPage(
             <tr className="border-b border-black/10 text-xs uppercase text-rhyze-black/45">
               <th className="w-12 p-4">#</th>
               <th>Client</th>
+              <th>Marketing source</th>
               <th>Status</th>
               <th>Date joined</th>
               <th>Last login</th>
@@ -225,6 +226,7 @@ export default async function AdminMembersPage(
                     <small>{member.email}</small>
                   </Link>
                 </td>
+                <td className="px-3">{member.source_label || '—'}</td>
                 <td>
                   <AdminStatusBadge
                     status={adminClientStatus({

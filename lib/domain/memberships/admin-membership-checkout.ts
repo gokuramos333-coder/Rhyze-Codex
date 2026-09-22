@@ -1,11 +1,12 @@
 import type { BillingInterval, ProductKind } from '@prisma/client';
+import { attributionMetadata, type SourceAttribution } from '@/lib/attribution/first-touch';
 
 type CheckoutClient = {
   id: string;
   email: string;
   name: string | null;
   stripeCustomerId: string | null;
-};
+} & Partial<{ [K in keyof SourceAttribution]: SourceAttribution[K] | null }>;
 
 type CheckoutProduct = {
   id: string;
@@ -81,6 +82,7 @@ export async function startAdminMembershipCheckout(
         customerName: client.name || '',
         customerEmail: client.email,
         initiatedBy: 'ADMIN',
+        ...attributionMetadata(client),
       },
       subscription_data: {
         metadata: {

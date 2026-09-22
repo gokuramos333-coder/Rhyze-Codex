@@ -1,4 +1,5 @@
 import { hashPassword, validatePassword } from '@/lib/auth/password';
+import type { SourceAttribution } from '@/lib/attribution/first-touch';
 
 export type NewAccountInput = {
   name: string;
@@ -11,6 +12,7 @@ export type NewAccountInput = {
   ipAddress?: string | null;
   userAgent?: string | null;
   password: string;
+  sourceAttribution?: SourceAttribution;
 };
 
 export type AccountRepository = {
@@ -25,6 +27,7 @@ export type AccountRepository = {
     mediaConsent: boolean;
     ipAddress?: string | null;
     userAgent?: string | null;
+    sourceAttribution?: SourceAttribution;
   }): Promise<{
     id: string;
     email: string;
@@ -87,5 +90,6 @@ export async function createAccount(
     mediaConsent: input.mediaConsent ?? false,
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,
+    sourceAttribution: input.sourceAttribution,
   });
 }

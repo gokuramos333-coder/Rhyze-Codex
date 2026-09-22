@@ -120,6 +120,11 @@ function fixture() {
 }
 
 describe('Somble recovery checkout orchestration', () => {
+  it('keeps source metadata absent for existing untracked members', async () => {
+    const f = fixture();
+    await startSombleRecoveryCheckout(f.db, f.stripe, f.input);
+    expect(f.state.created[0].params.metadata).not.toHaveProperty('source_label');
+  });
   it('does not silently replace an unexpected canceled provider subscription', async () => {
     const f = fixture();
     f.state.subscriptions = [{ id: 'sub_unknown', status: 'canceled' }];

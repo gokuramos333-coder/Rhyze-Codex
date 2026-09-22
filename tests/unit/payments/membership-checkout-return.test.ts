@@ -123,6 +123,21 @@ describe('membership checkout return', () => {
     });
   });
 
+  it('adds the saved member first-touch source to Session metadata without changing checkout URLs', async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      stripeCustomerId: null, source_label: 'Meta Ad', source_fbclid: 'abc123',
+      source_utm_campaign: 'original-campaign', source_captured_at: new Date('2026-09-22T00:00:00Z'),
+    });
+    const formData = new FormData();
+    formData.set('productId', 'product_intro');
+    formData.set('trialPolicyAccepted', 'on');
+    await expect(startCheckoutAction(formData)).rejects.toThrow('redirect:https://checkout.stripe.com/c/pay/cs_intro');
+    expect(mocks.checkoutCreate.mock.calls[0][0].metadata).toMatchObject({
+      purchaseId: 'purchase_intro', source_label: 'Meta Ad', source_fbclid: 'abc123',
+      source_utm_campaign: 'original-campaign', source_captured_at: '2026-09-22T00:00:00.000Z',
+    });
+  });
+
   it.each([
     ['intro-offer', 'INTRO_TRIAL', 'ONE_TIME', 'intro_7day'],
     ['drop-in', 'DROP_IN', 'ONE_TIME', 'single_class'],

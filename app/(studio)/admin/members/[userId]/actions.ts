@@ -1,5 +1,7 @@
 'use server';
 
+import { sourceAttributionSelect } from '@/lib/attribution/first-touch';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -889,7 +891,7 @@ export async function startAdminMembershipCheckoutAction(formData: FormData) {
     checkoutUrl = await startAdminMembershipCheckout({ clientId: userId, productId, origin }, {
       findClient: (id) => prisma.user.findFirst({
         where: { id, NOT: { email: { endsWith: '@rhyze.local' } }, status: { not: 'ARCHIVED' } },
-        select: { id: true, email: true, name: true, stripeCustomerId: true },
+        select: { id: true, email: true, name: true, stripeCustomerId: true, ...sourceAttributionSelect },
       }),
       findProduct: (id) => prisma.product.findUnique({
         where: { id },

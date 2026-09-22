@@ -31,6 +31,22 @@ Synthetic data only. Stripe/email providers are disconnected. Review change inte
 
 ## Release boundary
 
-This is ready for local UI review, **not proof of live Stripe settlement**. Stripe calls and future schedule transitions were tested through mocked Stripe boundaries plus real disposable PostgreSQL transactions. Before a live release, exercise Stripe test-mode immediate upgrade/downgrade, chosen-date phase transition, next-renewal invoice, failed payment/recovery, and refund handling. No real customer may be used for those tests.
+The initial review used mocked Stripe boundaries plus real disposable PostgreSQL transactions. The follow-up release check below now covers real Stripe test-mode calls. Neither is proof of live customer settlement; no real customer may be used for those tests.
 
 Unsupported configurations fail closed: unlinked/manual/imported billing, discounts/taxes or other special Stripe settings, non-monthly products, pending invoices/changes, cancellations, freezes, and external schedules. They require explicit billing reconciliation, not a silent plan-name edit. Schema migration must precede runtime deployment.
+
+## Real Stripe sandbox release check — September 22
+
+`scripts/verify-plan-changes-stripe-test.ts` ran successfully against the existing Stripe test account and the explicitly guarded local `membership_plan_test` database. It used only synthetic customers, test clocks and test payment methods; no live keys, real customers, production data or outgoing studio email.
+
+- Immediate upgrade and downgrade: actual Stripe paid proration invoices processed by the application; original monthly billing anchor retained; prior credit usage retained.
+- Chosen-date schedule: actual phase transition and paid adjustment; original renewal anchor retained.
+- Next-renewal change: actual renewal invoice charged the exact new price, then the application granted the full new allowance.
+- Failed immediate payment: no unpaid upgrade; payment retry and duplicate processing applied access once.
+- Failed renewal: expired paid period remained restricted; successful payment activated the new paid period and proper credits.
+- Full refund of current funding: actual test refund updated the financial record and restricted membership access.
+- Real test Checkout Session accepted the first-touch attribution metadata.
+
+Successful run: `rhyze-test-9a2981d3-f32f-47f3-9b54-1fabcea9daa8`, exit 0. Its five test clocks were deleted and two synthetic products archived. A preceding run passed its billing assertions but encountered Stripe's restriction against archiving a product's default price during cleanup; its two products were subsequently archived and verified. No default price or live catalog was changed. The harness now reports cleanup failures instead of falsely claiming successful cleanup.
+
+Full current suite: 276 files / 1,212 tests passed with all four disposable PostgreSQL databases enabled. Typecheck, lint, Prisma validation and optimized production build passed. **Still not deployed:** Netlify returned `netlifydb_readonly` with INSERT/UPDATE denied; publishing awaits the release-specific temporary database permission confirmation.

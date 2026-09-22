@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { attributionMetadata } from '@/lib/attribution/first-touch';
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db/prisma';
@@ -118,6 +119,7 @@ export async function POST(request: Request) {
       },
       client_reference_id: order.id,
       metadata: {
+        ...attributionMetadata(user),
         purchaseType: 'EVENT',
         commerceOrderId: order.id,
         occurrenceId: occurrence.id,

@@ -15,6 +15,7 @@ export const prismaAccountRepository: AccountRepository = {
           email: input.email,
           name: input.name,
           passwordHash: input.passwordHash,
+          ...input.sourceAttribution,
           memberProfile: { create: { phone: input.phone, dateOfBirth: input.dateOfBirth } },
           notificationPreference: { create: { marketingEmail: true } },
           waiverAcceptances: {

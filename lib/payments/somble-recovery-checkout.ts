@@ -1,4 +1,5 @@
 import type Stripe from 'stripe';
+import { attributionMetadata } from '@/lib/attribution/first-touch';
 import type { PrismaClient, Product } from '@prisma/client';
 import {
   eligibleRecovery,
@@ -238,7 +239,7 @@ export async function startSombleRecoveryCheckout(
     origin: acceptance.origin,
     expiresAt: Math.floor(attemptAt / 1000) + 3600,
   });
-  params.metadata = { ...params.metadata, attempt: String(acceptance.attempt) };
+  params.metadata = { ...params.metadata, ...attributionMetadata(user), attempt: String(acceptance.attempt) };
   session = await stripe.checkout.sessions.create(params, {
     idempotencyKey: `${purchase.id}:checkout:${acceptance.attempt}`,
   });

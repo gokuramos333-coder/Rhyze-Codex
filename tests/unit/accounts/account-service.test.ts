@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { attributionFromCookie } from '@/lib/attribution/first-touch';
 import {
   AccountConflictError,
   createAccount,
@@ -34,6 +35,16 @@ function repository(existingEmail?: string): AccountRepository & {
 }
 
 describe('createAccount', () => {
+  it('passes first-touch attribution only into creation of a new member', async () => {
+    const repo = repository();
+    const sourceAttribution = attributionFromCookie('{"fbclid":"abc123","utm_source":"meta"}', 'https://www.rhyzefitness.com');
+    await createAccount({
+      name: 'Marketing Test', email: 'marketing@example.test', phone: '9735550100',
+      dateOfBirth: new Date('1990-01-01'), waiverAccepted: true,
+      waiverVersionId: 'waiver-current', password: 'Rhyze!StrongPass2026', sourceAttribution,
+    }, repo);
+    expect(repo.created[0]).toHaveProperty('sourceAttribution', sourceAttribution);
+  });
   it('normalizes an email and creates a member with a password hash', async () => {
     const repo = repository();
 

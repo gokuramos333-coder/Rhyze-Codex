@@ -211,6 +211,16 @@ model User {
   updatedAt            DateTime   @updatedAt
   stripeCustomerId     String?    @unique
   emailChangeRequestedAt DateTime?
+  source_label         String?
+  source_fbclid        String?
+  source_utm_source    String?
+  source_utm_medium    String?
+  source_utm_campaign  String?
+  source_utm_term      String?
+  source_utm_content   String?
+  source_referrer      String?
+  source_landing_path  String?
+  source_captured_at   DateTime?
 
   accounts                 Account[]
   sessions                 Session[]
