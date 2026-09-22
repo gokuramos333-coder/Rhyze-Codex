@@ -1,12 +1,20 @@
-# Studio updates — local review, September 21, 2026
+# Studio updates — production release, September 21, 2026
 
 ## Release status
 
-Deployment approved by the user on September 21; not yet deployed. All task reviews and the final independent re-review passed. Production data, payments and emails have not been changed by this batch. Work remains in the existing `fix/sign-in-plan-fallback` worktree; do not reset/clean it or deploy the older `rhyze-fitness-new` checkout.
+Deployed September 21 at approximately 22:00 EDT. Production serves source commit `42e093fdd25b70b5df0a27f8f5f8b9cb23fa8ce2` through Netlify deploy `6ab1dfc34adb574a165542e3` (READY and confirmed published). All task reviews and the final independent re-review passed. Work is committed in the existing `fix/sign-in-plan-fallback` worktree; do not reset/clean it or deploy the older `rhyze-fitness-new` checkout. No real payment, customer email or booking was created for verification.
 
-Deployment preflight at approximately 21:46 EDT passed: 1,063 unit tests, 22 explicit local PostgreSQL integration tests, typecheck, lint, Prisma validation, production-mode Next build and diff whitespace checks. All four migration mirrors match. Production remains deploy `6ab188346604667203434c18` in READY state; five public routes, three anonymous portal redirects and 19 JavaScript/CSS assets passed. Read-only database checks found no case-insensitive duplicate emails, no new identity/artwork schema yet, and the expected Gui/Carmen/Fanny target records. Amy/Kim retain the specifically approved September exception.
+Deployment preflight at approximately 21:46 EDT passed: 1,063 unit tests, 22 explicit local PostgreSQL integration tests, typecheck, lint, Prisma validation, production-mode Next build and diff whitespace checks. All four migration mirrors match. At that time production was deploy `6ab188346604667203434c18` in READY state; five public routes, three anonymous portal redirects and 19 JavaScript/CSS assets passed. Read-only database checks found no case-insensitive duplicate emails, no new identity/artwork schema yet, and the expected Gui/Carmen/Fanny target records. Tests, typecheck and lint were freshly repeated at 21:50 EDT before release. Amy/Kim's specifically approved September exception was confirmed again after publication.
 
-Netlify's production-database PAT write-access setting is confirmed OFF. No linked Git build is configured. Release is paused before changing that security-sensitive setting; action-time confirmation was requested to enable it temporarily and restore it immediately after the release. No permission setting, customer record, payment or email was changed during preflight. The preflight build is not a Netlify production artifact and must not be uploaded with `--no-build`.
+After explicit action-time approval, PAT database write access was temporarily enabled to obtain the deployment-scoped application binding. A release-only guard initially rejected the harmless tracked `.env.example` before any upload; this was corrected, with runtime `.env` files still forbidden. Protection was restored between attempts and again after the full build, before publication. Netlify UI and API both confirmed OFF/read-only. No linked Git build is configured, so future CLI releases still require this deliberate permission check; the protection has not been left disabled permanently. See [production release checklist](../operations/production-release.md).
+
+The final isolated Netlify adapter build passed (95 generated pages, all six functions packaged). All four pending migrations matched the reviewed SQL and were included in the artifact. Netlify applied them during publication; read-only verification confirmed the identity/artwork schema, Gui's stale plan expired, Carmen/Fanny's free regular-class accounts with events excluded and invitation state preserved, and unchanged public VIP price of $222.
+
+Post-release verification passed: five public routes, three anonymous portal redirects, 19 JavaScript/CSS assets, 32px browser and 180px Apple PNG icons, and authenticated HTTP smoke for OWNER/INSTRUCTOR/MEMBER (13 allowed routes and three forbidden cross-role routes). Live homepage styling was also checked in the browser. This smoke did not submit purchases, upload live customer artwork, change attendance or send emails.
+
+Remaining gate: `ACCOUNT_EMAIL_CONFIRMATION` and `ACCOUNT_EMAIL_CHANGED` have no production template approval yet. Secure email-address changes therefore remain behind the existing admin template-review workflow; no approval was fabricated or bypassed. Name editing and the rest of the deployed changes are independent of this gate.
+
+Recovery copies: full Git history bundle `/Users/gokuramos/Projects/rhyze-review-20260921.h0vmot/studio-release-42e093f.bundle` (verified), plus the earlier reviewed-source/evidence archive in the same directory. The isolated deployment snapshot is `/tmp/rhyze-studio-release.2uoN9V`; do not use it as the ongoing editable project.
 
 Local preview: http://localhost:3000/admin. It uses synthetic fixtures and a separate local PostgreSQL database, not live customer records. Preview accounts use `RhyzePreview-0921!`: administrator `automation-admin@rhyze.local`, instructor `instructor@example.test`, member `member@example.test`.
 
@@ -17,7 +25,7 @@ Local preview: http://localhost:3000/admin. It uses synthetic fixtures and a sep
 3. Independent admin class/event artwork controls; an instructor can override only their assigned date. Removal restores inherited artwork/portrait. Shared media is not deleted.
 4. Approved active instructors receive ongoing free regular-class access, not free events, without spending purchased credits.
 5. Account-name editing and verified email changes. Email remains unchanged until confirmation; existing history and Stripe customer identity remain linked to the same user. Old sessions and recovery tokens are invalidated safely.
-6. Guarded, idempotent account corrections are prepared for Gui, Carmen and Fanny. They have been applied only to synthetic local fixtures. No payment provider subscription is cancelled by guess.
+6. Guarded, idempotent account corrections for Gui, Carmen and Fanny are applied and verified in production. No payment provider subscription was cancelled by guess.
 7. The withdrawn $199-for-life VIP sentence is removed from current public presentation. Public VIP remains $222; approved Amy/Kim recovery remains $199 and Jolie remains $92.
 8. Raised-arms Rhyze symbol replaces the letter R in browser and Apple/mobile icons.
 9. VIP booking/display/transfer eligibility is restricted to the paid period. Amy/Kim's specifically approved current September access remains exempt while recovery is pending; this does not create a general unpaid VIP exception.
@@ -32,7 +40,7 @@ Independent review identified and prompted regression fixes for stale payment no
 
 Stripe does not guarantee notification delivery order, and separate events can share the same timestamp second; the tests explicitly cover those cases. [Stripe webhook documentation](https://docs.stripe.com/webhooks#event-ordering)
 
-## Before a future approved deployment
+## Future release safeguards
 
 - Re-run typecheck, full tests, lint, Prisma validation and production build on the exact release snapshot.
 - Rebuild with production configuration; do not publish the local preview build, which deliberately uses localhost URLs and no live provider credentials.
