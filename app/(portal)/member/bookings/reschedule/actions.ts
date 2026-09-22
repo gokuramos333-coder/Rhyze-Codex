@@ -6,8 +6,10 @@ import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { evaluateTransferWindow } from '@/lib/domain/transfers/transfer-policy';
 import { queueEmail } from '@/lib/notifications/email-queue';
-import { bookingAccessType, bookingPolicySnapshotWithAccess } from '@/lib/domain/bookings/booking-access';
+import { bookingPolicySnapshotWithAccess } from '@/lib/domain/bookings/booking-access';
 import { chargeAttendanceFee, refundAttendanceFee } from '@/lib/payments/attendance-fee';
+import { vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
+import { transferBookingAccessType, transferEntitlementAllowed } from '@/lib/domain/transfers/transfer-entitlement';
 
 export async function rescheduleMemberBookingAction(formData: FormData) {
   const user = await requireArea('member');
@@ -18,9 +20,9 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     include: {
       user: {
         include: {
+          instructorProfile: true,
           memberships: {
-            where: { status: { in: ['ACTIVE', 'TRIALING'] } },
-            select: { product: { select: { kind: true } } },
+            include: vipEntitlementInclude,
           },
         },
       },
@@ -40,13 +42,11 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     },
   });
   const reservedProductKind = reservation?.creditAccount.sourcePurchase?.product.kind ?? null;
-  const accessType = bookingAccessType({
+  const accessType = transferBookingAccessType({
     policySnapshot: booking.policySnapshot,
     bookingSource: booking.source,
-    reservedProductKind,
-    activeProductKinds: booking.user.memberships.map(
-      (membership) => membership.product.kind,
-    ),
+    reservation,
+    memberships: booking.user.memberships,
   });
   const policy = evaluateTransferWindow(booking.occurrence.startAt, new Date(), accessType);
   if (policy === 'BLOCKED') redirect('/member/bookings?result=reschedule-blocked');
@@ -65,6 +65,10 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     include: { template: true },
   });
   if (!requestedDestination) redirect('/member/bookings?result=reschedule-destination');
+  if (!transferEntitlementAllowed({ accessType, user: booking.user, sourceIsEvent: booking.occurrence.template.isEvent,
+    destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date() })) {
+    redirect('/member/bookings?result=reschedule-destination');
+  }
   const [requestedOccupied, requestedOverlap] = await Promise.all([
     prisma.booking.count({ where: { occurrenceId: destinationId, status: 'CONFIRMED' } }),
     prisma.booking.findFirst({
@@ -87,6 +91,12 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     redirect('/member/bookings?result=reschedule-destination');
   }
 
+  const preflightUser = await prisma.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
+  if (!preflightUser || !transferEntitlementAllowed({
+    accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: preflightUser.memberships }),
+    user: preflightUser, sourceIsEvent: booking.occurrence.template.isEvent,
+    destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date(),
+  })) redirect('/member/bookings?result=reschedule-destination');
   const feeResult = feeCents > 0
     ? await chargeAttendanceFee({
         bookingId,
@@ -118,6 +128,11 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
       include: { template: true },
     });
     if (!destination) return false;
+    const currentUser = await tx.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
+    if (!currentUser || !transferEntitlementAllowed({
+      accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: currentUser.memberships }),
+      user: currentUser, sourceIsEvent: booking.occurrence.template.isEvent,
+      destinationIsEvent: destination.template.isEvent, destinationStartsAt: destination.startAt, now: new Date() })) return false;
     const occupied = await tx.booking.count({ where: { occurrenceId: destinationId, status: 'CONFIRMED' } });
     if (occupied + destination.historicalSignupCount >= destination.capacity) return false;
     const overlap = await tx.booking.findFirst({

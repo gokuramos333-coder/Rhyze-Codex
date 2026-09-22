@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
+import { rosterHistoryBookingWhere, rosterConfirmedBookings } from '@/lib/domain/bookings/roster-history';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { Roster } from '@/components/attendance/Roster';
 import Link from 'next/link';
@@ -25,7 +25,7 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
       template: true,
       room: true,
       bookings: {
-        where: confirmedRosterBookingWhere(),
+        where: rosterHistoryBookingWhere(),
         include: {
           user: {
             include: {
@@ -61,7 +61,8 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
     });
     return { ...booking, bookedAt: booking.bookedAt, ...payment };
   });
-  const namedImportedGuests = occurrence.bookings.reduce(
+  const confirmedBookings = rosterConfirmedBookings(occurrence.bookings);
+  const namedImportedGuests = confirmedBookings.reduce(
     (total, booking) =>
       total + importedBookingParty(booking.policySnapshot).guestNames.length,
     0,
@@ -77,7 +78,8 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
       <LiveDataRefresh />
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class roster</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
-      <p className="mt-3 text-rhyze-black/55">{memberBookingDateTimeLabel(occurrence)} · {occurrence.room?.name || 'Room TBA'} · {occurrence.bookings.length + occurrence.historicalSignupCount}/{occurrence.capacity}</p>
+      {occurrence.instructorId === user.id && <Link href={`/instructor/classes/${occurrence.id}/artwork`} className="mt-4 inline-block border border-rhyze-orange px-4 py-3 text-xs font-black uppercase tracking-widest text-rhyze-coral">Manage class / event photo</Link>}
+      <p className="mt-3 text-rhyze-black/55">{memberBookingDateTimeLabel(occurrence)} · {occurrence.room?.name || 'Room TBA'} · {confirmedBookings.length + occurrence.historicalSignupCount}/{occurrence.capacity} booked</p>
       {occurrence.status === 'CANCELLED' && (
         <p className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 text-sm font-black uppercase tracking-widest text-red-900">
           CLASS CANCELED · This class is canceled and no longer accepting bookings.

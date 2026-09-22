@@ -8,7 +8,7 @@ import { signInSchema } from '@/lib/validation/auth';
 import {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authSessionCookie,
-  isJwtCredentialStale,
+  isJwtIdentityStale,
 } from '@/lib/auth/session-config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -65,14 +65,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       } else if (token.id) {
         const currentUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { role: true, status: true, credentialsUpdatedAt: true },
+          select: { role: true, status: true, email: true, name: true, credentialsUpdatedAt: true },
         });
 
         if (currentUser) {
           if (
-            isJwtCredentialStale(
+            isJwtIdentityStale(
               typeof token.iat === 'number' ? token.iat : undefined,
-              currentUser.credentialsUpdatedAt,
+              token.email,
+              currentUser,
             )
           ) {
             delete token.id;
@@ -82,6 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
           token.role = currentUser.role;
           token.status = currentUser.status;
+          token.name = currentUser.name;
         }
       }
       return token;

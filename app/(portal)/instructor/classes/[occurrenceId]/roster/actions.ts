@@ -173,7 +173,7 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
         data: {
           status: transition.bookingStatus,
           cancelledAt:
-            transition.attendanceStatus === 'LATE_CANCELLED' ? new Date() : null,
+            booking.cancelledAt ?? (transition.attendanceStatus === 'LATE_CANCELLED' ? new Date() : null),
         },
       });
     });
@@ -247,6 +247,7 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
         id: true,
         occurrenceId: true,
         userId: true,
+        cancelledAt: true,
         user: { select: { name: true, email: true } },
         occurrence: { select: { startAt: true, timezone: true, template: { select: { name: true, isEvent: true } } } },
       },
@@ -330,7 +331,7 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
 
     await tx.booking.update({
       where: { id: booking.id },
-      data: { status: 'CANCELLED', cancelledAt: restoredAt },
+      data: { status: 'CANCELLED', cancelledAt: booking.cancelledAt ?? restoredAt },
     });
     await tx.attendanceRecord.deleteMany({
       where: { bookingId: booking.id },

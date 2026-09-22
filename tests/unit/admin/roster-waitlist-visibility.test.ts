@@ -5,7 +5,7 @@ describe('admin roster waitlist visibility', () => {
   it('shows waiting members with contact info on the protected admin roster page', () => {
     const rosterPage = readFileSync('app/(studio)/admin/schedule/[occurrenceId]/roster/page.tsx', 'utf8');
 
-    expect(rosterPage).toContain('where: confirmedRosterBookingWhere()');
+    expect(rosterPage).toContain('where: rosterHistoryBookingWhere()');
     expect(rosterPage).toContain("waitlistEntries: {");
     expect(rosterPage).toContain("where: { status: 'WAITING' }");
     expect(rosterPage).toContain('memberProfile');

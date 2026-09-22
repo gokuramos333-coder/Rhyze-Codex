@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -9,9 +10,9 @@ import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { MOMMY_AND_ME_SLUG } from '@/lib/payments/commerce-orders';
 import { prisma } from '@/lib/db/prisma';
+import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import {
   confirmedRosterBookingWhere,
-  reconcileKnownCancelledBookings,
 } from '@/lib/domain/bookings/known-cancellations';
 import { WAITLIST_CAPACITY } from '@/lib/domain/bookings/booking-rules';
 
@@ -28,10 +29,11 @@ export function generateStaticParams() {
 export default async function EventBookingPage(
   props: {
     params: Promise<{ slug: string }>;
+    searchParams?: Promise<{ occurrence?: string }>;
   }
 ) {
   const params = await props.params;
-  await reconcileKnownCancelledBookings(prisma);
+  const searchParams = await props.searchParams;
   const fallback = getOwnedEvent(params.slug);
   const event = await prisma.classTemplate.findFirst({
     where: {
@@ -43,16 +45,18 @@ export default async function EventBookingPage(
   });
   if (!event) notFound();
   const occurrence = await prisma.classOccurrence.findFirst({
-    where: { template: { slug: params.slug, isEvent: true }, status: 'SCHEDULED', startAt: { gt: new Date() } },
+    where: { template: { slug: params.slug, isEvent: true }, status: 'SCHEDULED', startAt: { gt: new Date() }, ...(searchParams?.occurrence ? { id: searchParams.occurrence } : {}) },
     include: {
-      instructor: { select: { name: true } },
+      instructor: { select: { name: true, instructorProfile: true } },
       _count: { select: { bookings: { where: confirmedRosterBookingWhere() }, waitlistEntries: { where: { status: 'WAITING' } } } },
     },
     orderBy: { startAt: 'asc' },
   });
+  if (searchParams?.occurrence && !occurrence) notFound();
   const booked = occurrence
     ? occurrence._count.bookings + occurrence.historicalSignupCount
     : 0;
+  const artwork = resolveClassArtwork({ ...occurrence, template: event });
   const capacity = occurrence?.capacity ?? event.defaultCapacity;
   const waiting = occurrence?._count.waitlistEntries ?? 0;
   const soldOut = booked >= capacity;
@@ -86,7 +90,7 @@ export default async function EventBookingPage(
   return (
     <main className="mx-auto max-w-6xl px-6 py-20">
       <Link
-        href={`/events/${event.slug}`}
+        href={`/events/${event.slug}${occurrence ? `?occurrence=${occurrence.id}` : ''}`}
         className="focus-ring mb-10 inline-flex items-center gap-2 text-xs uppercase tracking-widest text-rhyze-cream/60 hover:text-rhyze-coral"
       >
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
@@ -129,6 +133,9 @@ export default async function EventBookingPage(
         </div>
 
         <aside className="rounded-3xl border border-white/10 bg-rhyze-charcoal p-6">
+          <div className="relative mb-6 aspect-[4/3] overflow-hidden rounded-2xl">
+            <Image src={artwork} alt={event.name} fill sizes="(min-width: 1024px) 28rem, 100vw" unoptimized={artwork.startsWith('/api/media/')} className="object-cover object-[center_18%]" />
+          </div>
           <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-gold">
             Checkout Preview
           </p>

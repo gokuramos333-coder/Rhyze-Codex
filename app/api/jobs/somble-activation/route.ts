@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const claim = await issueAccountClaim(candidate.id, prismaAccountClaimRepository);
+    const claim = await issueAccountClaim(candidate.id, prismaAccountClaimRepository, new Date(), candidate.email);
     const activationUrl = new URL(
       `/claim-account/${encodeURIComponent(claim.rawToken)}`,
       appUrl,
@@ -97,8 +97,8 @@ export async function POST(request: Request) {
 
     const messageData = {
       userId: candidate.id,
-      to: candidate.email,
-      toList: [candidate.email],
+      to: claim.email,
+      toList: [claim.email],
       subject: 'Your new My Rhyze Fitness account is ready!',
       template: 'ACCOUNT_ACTIVATION',
       payload: {

@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 const KNOWN_CANCELLED_BOOKINGS = [
   {
@@ -6,8 +6,6 @@ const KNOWN_CANCELLED_BOOKINGS = [
     email: 'careesonnett@gmail.com',
   },
 ] as const;
-
-type Client = PrismaClient | Prisma.TransactionClient;
 
 function knownCancelledOrClauses(): Prisma.BookingWhereInput[] {
   return KNOWN_CANCELLED_BOOKINGS.map((item) => ({
@@ -29,26 +27,4 @@ export function instructorTaughtBookingWhere(): Prisma.BookingWhereInput {
     status: { in: ['CONFIRMED', 'ATTENDED'] },
   };
   return overridden.length ? { ...where, NOT: { OR: overridden } } : where;
-}
-
-export async function reconcileKnownCancelledBookings(client: Client) {
-  for (const item of KNOWN_CANCELLED_BOOKINGS) {
-    const bookings = await client.booking.findMany({
-      where: {
-        occurrenceId: item.occurrenceId,
-        status: 'CONFIRMED',
-        user: { email: { equals: item.email, mode: 'insensitive' } },
-      },
-      select: { id: true },
-    });
-    if (!bookings.length) continue;
-    const bookingIds = bookings.map((booking) => booking.id);
-    await client.booking.updateMany({
-      where: { id: { in: bookingIds } },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
-    });
-    await client.attendanceRecord.deleteMany({
-      where: { bookingId: { in: bookingIds } },
-    });
-  }
 }

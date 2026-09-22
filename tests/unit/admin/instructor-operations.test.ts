@@ -132,7 +132,6 @@ describe('instructor operations', () => {
     expect(admin).toContain(": 'month';");
     expect(instructor).toContain(": 'month';");
     expect(readFileSync('lib/domain/bookings/known-cancellations.ts', 'utf8')).toContain('careesonnett@gmail.com');
-    expect(readFileSync('app/(studio)/admin/schedule/[occurrenceId]/roster/page.tsx', 'utf8')).toContain('reconcileKnownCancelledBookings(prisma)');
     for (const source of [admin, instructor]) {
       expect(source).toContain('Bi-weekly');
       expect(source).toContain('From date');

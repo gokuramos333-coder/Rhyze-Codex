@@ -114,6 +114,20 @@ export const emailTemplateCatalog = {
       closing: 'If you need help, reply to this email. Welcome to the Rhyze tribe!',
     }),
   },
+  ACCOUNT_EMAIL_CONFIRMATION: {
+    label: 'New account email confirmation', category: 'Accounts', trigger: 'After a member reauthenticates or authorized management requests an email change',
+    subject: () => 'Confirm your new Rhyze email', sample: { ...member, confirmUrl: '/confirm-email/sample-token' },
+    present: (p) => ({ eyebrow: 'Account security', headline: 'Confirm your new email', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`,
+      paragraphs: ['An email change was requested for your My Rhyze account. Your old email remains your login until you confirm this address.', 'This single-use link expires in one hour. Confirming signs out existing sessions, but keeps your memberships, bookings, payments, and history connected.', 'If you did not request this change, do not confirm it and contact Rhyze management.'],
+      cta: { label: 'Confirm new email', href: text(p, 'confirmUrl', '/member/profile') } }),
+  },
+  ACCOUNT_EMAIL_CHANGED: {
+    label: 'Account email changed — old-address security notice', category: 'Accounts', trigger: 'Immediately after a new email address is confirmed',
+    subject: () => 'Your Rhyze email was changed', sample: { ...member, contactUrl: '/contact' },
+    present: (p) => ({ eyebrow: 'Account security', headline: 'Your account email was changed', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`,
+      paragraphs: ['The email address used to sign in to your My Rhyze account was changed after confirmation of the new address.', 'Your previous sessions were signed out. Your memberships, bookings, payments, and history remain connected to the same account.', 'If you did not authorize this change, contact Rhyze management immediately.'],
+      cta: { label: 'Contact Rhyze', href: text(p, 'contactUrl', '/contact') } }),
+  },
   PASSWORD_RESET: {
     label: 'Password reset', category: 'Accounts', trigger: 'When someone requests a password reset',
     subject: () => 'Reset your Rhyze password', sample: { ...member, resetUrl: '/reset-password/sample-token' },

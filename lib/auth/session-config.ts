@@ -1,5 +1,9 @@
 export const AUTH_SESSION_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 
+export function isJwtIdentityStale(issuedAtSeconds: number | undefined, email: unknown, user: { email: string; credentialsUpdatedAt: Date | null }) {
+  return email !== user.email || isJwtCredentialStale(issuedAtSeconds, user.credentialsUpdatedAt);
+}
+
 export function authSessionCookie(environment = process.env.NODE_ENV) {
   const secure = environment === 'production';
   return {

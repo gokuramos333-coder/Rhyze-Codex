@@ -17,6 +17,7 @@ import {
   classCreditDisplayLabel,
 } from '@/lib/domain/credits/credit-balances';
 import { giftedVipAccessNote } from '@/lib/domain/memberships/gifted-vip';
+import { vipCreditAccountCanBook, vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
 
 export default async function MemberHomePage() {
   const user = await requireArea('member');
@@ -36,7 +37,7 @@ export default async function MemberHomePage() {
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { status: true, activatedAt: true, currentPeriodEnd: true } },
+            membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true } },
             product: { select: { includedCredits: true, kind: true } },
           },
         },
@@ -44,7 +45,7 @@ export default async function MemberHomePage() {
     }),
     prisma.membership.findMany({
       where: { userId: user.id, status: { in: ['ACTIVE', 'TRIALING', 'PAUSED', 'PAST_DUE'] } },
-      include: { product: true },
+      include: vipEntitlementInclude,
       orderBy: { createdAt: 'desc' },
     }),
     prisma.booking.findFirst({
@@ -91,7 +92,8 @@ export default async function MemberHomePage() {
       ) {
         return false;
       }
-      return creditAccountCanBook({ membershipStatus: membership?.status ?? null });
+      return creditAccountCanBook({ membershipStatus: membership?.status ?? null }) &&
+        vipCreditAccountCanBook({ account, memberships, now });
     })
     .map((account) => ({
       label: account.label,

@@ -6,9 +6,9 @@ import { ArrowLeft, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { getOwnedEvent } from '@/lib/rhyze-platform';
 import { Button } from '@/components/ui/Button';
 import { prisma } from '@/lib/db/prisma';
+import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import {
   confirmedRosterBookingWhere,
-  reconcileKnownCancelledBookings,
 } from '@/lib/domain/bookings/known-cancellations';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
@@ -20,16 +20,16 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
   return event ? { title: event.name, description: event.description } : { title: 'Event not found' };
 }
 
-export default async function EventDetailPage(props: { params: Promise<{ slug: string }> }) {
+export default async function EventDetailPage(props: { params: Promise<{ slug: string }>; searchParams?: Promise<{ occurrence?: string }> }) {
   const params = await props.params;
-  await reconcileKnownCancelledBookings(prisma);
+  const searchParams = await props.searchParams;
   const event = await prisma.classTemplate.findFirst({
     where: { slug: params.slug, isEvent: true, isActive: true, archivedAt: null },
     include: {
       occurrences: {
-        where: { status: 'SCHEDULED', startAt: { gte: new Date() } },
+        where: { status: 'SCHEDULED', startAt: { gte: new Date() }, ...(searchParams?.occurrence ? { id: searchParams.occurrence } : {}) },
         include: {
-          instructor: true,
+          instructor: { include: { instructorProfile: true } },
           _count: {
             select: {
               bookings: { where: confirmedRosterBookingWhere() },
@@ -43,6 +43,8 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
   });
   if (!event) notFound();
   const occurrence = event.occurrences[0];
+  if (searchParams?.occurrence && !occurrence) notFound();
+  const artwork = resolveClassArtwork({ ...occurrence, template: event });
   const fallback = getOwnedEvent(event.slug);
   const bookingLabel = occurrence
     ? publicBookingCountLabel(
@@ -76,7 +78,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
         </div>
         <aside className="overflow-hidden rounded-3xl border border-rhyze-gold/25 bg-rhyze-charcoal">
           <div className="relative aspect-[4/3] bg-rhyze-black">
-            <Image src={event.imageUrl || fallback?.photo || '/brand/rhyze-logo-header.png'} alt={event.name} fill sizes="(min-width: 1024px) 28rem, 100vw" className="object-cover object-[center_18%]" />
+            <Image src={artwork} unoptimized={artwork.startsWith('/api/media/')} alt={event.name} fill sizes="(min-width: 1024px) 28rem, 100vw" className="object-cover object-[center_18%]" />
           </div>
           <dl className="divide-y divide-white/10 p-6 text-sm">
             <EventDetail label="Instructor" value={occurrence?.instructor?.name || 'To be announced'} />
@@ -85,7 +87,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
             {bookingLabel && <EventDetail label="Booked" value={bookingLabel.replace(' booked', '')} />}
           </dl>
           <div className="px-6 pb-6">
-            <Button href={occurrence ? `/book/event/${event.slug}` : '/events'} size="lg" className="w-full">Claim Your Spot</Button>
+            <Button href={occurrence ? `/book/event/${event.slug}?occurrence=${occurrence.id}` : '/events'} size="lg" className="w-full">Claim Your Spot</Button>
           </div>
         </aside>
       </section>

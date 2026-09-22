@@ -1,6 +1,6 @@
 import 'server-only';
 import { prisma } from '@/lib/db/prisma';
-import { resolvePublicInstructorPhoto } from './public-instructor-photo';
+import { resolveClassArtwork } from './class-artwork';
 import {
   buildPublicScheduleFilterOptions,
   localDateKey,
@@ -89,7 +89,6 @@ export async function loadPublicScheduleSlots(
       isWednesdayReplacement && lowerTemplateName.includes('grind & grow');
     const isIgniteSub = isThisWeekIgniteSub(occurrence.startAt, timezone, templateName);
     const instructorName = isWorkAndToneReplacement || isIgniteSub ? 'Vanessa Ramos' : occurrenceInstructorName(occurrence);
-    const assignedInstructorName = occurrenceInstructorName(occurrence);
     const dateKey = localDateKey(occurrence.startAt, timezone);
 
     const baseClassName = isWorkAndToneReplacement
@@ -115,11 +114,7 @@ export async function loadPublicScheduleSlots(
       className: occurrenceTitleWithInstructor(baseClassName, instructorName),
       category: occurrence.template.category.name,
       instructor: instructorName,
-      photo: resolvePublicInstructorPhoto({
-        assignedInstructorName,
-        displayInstructorName: instructorName,
-        assignedProfile: occurrence.instructor?.instructorProfile,
-      }),
+      photo: resolveClassArtwork(occurrence, instructorName),
       isEvent: occurrence.template.isEvent,
       isSubstitute: occurrence.isSubstitute || isIgniteSub,
       room: occurrence.room?.name || 'Rhyze Floor',

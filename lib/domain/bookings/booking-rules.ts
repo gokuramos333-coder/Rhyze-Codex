@@ -17,6 +17,7 @@ export function attendanceStatusCountsAsAttended(status: AttendanceValue | strin
 
 export const WAITLIST_CAPACITY = 5;
 export const COMPLIMENTARY_STANDARD_50MIN_PLAN = 'COMPLIMENTARY_STANDARD_50MIN';
+export const COMPLIMENTARY_STANDARD_PLAN = 'COMPLIMENTARY_STANDARD';
 export const EVENT_CREDIT_LABEL_PREFIX = 'Event credit';
 
 export function waitlistAvailability(waitingCount: number) {
@@ -64,6 +65,7 @@ export function complimentaryStandardAccessCanBook(input: {
   isEvent: boolean;
   durationMinutes: number;
 }) {
+  if (input.customPlanType === COMPLIMENTARY_STANDARD_PLAN) return !input.isEvent;
   return (
     input.customPlanType !== COMPLIMENTARY_STANDARD_50MIN_PLAN ||
     (!input.isEvent && input.durationMinutes === 50)
@@ -172,4 +174,12 @@ export function instructorAugustStandardClassAccess(input: {
     input.occurrenceStartsAt >= INSTRUCTOR_AUGUST_STANDARD_ACCESS_START &&
     input.occurrenceStartsAt < INSTRUCTOR_AUGUST_STANDARD_ACCESS_END
   );
+}
+
+export function instructorStandardClassAccess(input: {
+  user: { role: string; status: string; instructorProfile: { isActive: boolean } | null } | null;
+  isEvent: boolean;
+}) {
+  return Boolean(!input.isEvent && input.user && ['INSTRUCTOR', 'OWNER', 'ADMIN', 'MANAGER'].includes(input.user.role) &&
+    input.user.status === 'ACTIVE' && input.user.instructorProfile?.isActive);
 }

@@ -115,13 +115,15 @@ export async function createInstructorAction(formData: FormData) {
   });
 
   let activationUrl = '/member/instructor-access';
+  let invitationEmail = invited.email;
   if (invited.status === 'INVITED' && !invited.passwordHash) {
-    const claim = await issueAccountClaim(invited.id, prismaAccountClaimRepository);
+    const claim = await issueAccountClaim(invited.id, prismaAccountClaimRepository, new Date(), invited.email);
     activationUrl = `/claim-account/${encodeURIComponent(claim.rawToken)}`;
+    invitationEmail = claim.email;
   }
   await queueEmail(prisma, {
     userId: invited.id,
-    to: invited.email,
+    to: invitationEmail,
     subject: 'Welcome to the Rhyze Tribe team',
     template: 'INSTRUCTOR_WELCOME_INVITE',
     payload: {

@@ -5,6 +5,10 @@ type MembershipCopySource = {
   cancellationPolicy: string | null;
 };
 
+export function publicMembershipDescription(description: string) {
+  return description.replace(/Founding members lock in \$199\/month for life\.?\s*/gi, '').trim();
+}
+
 function meaningKey(sentence: string) {
   const normalized = sentence
     .toLowerCase()
@@ -47,7 +51,7 @@ function meaningKey(sentence: string) {
 
 export function membershipDisplayDetails(product: MembershipCopySource) {
   const sentences = [
-    ...product.description
+    ...publicMembershipDescription(product.description)
       .split(/\n|(?<=[.!?])\s+/)
       .map((item) => item.trim())
       .filter(Boolean),

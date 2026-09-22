@@ -81,13 +81,13 @@ describe('desktop header Join Now CTA', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the visible orange R browser icon mark', () => {
+  it('uses the raised-arms Rhyze symbol for browser and mobile icons', () => {
     const icon = readFileSync('app/icon.tsx', 'utf8');
     const appleIcon = readFileSync('app/apple-icon.tsx', 'utf8');
 
-    expect(icon).toContain('linear-gradient(135deg,#F05A3C,#F7931E 55%,#FFC72C)');
-    expect(appleIcon).toContain('linear-gradient(135deg,#F05A3C,#F7931E 55%,#FFC72C)');
-    expect(icon).toContain('>\n        R\n');
-    expect(appleIcon).toContain('>\n          R\n');
+    expect(icon).toContain('rhyzeSymbolIcon');
+    expect(appleIcon).toContain('rhyzeSymbolIcon');
+    expect(icon).not.toMatch(/>\s*R\s*</);
+    expect(appleIcon).not.toMatch(/>\s*R\s*</);
   });
 });

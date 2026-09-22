@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db/prisma';
 import { createSecureToken } from '@/lib/auth/tokens';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import type { AdminClientRepository } from './admin-client-creation';
+import { accountTokenSnapshot } from './account-token-security';
 
 const ACCOUNT_ACTIVATION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 
@@ -24,10 +25,9 @@ export const prismaAdminClientRepository: AdminClientRepository = {
           memberProfile: { create: { phone: input.phone, dateOfBirth: input.dateOfBirth } },
           notificationPreference: { create: { marketingEmail: true } },
         },
-        select: { id: true, email: true },
       });
       await tx.accountClaimToken.create({
-        data: { userId: user.id, tokenHash, expiresAt },
+        data: { userId: user.id, tokenHash, expiresAt, ...accountTokenSnapshot(user) },
       });
       await tx.auditLog.create({
         data: {
@@ -49,7 +49,7 @@ export const prismaAdminClientRepository: AdminClientRepository = {
         },
         dedupeKey: `admin-client-invitation:${user.id}`,
       });
-      return user;
+      return { id: user.id, email: user.email };
     });
   },
 };

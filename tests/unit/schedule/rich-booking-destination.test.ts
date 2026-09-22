@@ -13,7 +13,7 @@ describe('schedule booking destinations', () => {
     );
 
     expect(querySource).toContain('publicScheduleDetailHref');
-    expect(routeSource).toContain('`/events/${templateSlug}`');
+    expect(routeSource).toContain('`/events/${templateSlug}?occurrence=${occurrenceId}`');
     expect(routeSource).toContain(
       '`/book/${templateSlug}?occurrence=${occurrenceId}`',
     );
@@ -44,7 +44,8 @@ describe('schedule booking destinations', () => {
   it('sends people without an active membership to membership selection', () => {
     const source = readFileSync('app/book/[slug]/page.tsx', 'utf8');
 
-    expect(source).toContain("status: { in: ['TRIALING', 'ACTIVE'] }");
+    expect(source).toContain("['ACTIVE', 'TRIALING'].includes(m.status)");
+    expect(source).toContain('vipCreditAccountCanBook');
     expect(source).toContain('activeMembership');
     expect(source).toContain('`/memberships?returnTo=${encodeURIComponent(returnPath)}`');
   });
@@ -96,7 +97,7 @@ describe('schedule booking destinations', () => {
   it('continues from an event detail page into its event booking flow', () => {
     const source = readFileSync('app/events/[slug]/page.tsx', 'utf8');
 
-    expect(source).toContain('`/book/event/${event.slug}`');
+    expect(source).toContain('`/book/event/${event.slug}?occurrence=${occurrence.id}`');
     expect(source).not.toContain(
       'occurrence ? `/schedule/${occurrence.id}` : \'/schedule\'',
     );

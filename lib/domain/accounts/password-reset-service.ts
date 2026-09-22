@@ -1,9 +1,5 @@
 import { hashPassword, validatePassword } from '@/lib/auth/password';
-import {
-  createSecureToken,
-  hashToken,
-  isTokenUsable,
-} from '@/lib/auth/tokens';
+import { createSecureToken, hashToken, isTokenUsable } from '@/lib/auth/tokens';
 import { InvalidPasswordError } from './account-service';
 
 export type ResetTokenRecord = {
@@ -15,12 +11,20 @@ export type ResetTokenRecord = {
 };
 
 export type PasswordResetRepository = {
-  findActiveUserByEmail(email: string): Promise<{ id: string } | null>;
+  findActiveUserByEmail(
+    email: string,
+  ): Promise<{
+    id: string;
+    email: string;
+    credentialFingerprint: string;
+  } | null>;
   replaceToken(input: {
     userId: string;
     tokenHash: string;
     expiresAt: Date;
-  }): Promise<void>;
+    emailSnapshot: string;
+    credentialFingerprint: string;
+  }): Promise<boolean>;
   findTokenByHash(tokenHash: string): Promise<ResetTokenRecord | null>;
   consumeToken(input: {
     tokenId: string;
@@ -40,11 +44,14 @@ export async function requestPasswordReset(
   if (!user) return null;
 
   const { token, tokenHash } = createSecureToken();
-  await repository.replaceToken({
+  const issued = await repository.replaceToken({
     userId: user.id,
+    emailSnapshot: user.email,
+    credentialFingerprint: user.credentialFingerprint,
     tokenHash,
     expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
   });
+  if (!issued) return null;
 
   return token;
 }

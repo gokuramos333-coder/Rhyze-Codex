@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import {
   archiveClassTemplateAction,
@@ -184,7 +185,7 @@ export default async function AdminClassesPage(
         ),
         category: occurrence.template.category.name,
         instructor,
-        photo: occurrence.instructor?.instructorProfile?.photoUrl || null,
+        photo: resolveClassArtwork(occurrence),
         capacity: occurrence.capacity,
         booked: occurrence.bookings.length + occurrence.historicalSignupCount,
         attended: occurrence.bookings.filter(
@@ -343,20 +344,14 @@ export default async function AdminClassesPage(
           {templates.map((template) => (
           <article key={template.id} className="grid gap-3 bg-white p-5 md:grid-cols-[1fr_auto] md:items-center">
             <div className="grid gap-4 sm:grid-cols-[3.5rem_1fr] sm:items-center">
-              {template.occurrences[0]?.instructor?.instructorProfile?.photoUrl ? (
                 <Image
-                  src={template.occurrences[0].instructor.instructorProfile.photoUrl}
+                  src={resolveClassArtwork({ ...template.occurrences[0], template })}
                   alt=""
                   width={56}
                   height={56}
-                  unoptimized={template.occurrences[0].instructor.instructorProfile.photoUrl.startsWith('/api/media/')}
+                  unoptimized={resolveClassArtwork({ ...template.occurrences[0], template }).startsWith('/api/media/')}
                   className="h-14 w-14 object-cover"
                 />
-              ) : (
-                <span className="grid h-14 w-14 place-items-center bg-rhyze-orange/10 font-display text-2xl">
-                  {(template.occurrences[0]?.instructor?.name || 'T').slice(0, 1)}
-                </span>
-              )}
               <div>
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">
                 {template.category.name} · {template.durationMinutes} min

@@ -13,7 +13,7 @@ describe('admin attendance credit restore surface', () => {
     expect(action).toContain('/admin/members/${booking.userId}?sent=attendance-credit-restored#credits');
     expect(action).toContain('returnedCreditTerms');
     expect(action).toContain('Manual attendance class credit restore');
-    expect(action).toContain("data: { status: 'CANCELLED', cancelledAt: restoredAt }");
+    expect(action).toContain("data: { status: 'CANCELLED', cancelledAt: booking.cancelledAt ?? restoredAt }");
     expect(action).toContain("template: 'ATTENDANCE_CREDIT_RESTORED_STAFF'");
     expect(action).toContain("to: 'melissa@rhyzefit.com'");
     expect(action).toContain("cc: ['vanessa@rhyzefit.com']");

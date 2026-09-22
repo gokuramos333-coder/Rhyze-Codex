@@ -71,7 +71,7 @@ export function publicScheduleDetailHref({
   isEvent: boolean;
 }) {
   return isEvent
-    ? `/events/${templateSlug}`
+    ? `/events/${templateSlug}?occurrence=${occurrenceId}`
     : `/book/${templateSlug}?occurrence=${occurrenceId}`;
 }
 

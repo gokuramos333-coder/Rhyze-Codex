@@ -223,7 +223,7 @@ describe('admin activity feed and client metrics', () => {
     expect(source).toContain('buildReconciledRefundRecords');
     expect(source).toContain('Verified direct Stripe');
     expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("schedule: '7 * * * *'");
-    expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("runProtectedJob('/api/jobs/stripe-sync')");
+    expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("runProtectedJob('/api/jobs/stripe-sync', undefined, { retryConnectFailures: true })");
     expect(source).toContain('paymentRecords: visiblePaymentRecords');
     expect(source).toContain('bookings: activityBookings');
     expect(source).toContain('waitlistEntries: activityWaitlistEntries');

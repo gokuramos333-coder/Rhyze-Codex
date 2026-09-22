@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, CalendarDays } from 'lucide-react';
-import { ownedEvents } from '@/lib/rhyze-platform';
+import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { prisma } from '@/lib/db/prisma';
 import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
@@ -33,6 +33,7 @@ export async function EventsPreview({
           ...upcomingEventOccurrenceWhere(now),
         },
         include: {
+          instructor: { include: { instructorProfile: true } },
           _count: {
             select: {
               bookings: { where: { status: 'CONFIRMED' } },
@@ -86,7 +87,7 @@ export async function EventsPreview({
 
         <EventsCarousel>
           {eventCards.map(({ event, occurrence }) => {
-            const fallback = ownedEvents.find((item) => item.slug === event.slug);
+            const artwork = resolveClassArtwork({ ...occurrence, template: event });
             const bookingLabel = publicBookingCountLabel(
               occurrence._count.bookings + occurrence.historicalSignupCount,
               occurrence.capacity,
@@ -95,7 +96,8 @@ export async function EventsPreview({
               <>
                 <div className="relative aspect-[4/3] overflow-hidden bg-rhyze-black">
                   <Image
-                    src={event.imageUrl || fallback?.photo || '/brand/rhyze-logo-header.png'}
+                    src={artwork}
+                    unoptimized={artwork.startsWith('/api/media/')}
                     alt={event.name}
                     fill
                     sizes="(min-width: 768px) 24rem, 18rem"
@@ -141,7 +143,7 @@ export async function EventsPreview({
                 key={`${event.id}-${occurrence.id}`}
                 className="group overflow-hidden rounded-3xl border border-rhyze-gold/25 bg-rhyze-charcoal shadow-[0_0_0_1px_rgba(255,199,44,0.2)] transition hover:-translate-y-1 hover:border-rhyze-orange hover:shadow-[0_0_0_1px_rgba(255,122,24,0.55),0_0_30px_rgba(255,122,24,0.18)] motion-reduce:transition-none"
               >
-                <Link href={`/events/${event.slug}`} className="block">
+                <Link href={`/events/${event.slug}?occurrence=${occurrence.id}`} className="block">
                   {cardContent}
                 </Link>
               </article>

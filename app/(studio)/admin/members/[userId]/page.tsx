@@ -9,8 +9,14 @@ import {
   UserRound,
 } from 'lucide-react';
 import { prisma } from '@/lib/db/prisma';
+import { requireArea } from '@/lib/auth/session';
+import { AccountIdentityForm } from '@/components/domain/accounts/AccountIdentityForm';
+import { updateAdminAccountNameAction, requestAdminAccountEmailChangeAction } from './identity-actions';
+import { creditAccountCanBook } from '@/lib/domain/bookings/booking-rules';
+import { vipCreditAccountCanBook, vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
 import { adminClientStatus } from '@/lib/admin/client-status';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
+import { CancellationTimestamp } from '@/components/attendance/CancellationTimestamp';
 import { memberSpendTotals } from '@/lib/admin/member-spend';
 import { cancellationNoticeStatus } from '@/lib/domain/memberships/change-request';
 import { importedBookingParty } from '@/lib/domain/bookings/imported-booking-party';
@@ -109,11 +115,12 @@ function dateTime(value: Date | null | undefined) {
 export default async function AdminMemberDetailPage(
   props: {
     params: Promise<{ userId: string }>;
-    searchParams: Promise<{ sent?: string; error?: string; membership?: string }>;
+    searchParams: Promise<{ sent?: string; error?: string; membership?: string; identityError?: string; identitySaved?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
+  const actor = await requireArea('admin');
   const [member, activeWaiver, membershipProducts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: params.userId },
@@ -151,7 +158,7 @@ export default async function AdminMemberDetailPage(
         },
         memberships: {
           include: {
-            product: true,
+            ...vipEntitlementInclude,
             freezes: { where: { cancelledAt: null }, orderBy: { startAt: 'desc' } },
             changeRequests: {
               where: { status: 'PENDING' },
@@ -200,7 +207,7 @@ export default async function AdminMemberDetailPage(
             entries: true,
             sourcePurchase: {
               include: {
-                membership: { select: { status: true, activatedAt: true, currentPeriodEnd: true } },
+                membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true } },
                 product: { select: { kind: true } },
               },
             },
@@ -260,7 +267,9 @@ export default async function AdminMemberDetailPage(
       ) {
         return false;
       }
-      return account.validFrom <= now && (!account.validUntil || account.validUntil > now);
+      return account.validFrom <= now && (!account.validUntil || account.validUntil > now) &&
+        creditAccountCanBook({ membershipStatus: membership?.status ?? null }) &&
+        vipCreditAccountCanBook({ account, memberships: member.memberships, now });
     })
     .map((account) => ({
       label: account.label,
@@ -622,6 +631,7 @@ export default async function AdminMemberDetailPage(
               </form>
             </div>
           </InfoSection>
+          {(member.role === 'MEMBER' || member.id === actor.id) && <AccountIdentityForm name={member.name} email={member.email} userId={member.id} reauthenticate={member.id === actor.id} nameAction={updateAdminAccountNameAction} emailAction={requestAdminAccountEmailChangeAction} error={searchParams.identityError} saved={searchParams.identitySaved} />}
           <InfoSection title="CONTACT + PROFILE">
             <Info label="Email" value={member.email} />
             <Info label="Phone" value={member.memberProfile?.phone || 'Not provided'} />
@@ -822,6 +832,7 @@ export default async function AdminMemberDetailPage(
                         <AdminStatusBadge
                           status={booking.attendance?.status || booking.status}
                         />
+                        <CancellationTimestamp value={booking.cancelledAt} />
                       </td>
                     </tr>
                     );

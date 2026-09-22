@@ -4,6 +4,7 @@ import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly
 import { ERIKA_GIFTED_VIP } from '@/lib/domain/memberships/gifted-vip';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
 import { recoveryVipMaintenance } from '@/lib/domain/memberships/somble-billing-recovery';
+import { vipEntitlementInclude, vipMembershipPaidThrough } from '@/lib/domain/credits/vip-access';
 
 export async function POST(request: Request) {
   if (
@@ -139,14 +140,16 @@ export async function POST(request: Request) {
       product: { kind: 'VIP', isUnlimited: true },
       user: { status: 'ACTIVE' },
     },
-    include: { user: { select: { id: true, email: true } } },
+    include: { ...vipEntitlementInclude, user: { select: { id: true, email: true } } },
   });
   let vipUnlimitedCreditsSynced = 0;
   let vipEventCreditsGranted = 0;
   for (const membership of activeVipMemberships) {
     const recoveryBenefits = recoveryVipMaintenance(membership, now);
-    if (!recoveryBenefits.benefitsEligible) continue;
-    const existingUnlimited = recoveryBenefits.purchaseOwnsClasses ? { id: membership.purchaseId! } : await prisma.creditAccount.findFirst({
+    if (!recoveryBenefits.benefitsEligible || !vipMembershipPaidThrough(membership, now)) continue;
+    // Native invoice-paid processing owns unlimited access; never manufacture
+    // a fresh calendar-month entitlement from an ACTIVE subscription label.
+    const existingUnlimited = membership.purchaseId ? { id: membership.purchaseId } : await prisma.creditAccount.findFirst({
       where: {
         userId: membership.userId,
         label: vipWindow.classCreditLabel,

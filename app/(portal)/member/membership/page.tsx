@@ -15,6 +15,7 @@ import {
   introTrialIsExpired,
 } from '@/lib/domain/memberships/membership-display';
 import { creditAccountCanBook } from '@/lib/domain/bookings/booking-rules';
+import { vipCreditAccountCanBook, vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
 import { MembershipChangeRequestForm } from '@/components/memberships/MembershipChangeRequestForm';
 import { availableMembershipCredits } from '@/lib/domain/credits/membership-renewal';
 import {
@@ -28,6 +29,7 @@ import {
 import { giftedVipAccessNote } from '@/lib/domain/memberships/gifted-vip';
 import { TrialPolicyConsent } from '@/components/memberships/TrialPolicyConsent';
 import { productCheckoutCadence } from '@/lib/catalog/product-cadence';
+import { publicMembershipDescription } from '@/lib/catalog/membership-copy';
 import {
   membershipPromoCodeInputHelp,
   removeExpiredRhyze2026PromoCopy,
@@ -88,7 +90,7 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
     prisma.membership.findMany({
       where: { userId: user.id },
       include: {
-        product: true,
+        ...vipEntitlementInclude,
         freezes: { where: { cancelledAt: null }, orderBy: { startAt: 'desc' }, take: 5 },
         changeRequests: {
           where: { status: 'PENDING' },
@@ -109,7 +111,7 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { status: true, activatedAt: true, currentPeriodEnd: true } },
+            membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true } },
             product: { select: { includedCredits: true, kind: true } },
           },
         },
@@ -163,7 +165,8 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
       ) {
         return false;
       }
-      return creditAccountCanBook({ membershipStatus: membership?.status ?? null });
+      return creditAccountCanBook({ membershipStatus: membership?.status ?? null }) &&
+        vipCreditAccountCanBook({ account, memberships, now });
     })
     .map((account) => ({
       label: account.label,
@@ -277,7 +280,7 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
           return (
           <article key={product.id} className={product.slug === selectedPlan ? 'border-2 border-rhyze-orange bg-orange-50 p-6 shadow-lg' : 'bg-white p-6'}>
             <h3 className="font-display text-3xl tracking-wider">{product.name}</h3>
-            <p className="mt-2 text-sm text-rhyze-black/55">{removeExpiredRhyze2026PromoCopy(product.description, now)}</p>
+            <p className="mt-2 text-sm text-rhyze-black/55">{removeExpiredRhyze2026PromoCopy(publicMembershipDescription(product.description), now)}</p>
             <div className="mt-5 flex items-center justify-between gap-4">
               <strong>${(product.priceCents/100).toFixed(2)} <span className="text-xs font-bold text-rhyze-black/50">{cadence.label}</span></strong>
               {available ? (

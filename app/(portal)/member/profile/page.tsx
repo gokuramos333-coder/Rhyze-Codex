@@ -12,11 +12,13 @@ import {
   updateProfileAction,
 } from '../actions';
 import { ProfileSecurityForm } from '@/components/domain/accounts/ProfileSecurityForm';
+import { AccountIdentityForm } from '@/components/domain/accounts/AccountIdentityForm';
+import { updateAccountNameAction, requestAccountEmailChangeAction } from '../actions';
 import { giftedVipAccessNote } from '@/lib/domain/memberships/gifted-vip';
 
 export default async function MemberProfilePage(
   props: {
-    searchParams: Promise<{ error?: string; saved?: string; securityError?: string }>;
+    searchParams: Promise<{ error?: string; saved?: string; securityError?: string; identityError?: string; identitySaved?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -91,6 +93,8 @@ export default async function MemberProfilePage(
                 : 'Your password could not be changed here. Use Forgot password or contact management.'}
         </p>
       )}
+
+      <AccountIdentityForm name={user.name} email={user.email} nameAction={updateAccountNameAction} emailAction={requestAccountEmailChangeAction} error={searchParams.identityError} saved={searchParams.identitySaved} />
 
       <form
         action={updateProfileAction}

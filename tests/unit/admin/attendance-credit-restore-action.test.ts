@@ -142,4 +142,13 @@ describe('admin attendance credit restore action', () => {
       }),
     });
   });
+
+  it('preserves the actual cancellation timestamp when an admin later restores its credit', async () => {
+    const booking = await mocks.tx.booking.findFirst();
+    const cancelledAt = new Date('2026-09-14T16:23:45Z');
+    mocks.tx.booking.findFirst.mockResolvedValue({ ...booking, status: 'LATE_CANCELLED', cancelledAt });
+    const form = new FormData(); form.set('occurrenceId', 'occurrence_1'); form.set('bookingId', 'booking_1');
+    await expect(restoreCreditAction(form)).rejects.toThrow('attendance-credit-restored');
+    expect(mocks.tx.booking.update).toHaveBeenCalledWith({ where: { id: 'booking_1' }, data: { status: 'CANCELLED', cancelledAt } });
+  });
 });

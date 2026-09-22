@@ -9,9 +9,13 @@ import {
   creditAccountCanBook,
   EVENT_CREDIT_LABEL_PREFIX,
   eventCreditCanBook,
+  instructorStandardClassAccess,
   standardSingleClassCreditCanBook,
 } from '@/lib/domain/bookings/booking-rules';
 import { availableMembershipCredits } from '@/lib/domain/credits/membership-renewal';
+import { vipCreditAccountCanBook, vipCreditBenefit, vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
+import { bookingPolicySnapshotWithAccess } from '@/lib/domain/bookings/booking-access';
+import { accessTypeForProductKind } from '@/lib/domain/bookings/cancellation-policy';
 
 const ownerEmails = new Set([
   'vanessa@rhyzefit.com',
@@ -42,7 +46,11 @@ export async function addMemberToClassAction(formData: FormData) {
 
     const member = await tx.user.findFirst({
       where: {
-        role: { in: ['MEMBER', 'INSTRUCTOR'] },
+        AND: [{ OR: [
+          { role: { in: ['MEMBER', 'INSTRUCTOR'] } },
+          { role: { in: ['OWNER', 'ADMIN', 'MANAGER'] }, instructorProfile: { is: { isActive: true } } },
+        ] }],
+        status: 'ACTIVE',
         OR: [
           { email: { equals: memberQuery, mode: 'insensitive' } },
           { email: { contains: memberQuery, mode: 'insensitive' } },
@@ -50,8 +58,11 @@ export async function addMemberToClassAction(formData: FormData) {
         ],
       },
       orderBy: [{ email: 'asc' }],
+      include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } },
     });
     if (!member) return 'member-not-found';
+    const now = new Date();
+    const instructorAccess = instructorStandardClassAccess({ user: member, isEvent: occurrence.template.isEvent });
 
     const existing = await tx.booking.findUnique({
       where: { occurrenceId_userId: { occurrenceId, userId: member.id } },
@@ -83,7 +94,7 @@ export async function addMemberToClassAction(formData: FormData) {
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { status: true } },
+            membership: { select: { id: true, status: true } },
             product: { select: { includedCredits: true, kind: true, customPlanType: true } },
           },
         },
@@ -118,6 +129,7 @@ export async function addMemberToClassAction(formData: FormData) {
         productAllowsOccurrence &&
         validEventAccess &&
         creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
+        vipCreditAccountCanBook({ account, memberships: member.memberships, now, occurrenceStartsAt: occurrence.startAt }) &&
         validSingleClassCredit &&
         (account.isUnlimited || creditBalance(
           account.entries,
@@ -125,14 +137,21 @@ export async function addMemberToClassAction(formData: FormData) {
         ) > 0)
       );
     });
-    if (!creditAccount) return 'member-no-credit';
+    if (!creditAccount && !instructorAccess) return 'member-no-credit';
+
+    const accessProductKind = instructorAccess ? null : creditAccount && vipCreditBenefit(creditAccount) ? 'VIP' : creditAccount?.sourcePurchase?.product.kind ?? null;
+    const policySnapshot = bookingPolicySnapshotWithAccess({
+      currentSnapshot: { creditAccountId: instructorAccess ? null : creditAccount?.id ?? null },
+      accessType: instructorAccess ? 'COMPLIMENTARY' : accessTypeForProductKind(accessProductKind),
+      accessProductKind,
+    });
 
     const booking = await tx.booking.upsert({
       where: { occurrenceId_userId: { occurrenceId, userId: member.id } },
-      update: { status: 'CONFIRMED', source: 'ADMIN_ADDED', cancelledAt: null, bookedAt: new Date() },
-      create: { occurrenceId, userId: member.id, source: 'ADMIN_ADDED' },
+      update: { status: 'CONFIRMED', source: 'ADMIN_ADDED', cancelledAt: null, bookedAt: new Date(), policySnapshot },
+      create: { occurrenceId, userId: member.id, source: 'ADMIN_ADDED', policySnapshot },
     });
-    if (!creditAccount.isUnlimited) {
+    if (!instructorAccess && creditAccount && !creditAccount.isUnlimited) {
       await tx.creditLedgerEntry.create({
         data: {
           creditAccountId: creditAccount.id,
@@ -149,7 +168,7 @@ export async function addMemberToClassAction(formData: FormData) {
         action: 'booking.admin-add-member',
         entityType: 'ClassOccurrence',
         entityId: occurrenceId,
-        after: { memberId: member.id, memberEmail: member.email, creditAccountId: creditAccount.id },
+        after: { memberId: member.id, memberEmail: member.email, creditAccountId: instructorAccess ? null : creditAccount?.id, complimentaryInstructor: instructorAccess },
       },
     });
     return 'member-added';

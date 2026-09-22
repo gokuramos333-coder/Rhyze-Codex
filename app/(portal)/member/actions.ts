@@ -21,6 +21,29 @@ import {
 } from '@/lib/domain/accounts/password-change-service';
 import { prismaPasswordChangeRepository } from '@/lib/domain/accounts/prisma-password-change-repository';
 import { queueEmail } from '@/lib/notifications/email-queue';
+import { changeAccountName, requestAccountEmailChange, IdentityError } from '@/lib/domain/accounts/account-identity-service';
+import { createIdentityStore } from '@/lib/domain/accounts/prisma-account-identity-repository';
+
+export async function updateAccountNameAction(formData: FormData): Promise<void> {
+  const user = await requireArea('member');
+  try {
+    await changeAccountName({ actorId: user.id, userId: user.id, name: String(formData.get('name') || '') }, createIdentityStore(prisma));
+  } catch (error) {
+    redirect(`/member/profile?identityError=${error instanceof IdentityError ? error.code : 'UNAVAILABLE'}`);
+  }
+  revalidatePath('/member/profile');
+  redirect('/member/profile?identitySaved=name');
+}
+
+export async function requestAccountEmailChangeAction(formData: FormData): Promise<void> {
+  const user = await requireArea('member');
+  try {
+    await requestAccountEmailChange({ actorId: user.id, userId: user.id, email: String(formData.get('email') || ''), currentPassword: String(formData.get('currentPassword') || '') }, createIdentityStore(prisma));
+  } catch (error) {
+    redirect(`/member/profile?identityError=${error instanceof IdentityError ? error.code : 'UNAVAILABLE'}`);
+  }
+  redirect('/member/profile?identitySaved=email');
+}
 
 export async function changePasswordAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');

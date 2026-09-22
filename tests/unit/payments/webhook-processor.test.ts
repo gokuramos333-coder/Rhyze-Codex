@@ -118,6 +118,7 @@ describe('Stripe webhook event interpretation', () => {
     };
     const tx = {
       purchase: {
+        findUnique: async () => null,
         update: async (args: unknown) => {
           calls.purchaseUpdate.push(args);
           return {
@@ -246,6 +247,7 @@ describe('Stripe webhook event interpretation', () => {
     };
     const tx = {
       purchase: {
+        findUnique: async () => null,
         update: async () => ({
           id: 'purchase_intro',
           userId: 'user_avery',

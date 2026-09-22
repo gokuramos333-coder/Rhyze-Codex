@@ -7,6 +7,9 @@ import {
   updateClassTemplateAction,
 } from './actions';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
+import { ClassArtworkForm } from '@/components/admin/ClassArtworkForm';
+import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
+import { updateTemplateArtworkAction } from './artwork-actions';
 
 export default async function EditTemplatePage(
   props: { params: Promise<{ templateId: string }>; searchParams: Promise<{ saved?: string }> }
@@ -20,7 +23,7 @@ export default async function EditTemplatePage(
         occurrences: {
           orderBy: { startAt: 'asc' },
           include: {
-            instructor: { select: { id: true, name: true } },
+            instructor: { select: { id: true, name: true, instructorProfile: true } },
             _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
           },
         },
@@ -47,8 +50,6 @@ export default async function EditTemplatePage(
         <Field name="defaultCapacity" label="Capacity" type="number" value={String(item.defaultCapacity)}/>
         <Field name="dropInPrice" label="Drop-in price" type="number" value={String((item.dropInPriceCents || 2500)/100)} min="1" step="0.01"/>
         <label className="grid gap-2"><Span>Intensity</Span><select name="intensity" defaultValue={item.intensity} className="min-h-12 border px-3">{['LOW','MODERATE','HIGH','ALL_LEVELS'].map((value) => <option key={value}>{value}</option>)}</select></label>
-        <Field name="imageUrl" label="Image path / URL" value={item.imageUrl || ''} required={false}/>
-        <label className="grid gap-2"><Span>Upload photo</Span><input name="image" type="file" accept="image/jpeg,image/png" className="min-h-12 border bg-rhyze-orange/10 p-3" /></label>
         <Field name="tags" label="Tags (comma separated)" value={item.tags.join(', ')}/>
         <Field name="equipment" label="Equipment (comma separated)" value={item.equipment.join(', ')}/>
         <label className="grid gap-2 md:col-span-2"><Span>Description</Span><textarea name="description" defaultValue={item.description} required className="min-h-28 border p-3"/></label>
@@ -56,6 +57,7 @@ export default async function EditTemplatePage(
         <label className="flex items-center gap-2 text-sm font-bold"><input name="isActive" type="checkbox" defaultChecked={item.isActive}/> Active</label>
         <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">Save class template</button>
       </form>
+      <ClassArtworkForm id={item.id} action={updateTemplateArtworkAction} currentPhotoUrl={item.imageUrl} fallbackPhotoUrl={resolveClassArtwork({ instructor: item.occurrences[0]?.instructor })} />
       <form
         action={assignTemplateInstructorAction}
         className="mt-8 grid gap-4 border-t-4 border-rhyze-orange bg-white p-6 md:grid-cols-[1fr_auto] md:items-end"

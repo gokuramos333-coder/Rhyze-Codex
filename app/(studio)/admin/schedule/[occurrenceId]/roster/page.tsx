@@ -1,10 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
-import {
-  confirmedRosterBookingWhere,
-  reconcileKnownCancelledBookings,
-} from '@/lib/domain/bookings/known-cancellations';
+import { rosterHistoryBookingWhere, rosterConfirmedBookings } from '@/lib/domain/bookings/roster-history';
 import { Roster } from '@/components/attendance/Roster';
 import { rosterPaymentDetails } from '@/lib/domain/bookings/roster-payment';
 import { importedBookingParty } from '@/lib/domain/bookings/imported-booking-party';
@@ -12,7 +9,7 @@ import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-d
 import { addMemberToClassAction, addOwnerComplimentaryBookingAction } from './actions';
 
 const addMemberMessages: Record<string, { text: string; tone: 'success' | 'error' | 'info' }> = {
-  'member-added': { text: 'Member added to this class and one available credit was reserved.', tone: 'success' },
+  'member-added': { text: 'Member added. An eligible credit was used, or complimentary regular-class access was applied.', tone: 'success' },
   'member-search': { text: 'Enter at least 2 characters from the member name or email.', tone: 'error' },
   'member-not-found': { text: 'No matching client account was found.', tone: 'error' },
   'member-already-booked': { text: 'That member is already on this roster.', tone: 'info' },
@@ -39,14 +36,13 @@ export default async function AdminRosterPage(props: {
   const params = await props.params;
   const searchParams = props.searchParams ? await props.searchParams : {};
   const resultMessage = searchParams.result ? addMemberMessages[searchParams.result] : null;
-  await reconcileKnownCancelledBookings(prisma);
   const occurrence = await prisma.classOccurrence.findUnique({
     where: { id: params.occurrenceId },
     include: {
       template: true,
       instructor: true,
       bookings: {
-        where: confirmedRosterBookingWhere(),
+        where: rosterHistoryBookingWhere(),
         include: {
           user: {
             include: {
@@ -94,7 +90,8 @@ export default async function AdminRosterPage(props: {
     });
     return { ...booking, bookedAt: booking.bookedAt, ...payment };
   });
-  const namedImportedGuests = occurrence.bookings.reduce(
+  const confirmedBookings = rosterConfirmedBookings(occurrence.bookings);
+  const namedImportedGuests = confirmedBookings.reduce(
     (total, booking) =>
       total + importedBookingParty(booking.policySnapshot).guestNames.length,
     0,
@@ -107,7 +104,7 @@ export default async function AdminRosterPage(props: {
     <>
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Attendance desk</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
-      <p className="mt-3 text-rhyze-black/55">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'} · {occurrence.bookings.length + occurrence.historicalSignupCount}/{occurrence.capacity}</p>
+      <p className="mt-3 text-rhyze-black/55">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'} · {confirmedBookings.length + occurrence.historicalSignupCount}/{occurrence.capacity} booked</p>
       <section className="mt-6 border-t-4 border-rhyze-gold bg-white p-5">
         <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Waitlist</p>
         <h2 className="mt-2 font-display text-4xl tracking-wider">
@@ -159,7 +156,7 @@ export default async function AdminRosterPage(props: {
         <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Attendees</p>
         <h2 className="mt-2 font-display text-4xl tracking-wider">Add member to this class</h2>
         <p className="mt-2 text-sm font-bold text-rhyze-black/55">
-          Search by client name or email. Admin-added bookings reserve one eligible member credit, including same-month single standard class credits.
+          Search by client name or email. Bookings use an eligible credit. Approved active instructors take regular classes free; events are excluded.
         </p>
         <form action={addMemberToClassAction} className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
           <input type="hidden" name="occurrenceId" value={occurrence.id} />

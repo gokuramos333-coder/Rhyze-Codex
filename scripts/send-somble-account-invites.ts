@@ -36,8 +36,8 @@ async function main() {
         hasPassword: Boolean(user.passwordHash),
       }));
     },
-    issueClaim(userId) {
-      return issueAccountClaim(userId, prismaAccountClaimRepository);
+    issueClaim(userId, expectedEmail) {
+      return issueAccountClaim(userId, prismaAccountClaimRepository, new Date(), expectedEmail);
     },
     async queueInvite(input) {
       await queueEmail(prisma, {

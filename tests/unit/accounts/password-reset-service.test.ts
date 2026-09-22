@@ -24,7 +24,7 @@ function repository(options?: { active?: boolean }): PasswordResetRepository & {
       usedAt: Date;
     }>,
     async findActiveUserByEmail() {
-      return options?.active === false ? null : { id: 'member-1' };
+      return options?.active === false ? null : { id: 'member-1', email: 'member@example.com', credentialFingerprint: 'test-fingerprint' };
     },
     async replaceToken(input: { userId: string; tokenHash: string; expiresAt: Date }) {
       repo.tokenHash = input.tokenHash;
@@ -35,6 +35,7 @@ function repository(options?: { active?: boolean }): PasswordResetRepository & {
         usedAt: null,
         createdAt: NOW,
       };
+      return true;
     },
     async findTokenByHash(tokenHash: string) {
       return tokenHash === repo.tokenHash ? repo.token : null;

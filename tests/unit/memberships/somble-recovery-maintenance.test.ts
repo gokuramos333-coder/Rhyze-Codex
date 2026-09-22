@@ -109,8 +109,13 @@ function fixture(person: {
     $executeRaw: async () => 0,
     membershipFreeze: { findMany: async () => [] },
     membership: {
-      findMany: async () =>
-        membership.status === 'ACTIVE' ? [membership] : [],
+      findMany: async () => membership.status === 'ACTIVE' ? [{
+        ...membership,
+        purchase: membership.purchaseId ? {
+          ...purchase,
+          creditAccount: accounts.find(a => a.sourcePurchaseId === membership.purchaseId) ?? null,
+        } : null,
+      }] : [],
       updateMany: async () => ({ count: 0 }),
       update: async ({ data }: any) => Object.assign(membership, data),
     },

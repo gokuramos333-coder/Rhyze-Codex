@@ -2,11 +2,13 @@ import { markAttendanceAction, restoreCreditAction } from '@/app/(portal)/instru
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { importedBookingParty } from '@/lib/domain/bookings/imported-booking-party';
 import Link from 'next/link';
+import { CancellationTimestamp } from './CancellationTimestamp';
 
 type RosterBooking = {
   id: string;
   status: string;
   bookedAt: Date;
+  cancelledAt?: Date | null;
   user: { id: string; name: string | null; email: string };
   attendance: { status: string } | null;
   policySnapshot?: unknown;
@@ -41,8 +43,10 @@ export function Roster({
     <div className="mt-8 grid gap-3">
       {bookings.map((booking) => {
         const party = importedBookingParty(booking.policySnapshot);
+        const lateCancelled = booking.status === 'LATE_CANCELLED' || booking.attendance?.status === 'LATE_CANCELLED';
+        const cancelled = booking.status === 'CANCELLED';
         return (
-        <article key={booking.id} className="grid gap-4 border-l-4 border-rhyze-orange bg-white p-5 xl:grid-cols-[1fr_auto] xl:items-center">
+        <article key={booking.id} className={`grid gap-4 border-l-4 p-5 xl:grid-cols-[1fr_auto] xl:items-center ${lateCancelled ? 'border-red-700 bg-red-50' : cancelled ? 'border-slate-400 bg-slate-50' : 'border-rhyze-orange bg-white'}`}>
           <div>
             <h2 className="font-sans text-lg font-black">
               <Link href={`/admin/members/${booking.user.id}`} className="underline decoration-rhyze-gold decoration-2 underline-offset-4 hover:text-rhyze-coral">
@@ -51,11 +55,13 @@ export function Roster({
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <p className="text-sm text-rhyze-black/50">{booking.user.email}</p>
-              <AdminStatusBadge status={booking.attendance?.status || booking.status} />
+              <AdminStatusBadge status={lateCancelled ? 'Late cancellation' : booking.attendance?.status || booking.status} />
             </div>
             <p className="mt-2 text-xs font-bold uppercase tracking-wider text-rhyze-black/45">
               Booked {bookingBookedAtLabel(booking.bookedAt)}
             </p>
+            <CancellationTimestamp value={booking.cancelledAt} />
+            {(lateCancelled || cancelled) && <p className="mt-1 text-xs font-bold text-rhyze-black/60">Cancellation history · Not counted as an occupied seat</p>}
             <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wider">
               <span className="bg-orange-50 px-2 py-1 text-rhyze-coral">Paid with: {booking.paymentMethod}</span>
               <span className="bg-rhyze-orange/10 px-2 py-1">Plan: {booking.currentPlan}</span>
@@ -79,7 +85,7 @@ export function Roster({
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {(['CHECKED_IN', 'NO_SHOW', 'LATE_CANCELLED'] as const).map((status) => {
+            {!cancelled && (['CHECKED_IN', 'NO_SHOW', 'LATE_CANCELLED'] as const).map((status) => {
               const selected = booking.attendance?.status === status;
               const label = status === 'CHECKED_IN'
                 ? 'Check in'
@@ -97,7 +103,7 @@ export function Roster({
               </form>
               );
             })}
-            {canRestore && (
+            {canRestore && !cancelled && (
               <form action={restoreCreditAction}>
                 <input type="hidden" name="occurrenceId" value={occurrenceId} />
                 <input type="hidden" name="bookingId" value={booking.id} />

@@ -75,7 +75,7 @@ describe('public schedule calendar', () => {
         templateSlug: 'tcj-hip-hop-happy-hour-tricia',
         isEvent: true,
       }),
-    ).toBe('/events/tcj-hip-hop-happy-hour-tricia');
+    ).toBe('/events/tcj-hip-hop-happy-hour-tricia?occurrence=event-1');
   });
 
   it('builds filters from assigned classes without excluding owner-instructors', () => {

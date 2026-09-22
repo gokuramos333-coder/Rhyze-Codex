@@ -17,6 +17,7 @@
     "deploy:production": "npx netlify deploy --prod --context production",
     "automation:setup-accounts": "tsx scripts/setup-automation-test-accounts.ts",
     "automation:portal-smoke": "tsx scripts/portal-auth-smoke.ts",
+    "automation:data-health": "tsx scripts/production-data-health.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
@@ -80,6 +81,9 @@
     "@node-rs/argon2-linux-x64-gnu": "^2.0.2"
   },
   "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    },
     "@opentelemetry/core": "^2.10.0",
     "effect": "^3.22.1",
     "postcss": "^8.5.25",

@@ -78,8 +78,8 @@ describe('automation test account isolation', () => {
   });
 
   it('uses only read-only admin routes for authorization checks', () => {
-    const smoke = readFileSync('scripts/portal-auth-smoke.ts', 'utf8');
-    expect(smoke).not.toContain("verifyDenied(page, '/admin')");
-    expect(smoke).toContain("verifyDenied(page, '/admin/settings')");
+    const policy = readFileSync('lib/automation/portal-smoke-policy.ts', 'utf8');
+    expect(policy).not.toContain("'/admin'");
+    expect(policy).toContain("'/admin/settings'");
   });
 });

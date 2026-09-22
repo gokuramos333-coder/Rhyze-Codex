@@ -1,10 +1,9 @@
 import { hashPassword, validatePassword } from '@/lib/auth/password';
+import { createSecureToken, hashToken, isTokenUsable } from '@/lib/auth/tokens';
 import {
-  createSecureToken,
-  hashToken,
-  isTokenUsable,
-} from '@/lib/auth/tokens';
-import { AgreementRequiredError, InvalidPasswordError } from './account-service';
+  AgreementRequiredError,
+  InvalidPasswordError,
+} from './account-service';
 
 const ACCOUNT_CLAIM_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -19,12 +18,20 @@ export type AccountClaimTokenRecord = {
 };
 
 export type AccountClaimRepository = {
-  findEligibleUserById(userId: string): Promise<{ id: string; email: string } | null>;
+  findEligibleUserById(
+    userId: string,
+  ): Promise<{
+    id: string;
+    email: string;
+    credentialFingerprint: string;
+  } | null>;
   replaceToken(input: {
     userId: string;
     tokenHash: string;
     expiresAt: Date;
-  }): Promise<void>;
+    emailSnapshot: string;
+    credentialFingerprint: string;
+  }): Promise<boolean>;
   findTokenByHash(tokenHash: string): Promise<AccountClaimTokenRecord | null>;
   consumeClaim(input: {
     tokenId: string;
@@ -43,15 +50,24 @@ export async function issueAccountClaim(
   userId: string,
   repository: AccountClaimRepository,
   now = new Date(),
-): Promise<{ rawToken: string; expiresAt: Date }> {
+  expectedEmail?: string,
+): Promise<{ rawToken: string; expiresAt: Date; email: string }> {
   const user = await repository.findEligibleUserById(userId);
-  if (!user) throw new AccountClaimError('This account cannot be activated.');
+  if (!user || (expectedEmail !== undefined && user.email !== expectedEmail))
+    throw new AccountClaimError('This account cannot be activated.');
 
   const { token, tokenHash } = createSecureToken();
   const expiresAt = new Date(now.getTime() + ACCOUNT_CLAIM_LIFETIME_MS);
-  await repository.replaceToken({ userId: user.id, tokenHash, expiresAt });
+  const issued = await repository.replaceToken({
+    userId: user.id,
+    tokenHash,
+    expiresAt,
+    emailSnapshot: user.email,
+    credentialFingerprint: user.credentialFingerprint,
+  });
+  if (!issued) throw new AccountClaimError('This account cannot be activated.');
 
-  return { rawToken: token, expiresAt };
+  return { rawToken: token, expiresAt, email: user.email };
 }
 
 export async function claimImportedAccount(

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { chromium, type Page } from 'playwright';
+import { verifyPortalAccess } from '../lib/automation/portal-smoke-policy';
 import {
   AUTOMATION_TEST_ACCOUNTS,
   type AutomationTestAccount,
@@ -7,12 +8,6 @@ import {
 
 const baseUrl = (process.env.RHYZE_SMOKE_BASE_URL || 'https://www.rhyzefitness.com')
   .replace(/\/$/, '');
-
-const portalRoutes: Record<AutomationTestAccount['role'], string[]> = {
-  OWNER: ['/admin/instructors', '/admin/classes', '/admin/settings', '/member'],
-  INSTRUCTOR: ['/instructor', '/instructor/schedule', '/instructor/profile', '/member'],
-  MEMBER: ['/member', '/member/bookings', '/member/membership'],
-};
 
 function passwordFor(account: AutomationTestAccount): string {
   try {
@@ -90,7 +85,7 @@ async function verifyDenied(page: Page, path: string) {
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
-  const results: string[] = [];
+  const failures: string[] = [];
 
   try {
     for (const account of AUTOMATION_TEST_ACCOUNTS) {
@@ -105,23 +100,19 @@ async function main() {
 
       try {
         await authenticate(page, account);
-        for (const path of portalRoutes[account.role]) {
-          await openExpectedPath(page, path);
-        }
-
-        if (account.role === 'OWNER') {
-          await verifyDenied(page, '/instructor');
-        } else if (account.role === 'INSTRUCTOR') {
-          await verifyDenied(page, '/admin/settings');
-        } else {
-          await verifyDenied(page, '/admin/settings');
-          await verifyDenied(page, '/instructor');
-        }
+        await verifyPortalAccess(account.role, {
+          open: (path) => openExpectedPath(page, path),
+          deny: (path) => verifyDenied(page, path),
+        });
 
         if (serverErrors.length > 0) {
           throw new Error(`Server errors observed: ${serverErrors.join(', ')}`);
         }
-        results.push(`${account.role}: PASS`);
+        console.info(`${account.role}: PASS`);
+      } catch (error) {
+        const failure = `${account.role}: FAIL — ${error instanceof Error ? error.message : 'Portal check failed.'}`;
+        failures.push(failure);
+        console.error(failure);
       } finally {
         await context.close();
       }
@@ -130,8 +121,8 @@ async function main() {
     await browser.close();
   }
 
+  if (failures.length) throw new Error(`Authenticated portal smoke failed for ${failures.length} role(s).`);
   console.info(`Authenticated portal smoke check passed for ${baseUrl}.`);
-  for (const result of results) console.info(result);
   console.info('Cross-role access checks: PASS');
 }
 

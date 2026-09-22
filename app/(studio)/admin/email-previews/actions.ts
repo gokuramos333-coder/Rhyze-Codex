@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { requireApprovedOwner } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { issueAccountClaim } from '@/lib/domain/accounts/account-claim-service';
+import { accountTokenEmailIsDeliverable } from '@/lib/domain/accounts/account-token-delivery';
 import { prismaAccountClaimRepository } from '@/lib/domain/accounts/prisma-account-claim-repository';
 import { renderTransactionalEmail } from '@/lib/notifications/email-content';
 import {
@@ -209,7 +210,7 @@ export async function sendAccountActivationEmailAction(formData: FormData) {
 
   let claim: Awaited<ReturnType<typeof issueAccountClaim>>;
   try {
-    claim = await issueAccountClaim(user.id, prismaAccountClaimRepository);
+    claim = await issueAccountClaim(user.id, prismaAccountClaimRepository, new Date(), user.email);
   } catch {
     redirect(destination('ACCOUNT_ACTIVATION', 'error=activation'));
   }
@@ -231,8 +232,8 @@ export async function sendAccountActivationEmailAction(formData: FormData) {
       userId: user.id,
       direction: 'OUTBOUND',
       from,
-      to: user.email,
-      toList: [user.email],
+      to: claim.email,
+      toList: [claim.email],
       replyTo: ['melissa@rhyzefit.com'],
       subject: rendered.subject,
       template,
@@ -249,10 +250,14 @@ export async function sendAccountActivationEmailAction(formData: FormData) {
     data: { threadId: archive.id },
   });
 
+  if (!await accountTokenEmailIsDeliverable(prisma, archive)) {
+    await prisma.emailMessage.update({ where: { id: archive.id }, data: { status: 'CANCELLED' } });
+    redirect(destination(template, 'error=activation'));
+  }
   const resend = new Resend(apiKey);
   const result = await resend.emails.send({
     from,
-    to: [user.email],
+    to: [claim.email],
     replyTo: ['melissa@rhyzefit.com'],
     subject: rendered.subject,
     text: rendered.text,

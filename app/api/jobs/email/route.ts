@@ -9,6 +9,7 @@ import {
 } from '@/lib/notifications/email-delivery-config';
 import { EMAIL_TEMPLATE_REVISION, isEmailTemplateKey } from '@/lib/notifications/email-templates';
 import { classReminderIsDeliverable } from '@/lib/notifications/class-reminder-delivery';
+import { accountTokenEmailIsDeliverable } from '@/lib/domain/accounts/account-token-delivery';
 
 export async function POST(request: Request) {
   const authorization = request.headers.get('authorization');
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
           select: { id: true },
         })),
       );
-      if (!stillDeliverable) {
+      if (!stillDeliverable || !await accountTokenEmailIsDeliverable(prisma, message)) {
         await prisma.emailMessage.updateMany({
           where: { id: message.id, status: 'PROCESSING' },
           data: { status: 'CANCELLED', lastError: null },

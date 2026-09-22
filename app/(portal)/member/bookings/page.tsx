@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { CancellationTimestamp } from '@/components/attendance/CancellationTimestamp';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { cancelBookingAction, leaveWaitlistAction } from './actions';
@@ -151,6 +152,7 @@ export default async function MemberBookingsPage(
                 Booked at {memberBookingDateTimeLabel({ startAt: booking.bookedAt, timezone: booking.occurrence.timezone })}
               </p>
               <span className="mt-2 inline-block text-xs font-black uppercase tracking-widest">{booking.status}</span>
+              <CancellationTimestamp value={booking.cancelledAt} />
             </div>
             {booking.status === 'CONFIRMED' && booking.occurrence.startAt > now && memberBookingActions(booking, decision)}
           </article>

@@ -166,19 +166,108 @@ async function notifyPaymentFailure(
   });
 }
 
+/** Native VIP only. Purchase locking also covers invoice-before-checkout and sync races.
+ * Keep ordering markers beside policy acceptance without replacing accepted terms.
+ * Webhook serializable retries handle snapshot conflicts; default-isolation sync
+ * checkout UPDATEs lock this same purchase row before touching membership state.
+ */
+async function nativeVipEntitlementDecision(
+  tx: Prisma.TransactionClient,
+  event: Stripe.Event,
+  action: Extract<ReturnType<typeof deriveStripeEventAction>, { type: 'INVOICE_PAID' | 'INVOICE_FAILED' | 'SUBSCRIPTION_CHANGED' }>,
+  membership: { id: string; purchaseId: string | null },
+) {
+  if (!membership.purchaseId) return { apply: false, settled: false, periodStart: null };
+  await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${membership.purchaseId} FOR UPDATE`;
+  const purchase = await tx.purchase.findUnique({ where: { id: membership.purchaseId }, include: { creditAccount: true } });
+  const fresh = await tx.membership.findUnique({ where: { id: membership.id } });
+  if (!purchase || !fresh) return { apply: false, settled: false, periodStart: null };
+  const acceptance = purchase.policyAcceptance && typeof purchase.policyAcceptance === 'object' && !Array.isArray(purchase.policyAcceptance)
+    ? purchase.policyAcceptance : {};
+  const rawState = acceptance.nativeVipEntitlement;
+  const state = rawState && typeof rawState === 'object' && !Array.isArray(rawState) ? rawState : {};
+  const paidEnd = Math.max(Number(state.paidEnd || 0), (purchase.creditAccount?.validUntil?.getTime() ?? 0) / 1000);
+  const paidAt = Math.max(Number(state.paidAt || 0), (purchase.paidAt?.getTime() ?? 0) / 1000);
+  const lifecycleAt = Number(state.lifecycleAt || 0);
+  const restrictiveAt = Number(state.restrictiveAt || 0);
+  const restrictiveEnd = Number(state.restrictiveEnd || 0);
+  const explicitlyRestricted = ['CANCELLED', 'PAUSED', 'EXPIRED'].includes(fresh.status);
+  const object = event.data.object as unknown as StripeObject;
+  const save = (next: Record<string, number | string>) => tx.purchase.update({ where: { id: purchase.id },
+    data: { policyAcceptance: { ...acceptance, nativeVipEntitlement: { ...state, ...next } } } });
+  if (action.type === 'INVOICE_PAID') {
+    const recorded = await tx.paymentRecord.findUnique({ where: { stripeInvoiceId: action.invoiceId } });
+    const settled = Boolean(recorded && ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(recorded.status));
+    if (settled) return { apply: false, settled: true, periodStart: null };
+    const recurring = object.lines?.data?.filter((item: StripeObject) => item.type === 'subscription' || item.parent?.type === 'subscription_item_details');
+    const line = object.lines?.data?.length === 1 ? object.lines.data[0] : recurring?.length === 1 ? recurring[0] : null;
+    const start = Number(line?.period?.start);
+    const end = Number(line?.period?.end);
+    const invoicePaidAt = Number(object.status_transitions?.paid_at);
+    // No fallback to subscription dates or event delivery time as payment proof.
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start ||
+        !Number.isFinite(invoicePaidAt) || object.status !== 'paid' ||
+        !(object.amount_paid > 0 || (object.amount_paid === 0 && object.amount_due === 0))) {
+      return { apply: false, settled: false, periodStart: null };
+    }
+    // Paid proof can clear dunning, including a failure/settlement in the same
+    // Stripe timestamp second. It never overrides an explicit lifecycle block.
+    // An approved local resume changes fresh.status to ACTIVE; obsolete block
+    // dates must then not poison a genuinely paid renewal. Stripe ACTIVE alone
+    // never performs that resume or extends the account's paid window.
+    const dunningAllowsPayment = fresh.status !== 'PAST_DUE' ||
+      (invoicePaidAt >= restrictiveAt && (!restrictiveEnd || end >= restrictiveEnd));
+    const apply = !explicitlyRestricted && end > paidEnd && invoicePaidAt >= paidAt && dunningAllowsPayment;
+    if (apply) {
+      await save({ paidEnd: end, paidAt: invoicePaidAt, invoiceId: action.invoiceId });
+      await tx.purchase.update({ where: { id: purchase.id }, data: { status: 'PAID', paidAt: purchase.paidAt ?? new Date(invoicePaidAt * 1000) } });
+    }
+    return { apply, settled: false, periodStart: new Date(start * 1000), periodEnd: new Date(end * 1000) };
+  }
+  if (action.type === 'INVOICE_FAILED') {
+    const recorded = await tx.paymentRecord.findUnique({ where: { stripeInvoiceId: action.invoiceId } });
+    const settled = Boolean(recorded && ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(recorded.status));
+    const apply = !explicitlyRestricted && !settled && event.created > Math.max(paidAt, lifecycleAt) &&
+      event.created >= paidEnd && action.currentPeriodEnd.getTime() / 1000 > paidEnd;
+    if (apply) {
+      await tx.membership.update({ where: { id: fresh.id }, data: { status: 'PAST_DUE' } });
+      await save({ lifecycleAt: event.created, restrictiveAt: event.created, restrictiveEnd: action.currentPeriodEnd.getTime() / 1000 });
+    }
+    return { apply, settled, periodStart: null };
+  }
+  const end = action.currentPeriodEnd.getTime() / 1000;
+  if (event.created < Math.max(paidAt, lifecycleAt) || end < paidEnd) return { apply: false, settled: false, periodStart: null };
+  const restrictive = !['ACTIVE', 'TRIALING'].includes(action.status);
+  // Dunning cannot revoke time already paid; cancellation/pause remain explicit restrictions.
+  const applyRestriction = restrictive && (action.status !== 'PAST_DUE' ||
+    (!explicitlyRestricted && event.created > paidAt && event.created >= paidEnd));
+  await tx.membership.update({ where: { id: fresh.id }, data: {
+    cancelAtPeriodEnd: action.cancelAtPeriodEnd,
+    ...(applyRestriction ? { status: action.status } : {}),
+  } });
+  await save({ lifecycleAt: event.created, ...(applyRestriction ? { restrictiveAt: event.created, restrictiveEnd: end } : {}) });
+  return { apply: false, settled: false, periodStart: null };
+}
+
 async function fulfillProductPurchase(
   tx: Prisma.TransactionClient,
   event: Stripe.Event,
   action: Extract<ReturnType<typeof deriveStripeEventAction>, { type: 'CHECKOUT_PAID' }>,
 ) {
   if (!action.purchaseId) return;
+  let prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true } });
+  if (prior?.product.kind === 'VIP') {
+    await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${action.purchaseId} FOR UPDATE`;
+    prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true } });
+  }
+  const settledNative = prior?.product.kind === 'VIP' && prior.paidAt ? prior : null;
   const purchase = await tx.purchase.update({
     where: { id: action.purchaseId },
     data: {
-      status: 'PAID',
-      paidAt: action.occurredAt,
+      status: settledNative?.status ?? 'PAID',
+      paidAt: settledNative?.paidAt ?? action.occurredAt,
       stripeCheckoutSessionId: action.sessionId,
-      stripePaymentIntentId: action.paymentIntentId,
+      stripePaymentIntentId: settledNative ? settledNative.stripePaymentIntentId : action.paymentIntentId,
     },
     include: { product: true, user: true },
   });
@@ -190,7 +279,7 @@ async function fulfillProductPurchase(
     const membership = await tx.membership.upsert({
       where: { purchaseId: purchase.id },
       update: {
-        status: purchase.product.kind === 'INTRO_TRIAL' ? 'TRIALING' : 'ACTIVE',
+        ...(purchase.product.kind === 'VIP' ? {} : { status: purchase.product.kind === 'INTRO_TRIAL' ? 'TRIALING' as const : 'ACTIVE' as const }),
         stripeSubscriptionId: action.subscriptionId,
       },
       create: {
@@ -509,10 +598,13 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
     if (!membership && action.purchaseId) {
       const purchase = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true } });
       if (purchase && purchase.product.billingInterval !== 'ONE_TIME') {
-        await tx.purchase.update({ where: { id: purchase.id }, data: { status: 'PAID', paidAt: action.occurredAt } });
+        if (purchase.product.kind === 'VIP') {
+          await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${purchase.id} FOR UPDATE`;
+        }
+        await tx.purchase.update({ where: { id: purchase.id }, data: { status: 'PAID', paidAt: purchase.product.kind === 'VIP' ? purchase.paidAt ?? action.occurredAt : action.occurredAt } });
         await tx.membership.upsert({
           where: { purchaseId: purchase.id },
-          update: { stripeSubscriptionId: action.subscriptionId, status: 'ACTIVE', currentPeriodEnd: action.currentPeriodEnd },
+          update: { stripeSubscriptionId: action.subscriptionId, ...(purchase.product.kind === 'VIP' ? {} : { status: 'ACTIVE' as const, currentPeriodEnd: action.currentPeriodEnd }) },
           create: {
             userId: purchase.userId,
             productId: purchase.productId,
@@ -531,27 +623,32 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
       }
     }
     if (!membership) return;
-    if (membership.purchaseId && action.paymentIntentId) {
+    const nativeVip = membership.product.kind === 'VIP';
+    const entitlement = nativeVip ? await nativeVipEntitlementDecision(tx, event, action, membership) : null;
+    if (entitlement?.settled) return;
+    const paidPeriodEnd = entitlement?.periodEnd ?? action.currentPeriodEnd;
+    if ((!nativeVip || entitlement?.apply) && membership.purchaseId && action.paymentIntentId) {
       await tx.purchase.update({
         where: { id: membership.purchaseId },
         data: { stripePaymentIntentId: action.paymentIntentId },
       });
     }
-    await tx.membership.update({
+    if (!nativeVip || entitlement?.apply) await tx.membership.update({
       where: { id: membership.id },
-      data: { status: 'ACTIVE', currentPeriodStart: action.occurredAt, currentPeriodEnd: action.currentPeriodEnd },
+      data: { status: 'ACTIVE', currentPeriodStart: entitlement?.periodStart ?? action.occurredAt, currentPeriodEnd: paidPeriodEnd },
     });
     const invoiceCredits = creditGrantForPayment(membership.product, 'INVOICE');
-    if (membership.purchaseId && (invoiceCredits || membership.product.isUnlimited)) {
+    if ((!nativeVip || entitlement?.apply) && membership.purchaseId && (invoiceCredits || membership.product.isUnlimited)) {
       const account = await tx.creditAccount.upsert({
         where: { sourcePurchaseId: membership.purchaseId },
-        update: { isUnlimited: membership.product.isUnlimited, validUntil: action.currentPeriodEnd },
+        update: { isUnlimited: membership.product.isUnlimited, validUntil: paidPeriodEnd, ...(entitlement?.periodStart ? { validFrom: entitlement.periodStart } : {}) },
         create: {
           userId: membership.userId,
           sourcePurchaseId: membership.purchaseId,
           label: membership.product.name,
           isUnlimited: membership.product.isUnlimited,
-          validUntil: action.currentPeriodEnd,
+          ...(entitlement?.periodStart ? { validFrom: entitlement.periodStart } : {}),
+          validUntil: paidPeriodEnd,
         },
         include: { entries: true },
       });
@@ -637,9 +734,12 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
     return;
   }
   if (action.type === 'INVOICE_FAILED' && action.subscriptionId) {
-    const membership = await tx.membership.findUnique({ where: { stripeSubscriptionId: action.subscriptionId }, include: { user: true } });
+    const membership = await tx.membership.findUnique({ where: { stripeSubscriptionId: action.subscriptionId }, include: { user: true, product: true } });
     if (!membership) return;
-    await tx.membership.update({ where: { id: membership.id }, data: { status: 'PAST_DUE' } });
+    const nativeVip = membership.product?.kind === 'VIP';
+    const entitlement = nativeVip ? await nativeVipEntitlementDecision(tx, event, action, membership) : null;
+    if (entitlement?.settled) return;
+    if (!nativeVip) await tx.membership.update({ where: { id: membership.id }, data: { status: 'PAST_DUE' } });
     await tx.paymentRecord.upsert({
       where: { stripeInvoiceId: action.invoiceId },
       update: {
@@ -666,10 +766,15 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
         occurredAt: action.occurredAt,
       },
     });
-    await notifyPaymentFailure(tx, membership.user, action.amountCents);
+    if (!nativeVip || entitlement?.apply) await notifyPaymentFailure(tx, membership.user, action.amountCents);
     return;
   }
   if (action.type === 'SUBSCRIPTION_CHANGED') {
+    const membership = await tx.membership.findUnique({ where: { stripeSubscriptionId: action.subscriptionId }, include: { product: true } });
+    if (membership?.product.kind === 'VIP') {
+      await nativeVipEntitlementDecision(tx, event, action, membership);
+      return;
+    }
     await tx.membership.updateMany({
       where: { stripeSubscriptionId: action.subscriptionId },
       data: {

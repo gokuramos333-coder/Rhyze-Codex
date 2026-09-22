@@ -48,7 +48,7 @@ describe('Somble account invitation batch', () => {
         listCandidates: async () => candidates,
         issueClaim: async (userId) => {
           writes.push(`claim:${userId}`);
-          return { rawToken: 'secret', expiresAt: new Date() };
+          return { rawToken: 'secret', expiresAt: new Date(), email: 'member@example.com' };
         },
         queueInvite: async ({ userId }) => {
           writes.push(`email:${userId}`);
@@ -75,6 +75,7 @@ describe('Somble account invitation batch', () => {
           writes.push(`claim:${userId}`);
           return {
             rawToken: 'private-token',
+            email: 'member@example.com',
             expiresAt: new Date('2026-08-26T18:00:00.000Z'),
           };
         },

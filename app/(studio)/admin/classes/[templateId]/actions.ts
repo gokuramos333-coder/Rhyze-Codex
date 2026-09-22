@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { requireAssignableInstructor } from '@/lib/domain/instructors/assignment';
-import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
+import { putPublicImage } from '@/lib/storage/object-storage';
 import {
   parseClassPriceCents,
   shouldSyncOccurrencePrice,
@@ -21,7 +21,9 @@ export async function updateClassTemplateAction(formData: FormData) {
     redirect(`/admin/classes/${id}?error=price`);
   }
   const image = formData.get('image');
-  let imageUrl = String(formData.get('imageUrl') || '').trim() || null;
+  let imageUrl = formData.has('imageUrl')
+    ? String(formData.get('imageUrl') || '').trim() || null
+    : current.imageUrl;
   if (image instanceof File && image.size > 0) {
     try {
       imageUrl = await putPublicImage(image);
@@ -76,13 +78,6 @@ export async function updateClassTemplateAction(formData: FormData) {
       data: { priceCents: dropInPriceCents },
     }),
   ]);
-  if (
-    imageUrl !== current.imageUrl &&
-    (current.imageUrl?.startsWith('/uploads/') ||
-      current.imageUrl?.startsWith('/api/media/'))
-  ) {
-    await deleteObject(current.imageUrl);
-  }
   revalidatePath('/admin/classes');
   revalidatePath('/admin/events');
   revalidatePath('/schedule');

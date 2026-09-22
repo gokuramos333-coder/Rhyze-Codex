@@ -11,7 +11,8 @@ import {
 import { categoryLabel, classes, getClass } from '@/lib/classes';
 import {
   complimentaryStandardAccessCanBook,
-  instructorAugustStandardClassAccess,
+  instructorStandardClassAccess,
+  creditAccountCanBook,
   standardSingleClassCreditCanBook,
 } from '@/lib/domain/bookings/booking-rules';
 import { instructors } from '@/lib/instructors';
@@ -19,6 +20,9 @@ import { ownedSchedule } from '@/lib/rhyze-platform';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db/prisma';
+import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
+import { vipCreditAccountCanBook, vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
+import { evaluateIntroTrialBooking } from '@/lib/domain/bookings/intro-trial-rules';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { occurrenceInstructorName, occurrenceLocalTimeZone, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 
@@ -50,7 +54,7 @@ export default async function BookingPage(
   if (!cls) notFound();
   const session = await auth();
   const now = new Date();
-  const [occurrence, bookingProducts, activeMembership, creditAccounts] = await Promise.all([
+  const [occurrence, bookingProducts, currentUser, creditAccounts] = await Promise.all([
     prisma.classOccurrence.findFirst({
       where: {
         template: { slug: params.slug },
@@ -61,7 +65,7 @@ export default async function BookingPage(
       },
       orderBy: { startAt: 'asc' },
       include: {
-        template: { select: { isEvent: true, durationMinutes: true, name: true } },
+        template: { select: { isEvent: true, durationMinutes: true, name: true, imageUrl: true } },
         instructor: { include: { instructorProfile: true } },
         series: { select: { recurrenceRule: true } },
         _count: {
@@ -94,12 +98,9 @@ export default async function BookingPage(
       orderBy: [{ displayOrder: 'asc' }, { priceCents: 'asc' }],
     }),
     session?.user?.id
-      ? prisma.membership.findFirst({
-          where: {
-            userId: session.user.id,
-            status: { in: ['TRIALING', 'ACTIVE'] },
-          },
-          include: { product: true },
+      ? prisma.user.findUnique({
+          where: { id: session.user.id },
+          include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } },
         })
       : Promise.resolve(null),
     session?.user?.id
@@ -112,12 +113,16 @@ export default async function BookingPage(
           include: {
             entries: true,
             sourcePurchase: {
-              include: { product: { select: { kind: true, customPlanType: true } } },
+              include: { membership: { select: { id: true, status: true } }, product: { select: { kind: true, customPlanType: true } } },
             },
           },
         })
       : Promise.resolve([]),
   ]);
+  const activeMembership = currentUser?.memberships.find(m =>
+    ['ACTIVE', 'TRIALING'].includes(m.status) && (!m.currentPeriodEnd || m.currentPeriodEnd > now));
+  const trial = currentUser?.memberships.find(m => m.product.kind === 'INTRO_TRIAL' && ['ACTIVE', 'TRIALING'].includes(m.status));
+  const trialAccess = trial && occurrence ? evaluateIntroTrialBooking({ activatedAt: trial.activatedAt, occurrenceStartsAt: occurrence.startAt, now, isEvent: occurrence.template.isEvent }).allowed : false;
   const eligibleCreditAccounts = occurrence
     ? creditAccounts.filter((account) => {
         const productKind = account.sourcePurchase?.product.kind ?? null;
@@ -126,7 +131,10 @@ export default async function BookingPage(
           isEvent: occurrence.template.isEvent,
           durationMinutes: occurrence.template.durationMinutes,
         });
-        return productAllowsOccurrence && (productKind !== 'DROP_IN' || standardSingleClassCreditCanBook({
+        return currentUser?.status === 'ACTIVE' && productAllowsOccurrence &&
+          creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
+          vipCreditAccountCanBook({ account, memberships: currentUser.memberships, now, occurrenceStartsAt: occurrence.startAt }) &&
+          (productKind !== 'INTRO_TRIAL' || trialAccess) && (productKind !== 'DROP_IN' || standardSingleClassCreditCanBook({
           productKind,
           paidAt: account.sourcePurchase?.paidAt,
           occurrenceStartsAt: occurrence.startAt,
@@ -135,13 +143,6 @@ export default async function BookingPage(
         }));
       })
     : creditAccounts;
-  const occurrenceAllowsPlan = (customPlanType: string | null | undefined) => occurrence
-    ? complimentaryStandardAccessCanBook({
-        customPlanType,
-        isEvent: occurrence.template.isEvent,
-        durationMinutes: occurrence.template.durationMinutes,
-      })
-    : true;
   const availableCredits = eligibleCreditAccounts.reduce(
     (total, account) =>
       total +
@@ -152,22 +153,20 @@ export default async function BookingPage(
   );
   const hasUnlimitedAccess =
     eligibleCreditAccounts.some((account) => account.isUnlimited) ||
-    (activeMembership?.product.isUnlimited && occurrenceAllowsPlan(activeMembership.product.customPlanType)) ||
-    activeMembership?.product.kind === 'INTRO_TRIAL';
-  const hasInstructorAugustStandardAccess = occurrence
-    ? instructorAugustStandardClassAccess({
-        role: session?.user?.role,
-        occurrenceStartsAt: occurrence.startAt,
+    (currentUser?.status === 'ACTIVE' && trialAccess);
+  const hasInstructorStandardAccess = occurrence
+    ? instructorStandardClassAccess({
+        user: currentUser,
         isEvent: occurrence.template.isEvent,
       })
     : false;
   const hasMembershipAccess = Boolean(
-    hasInstructorAugustStandardAccess ||
+    hasInstructorStandardAccess ||
     hasUnlimitedAccess ||
     availableCredits > 0,
   );
-  const creditDisplay = hasInstructorAugustStandardAccess
-    ? 'Instructor August access: standard classes are free'
+  const creditDisplay = hasInstructorStandardAccess
+    ? 'Instructor access: regular classes are free (events excluded)'
     : hasUnlimitedAccess
     ? 'Unlimited standard classes available'
     : `${availableCredits} credit${availableCredits === 1 ? '' : 's'} remaining`;
@@ -207,10 +206,11 @@ export default async function BookingPage(
     occurrence ? occurrenceInstructorName(occurrence) :
     matchingSlot?.instructor ??
     [instructor?.firstName, instructor?.lastName].filter(Boolean).join(' ');
-  const instructorPhoto =
-    occurrence?.instructor?.instructorProfile?.photoUrl ??
-    matchingSlot?.photo ??
-    instructor?.photo;
+  const artworkTemplate = occurrence?.template ?? await prisma.classTemplate.findFirst({
+    where: { slug: params.slug, isActive: true, archivedAt: null },
+    select: { imageUrl: true },
+  });
+  const instructorPhoto = resolveClassArtwork({ ...occurrence, template: artworkTemplate }, instructorName);
   const bookingTitle = occurrence ? occurrenceTitle(occurrence) : stripInstructorFromTitle(cls.name);
   const occurrenceBookingCount = occurrence
     ? occurrence._count.bookings + occurrence.historicalSignupCount
@@ -249,7 +249,8 @@ export default async function BookingPage(
                   <div className="relative h-72 overflow-hidden rounded-2xl border border-rhyze-gold/35 bg-rhyze-black">
                     <Image
                       src={instructorPhoto}
-                      alt={`${instructorName} instructor photo`}
+                      alt={`${bookingTitle} class artwork`}
+                      unoptimized={instructorPhoto.startsWith('/api/media/')}
                       fill
                       sizes="(min-width: 640px) 260px, calc(100vw - 72px)"
                       className="object-cover object-top"

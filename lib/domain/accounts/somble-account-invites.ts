@@ -9,7 +9,7 @@ export type SombleInviteCandidate = {
 
 export type SombleInviteDependencies = {
   listCandidates(): Promise<SombleInviteCandidate[]>;
-  issueClaim(userId: string): Promise<{ rawToken: string; expiresAt: Date }>;
+  issueClaim(userId: string, expectedEmail: string): Promise<{ rawToken: string; expiresAt: Date; email: string }>;
   queueInvite(input: {
     userId: string;
     email: string;
@@ -59,10 +59,10 @@ export async function runSombleAccountInviteBatch(
   let queued = 0;
   if (options.apply) {
     for (const candidate of eligible) {
-      const claim = await dependencies.issueClaim(candidate.id);
+      const claim = await dependencies.issueClaim(candidate.id, candidate.email);
       await dependencies.queueInvite({
         userId: candidate.id,
-        email: candidate.email,
+        email: claim.email,
         name: candidate.name,
         activationUrl: `/claim-account/${encodeURIComponent(claim.rawToken)}`,
         expiresAt: claim.expiresAt,

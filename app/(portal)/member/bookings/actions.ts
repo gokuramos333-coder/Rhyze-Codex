@@ -8,7 +8,7 @@ import {
   complimentaryStandardAccessCanBook,
   creditAccountCanBook,
   eventCreditCanBook,
-  instructorAugustStandardClassAccess,
+  instructorStandardClassAccess,
   standardSingleClassCreditCanBook,
   waitlistAvailability,
   EVENT_CREDIT_LABEL_PREFIX,
@@ -26,6 +26,7 @@ import {
 } from '@/lib/domain/bookings/intro-trial-rules';
 import { bookingWaiverDestination } from '@/lib/domain/waivers/acceptance';
 import { availableMembershipCredits } from '@/lib/domain/credits/membership-renewal';
+import { vipCreditAccountCanBook, vipCreditBenefit, vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
 import { notifyAdminBookingCancellation } from '@/lib/notifications/admin-booking-cancellations';
 import { bookingAccessType, bookingPolicySnapshotWithAccess } from '@/lib/domain/bookings/booking-access';
 import {
@@ -74,6 +75,13 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       include: { template: true, instructor: { select: { name: true } } },
     });
     if (!occurrence || occurrence.status !== 'SCHEDULED') return 'unavailable';
+    const now = new Date();
+    const currentUser = await tx.user.findUnique({
+      where: { id: user.id },
+      include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } },
+    });
+    if (!currentUser || currentUser.status !== 'ACTIVE') return 'access';
+    const instructorAccess = instructorStandardClassAccess({ user: currentUser, isEvent: occurrence.template.isEvent });
 
     const activeWaiver = await tx.waiverVersion.findFirst({
       where: { isActive: true, requiresSign: true },
@@ -198,7 +206,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { status: true } },
+            membership: { select: { id: true, status: true } },
             product: { select: { includedCredits: true, kind: true, customPlanType: true } },
           },
         },
@@ -236,6 +244,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           productAllowsOccurrence &&
           validEventAccess &&
           creditAccountCanBook({ membershipStatus: item.sourcePurchase?.membership?.status ?? null }) &&
+          vipCreditAccountCanBook({ account: item, memberships: currentUser.memberships, now, occurrenceStartsAt: occurrence.startAt }) &&
           validSingleClassCredit &&
           validIntroTrialCredit &&
           (item.isUnlimited ||
@@ -246,20 +255,15 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         );
       },
     );
-    const instructorAugustAccess = instructorAugustStandardClassAccess({
-      role: user.role,
-      occurrenceStartsAt: occurrence.startAt,
-      isEvent: occurrence.template.isEvent,
-    });
-    if (!account && !instructorAugustAccess && (!trialAccess || !trialAccess.allowed)) {
+    if (!account && !instructorAccess && (!trialAccess || !trialAccess.allowed)) {
       if (trialAccess?.reason === 'not-open') return 'trial-not-open';
       if (trialAccess?.reason === 'event-excluded') return 'trial-event';
       if (trialAccess?.reason === 'outside-window' || trialAccess?.reason === 'expired') return 'trial-window';
       return 'access';
     }
-    const accessProductKind = account?.sourcePurchase?.product.kind
-      ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null);
-    const accessType = instructorAugustAccess
+    const accessProductKind = instructorAccess ? null : (account && vipCreditBenefit(account) ? 'VIP' : account?.sourcePurchase?.product.kind
+      ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null));
+    const accessType = instructorAccess
       ? 'COMPLIMENTARY'
       : accessTypeForProductKind(accessProductKind);
     const booking = await tx.booking.create({
@@ -267,13 +271,13 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         occurrenceId,
         userId: user.id,
         policySnapshot: bookingPolicySnapshotWithAccess({
-          currentSnapshot: null,
+          currentSnapshot: { creditAccountId: instructorAccess ? null : account?.id ?? null },
           accessType,
           accessProductKind,
         }),
       },
     });
-    if (trial && trialAccess?.allowed && !trial.activatedAt) {
+    if (!instructorAccess && trial && trialAccess?.allowed && !trial.activatedAt) {
       await tx.membership.update({
         where: { id: trial.id },
         data: {
@@ -339,7 +343,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       scheduledFor: new Date(occurrence.startAt.getTime() - 24 * 60 * 60 * 1000),
       dedupeKey: `class-reminder:${booking.id}:${occurrence.id}`,
     });
-    if (account && !account.isUnlimited) {
+    if (!instructorAccess && account && !account.isUnlimited) {
       await tx.creditLedgerEntry.create({
         data: {
           creditAccountId: account.id,

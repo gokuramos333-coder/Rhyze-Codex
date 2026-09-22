@@ -11,7 +11,7 @@ import {
   InvalidPasswordError,
 } from '@/lib/domain/accounts/account-service';
 import { prismaAccountRepository } from '@/lib/domain/accounts/prisma-account-repository';
-import { issueAccountClaim } from '@/lib/domain/accounts/account-claim-service';
+import { AccountClaimError, issueAccountClaim } from '@/lib/domain/accounts/account-claim-service';
 import { prismaAccountClaimRepository } from '@/lib/domain/accounts/prisma-account-claim-repository';
 import {
   requestPasswordReset,
@@ -178,10 +178,16 @@ export async function forgotPasswordAction(formData: FormData): Promise<void> {
       invitedUser.status === 'INVITED' &&
       !invitedUser.passwordHash
     ) {
-      const claim = await issueAccountClaim(invitedUser.id, prismaAccountClaimRepository);
+      let claim: Awaited<ReturnType<typeof issueAccountClaim>>;
+      try {
+        claim = await issueAccountClaim(invitedUser.id, prismaAccountClaimRepository, new Date(), invitedUser.email);
+      } catch (error) {
+        if (error instanceof AccountClaimError) redirect('/forgot-password?sent=1');
+        throw error;
+      }
       await queueEmail(prisma, {
         userId: invitedUser.id,
-        to: invitedUser.email,
+        to: claim.email,
         subject: 'Your new My Rhyze Fitness account is ready!',
         template: 'ACCOUNT_ACTIVATION',
         payload: {

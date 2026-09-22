@@ -20,6 +20,7 @@ const statusStyles: Record<string, string> = {
   cancelled: 'border-red-700/20 bg-red-100 text-red-900',
   'late_cancelled': 'border-red-700/20 bg-red-100 text-red-900',
   'late cancelled': 'border-red-700/20 bg-red-100 text-red-900',
+  'late cancellation': 'border-red-700/20 bg-red-100 text-red-900',
   'no_show': 'border-red-700/20 bg-red-100 text-red-900',
   'no show': 'border-red-700/20 bg-red-100 text-red-900',
   paused: 'border-amber-700/20 bg-amber-100 text-amber-950',

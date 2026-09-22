@@ -7,6 +7,7 @@ import {
   productAvailabilityMessage,
 } from '@/lib/catalog/product-availability';
 import { productCheckoutCadence } from '@/lib/catalog/product-cadence';
+import { publicMembershipDescription } from '@/lib/catalog/membership-copy';
 import {
   isRhyze2026PromoEligibleProduct,
   shouldShowRhyze2026PromoCopy,
@@ -55,7 +56,7 @@ export default async function MembershipsPage() {
             <article key={product.id} className="flex flex-col border-t-4 border-rhyze-orange bg-rhyze-charcoal p-6">
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-gold">{product.kind.replaceAll('_',' ')}</p>
               <h2 className="mt-3 font-display text-4xl tracking-wider">{product.name}</h2>
-              <p className="mt-3 flex-1 text-sm text-rhyze-cream/60">{removeExpiredRhyze2026PromoCopy(product.description, now)}</p>
+              <p className="mt-3 flex-1 text-sm text-rhyze-cream/60">{removeExpiredRhyze2026PromoCopy(publicMembershipDescription(product.description), now)}</p>
               {promoEligible && (
                 <p className="mt-3 rounded bg-rhyze-gold/15 px-3 py-2 text-xs font-black uppercase tracking-widest text-rhyze-gold">
                   Labor Day sale: use RHYZE2026 for 20% off the first 2 months

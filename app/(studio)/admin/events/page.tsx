@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { prisma } from '@/lib/db/prisma';
+import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { createClassTemplateAction, deleteClassTemplateAction } from '../classes/actions';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
@@ -218,18 +219,14 @@ export default async function AdminEventsPage(
           return (
           <article key={event.id} className="grid gap-3 border-l-4 border-rhyze-gold bg-white p-5 md:grid-cols-[1fr_auto] md:items-center">
             <div className="grid gap-4 sm:grid-cols-[3.5rem_1fr] sm:items-center">
-              {occurrence?.instructor?.instructorProfile?.photoUrl ? (
                 <Image
-                  src={occurrence.instructor.instructorProfile.photoUrl}
+                  src={resolveClassArtwork({ ...occurrence, template: event })}
                   alt=""
                   width={56}
                   height={56}
-                  unoptimized={occurrence.instructor.instructorProfile.photoUrl.startsWith('/api/media/')}
+                  unoptimized={resolveClassArtwork({ ...occurrence, template: event }).startsWith('/api/media/')}
                   className="h-14 w-14 object-cover"
                 />
-              ) : (
-                <span className="grid h-14 w-14 place-items-center bg-rhyze-orange/10 font-display text-2xl">{(occurrence?.instructor?.name || 'T').slice(0, 1)}</span>
-              )}
               <div>
               <h2 className="font-display text-3xl tracking-wider">{event.name}</h2>
               <p className="mt-2 text-sm">${((event.dropInPriceCents || 0) / 100).toFixed(2)} · {event.durationMinutes} minutes · {event._count.occurrences} dates · {signups} signups</p>

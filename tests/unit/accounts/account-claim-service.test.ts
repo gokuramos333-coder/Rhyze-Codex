@@ -37,7 +37,7 @@ function repository(options?: { eligible?: boolean }): AccountClaimRepository & 
     async findEligibleUserById(userId: string) {
       return options?.eligible === false
         ? null
-        : { id: userId, email: 'member@example.com' };
+        : { id: userId, email: 'member@example.com', credentialFingerprint: 'test-fingerprint' };
     },
     async replaceToken(input: {
       userId: string;
@@ -52,6 +52,7 @@ function repository(options?: { eligible?: boolean }): AccountClaimRepository & 
         expiresAt: input.expiresAt,
         usedAt: null,
       };
+      return true;
     },
     async findTokenByHash(tokenHash: string) {
       return tokenHash === repo.storedHash ? repo.stored : null;
