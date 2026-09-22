@@ -113,6 +113,10 @@ describe('release input and production isolation', () => {
     const command = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
       .scripts['deploy:production'];
     const [bin, ...args] = command.split(' ');
+    // Never execute an arbitrary changed npm command in a regression test: a
+    // reversion to raw `netlify deploy` must fail BEFORE any child is started.
+    expect(bin).toBe('tsx');
+    expect(args).toEqual(['scripts/release/production.ts', 'publish']);
     let result = '';
     try {
       execFileSync(resolve('node_modules/.bin', bin), args, {
