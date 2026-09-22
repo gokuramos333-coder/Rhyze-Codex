@@ -851,6 +851,25 @@ model StripeEvent {
   @@index([type, createdAt])
 }
 
+model CallbackRequest {
+  id             String   @id @default(cuid())
+  requestKey     String   @unique
+  startAt        DateTime @unique
+  endAt          DateTime
+  name           String
+  email          String
+  phone          String
+  message        String
+  clientHash     String?
+  emailMessageId String   @unique
+  createdAt      DateTime @default(now())
+
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Restrict)
+
+  @@index([email, createdAt])
+  @@index([clientHash, createdAt])
+}
+
 model EmailMessage {
   id           String         @id @default(cuid())
   userId       String?
@@ -882,6 +901,7 @@ model EmailMessage {
 
   user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   attachments EmailAttachment[]
+  callbackRequest CallbackRequest?
 
   @@index([status, scheduledFor])
   @@index([userId, createdAt])

@@ -23,8 +23,20 @@ export const site = {
     url: 'https://instagram.com/rhyze.fitness',
   },
   hours: [
-    { days: 'Mon - Fri', hours: '7:00 AM - 8:00 PM' },
-    { days: 'Sat - Sun', hours: '8:00 AM - 2:00 PM' },
+    {
+      days: 'Mon - Fri',
+      hours: '7:00 AM - 8:00 PM',
+      weekdays: [1, 2, 3, 4, 5],
+      openMinute: 420,
+      closeMinute: 1200,
+    },
+    {
+      days: 'Sat - Sun',
+      hours: '8:00 AM - 2:00 PM',
+      weekdays: [0, 6],
+      openMinute: 480,
+      closeMinute: 840,
+    },
   ],
 } as const;
 

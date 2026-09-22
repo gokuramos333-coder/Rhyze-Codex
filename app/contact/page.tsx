@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import { Instagram, Mail, Phone, MapPin, Clock } from 'lucide-react';
 import { ContactForm } from '@/components/sections/ContactForm';
+import { CallbackScheduler } from '@/components/sections/CallbackScheduler';
 import { LocationBlock } from '@/components/sections/LocationBlock';
 import { site } from '@/lib/site';
 
@@ -28,6 +29,8 @@ export default function ContactPage() {
           sessions. We answer every message, usually within 24 hours.
         </p>
       </section>
+
+      <CallbackScheduler />
 
       <section className="mx-auto mt-16 max-w-7xl px-6">
         <div className="grid gap-10 lg:grid-cols-5">

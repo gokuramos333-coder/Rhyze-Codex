@@ -10,6 +10,7 @@ import {
 import { EMAIL_TEMPLATE_REVISION, isEmailTemplateKey } from '@/lib/notifications/email-templates';
 import { classReminderIsDeliverable } from '@/lib/notifications/class-reminder-delivery';
 import { accountTokenEmailIsDeliverable } from '@/lib/domain/accounts/account-token-delivery';
+import { CALLBACK_EMAIL_PREFIX, callbackStaleLease, deliverCallbackEmail } from '@/lib/domain/contact/callback-email';
 
 export async function POST(request: Request) {
   const authorization = request.headers.get('authorization');
@@ -31,8 +32,10 @@ export async function POST(request: Request) {
   const resumeAt = emailDeliveryResumeAt();
   const due = await prisma.emailMessage.findMany({
     where: {
-      status: 'QUEUED',
-      scheduledFor: { lte: new Date() },
+      OR: [
+        { status: 'QUEUED', scheduledFor: { lte: new Date() } },
+        callbackStaleLease(new Date()),
+      ],
       ...(resumeAt ? { createdAt: { gte: resumeAt } } : {}),
     },
     orderBy: { scheduledFor: 'asc' },
@@ -56,6 +59,12 @@ export async function POST(request: Request) {
   let failed = 0;
   let cancelled = 0;
   for (const message of deliverable) {
+    if (message.dedupeKey?.startsWith(CALLBACK_EMAIL_PREFIX)) {
+      const outcome = await deliverCallbackEmail(prisma, message.id).catch(() => 'failed' as const);
+      if (outcome === 'sent') delivered += 1;
+      if (outcome === 'failed') failed += 1;
+      continue;
+    }
     const claimed = await prisma.emailMessage.updateMany({
       where: { id: message.id, status: 'QUEUED' },
       data: { status: 'PROCESSING', attempts: { increment: 1 } },
