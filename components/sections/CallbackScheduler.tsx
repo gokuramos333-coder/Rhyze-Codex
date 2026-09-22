@@ -230,9 +230,10 @@ export function CallbackScheduler() {
                 01 / Choose your day & time
               </p>
               <p className="mb-5 text-xs leading-relaxed text-rhyze-cream/65">
-                All times are Eastern (New Jersey). Available within the next 30
-                days, with at least one hour&apos;s notice. Class and event
-                times, plus a 15-minute buffer, are excluded.
+                All times are Eastern (New Jersey). Callbacks start at 9:00 AM
+                every day. Available within the next 30 days, with at least one
+                hour&apos;s notice. Class and event times, plus a 15-minute
+                buffer, are excluded.
               </p>
               {loading && (
                 <p role="status" className="py-4 text-sm text-rhyze-gold">

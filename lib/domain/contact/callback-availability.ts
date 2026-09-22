@@ -6,6 +6,7 @@ export const CALLBACK_MINUTES = 15;
 export const CALLBACK_BUFFER_MINUTES = 15;
 export const CALLBACK_NOTICE_MINUTES = 60;
 export const CALLBACK_DAYS = 30;
+const CALLBACK_OPEN_MINUTE = 9 * 60;
 const MINUTE = 60_000;
 
 type Interval = { startAt: Date; endAt: Date };
@@ -70,15 +71,16 @@ export function buildCallbackAvailability(
     const hours = site.hours.find((item) =>
       (item.weekdays as readonly number[]).includes(weekday),
     )!;
+    const openMinute = Math.max(hours.openMinute, CALLBACK_OPEN_MINUTE);
     const opening = zonedLocalDateTimeToDate(
-      `${date}T${String(hours.openMinute / 60).padStart(2, '0')}:00`,
+      `${date}T${String(openMinute / 60).padStart(2, '0')}:00`,
       STUDIO_TIME_ZONE,
     ).getTime();
     const slots: string[] = [];
     // Office hours never cross the overnight DST transition.
     for (
       let minute = 0;
-      minute + CALLBACK_MINUTES <= hours.closeMinute - hours.openMinute;
+      minute + CALLBACK_MINUTES <= hours.closeMinute - openMinute;
       minute += CALLBACK_MINUTES
     ) {
       const start = opening + minute * MINUTE;

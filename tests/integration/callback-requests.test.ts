@@ -149,6 +149,8 @@ describe.skipIf(!url)(
       await reserveCallback(db, input(), null, now);
       for (const startAt of [
         '2026-09-22T10:00:00.000Z',
+        '2026-09-22T12:45:00.000Z',
+        '2026-09-26T12:45:00.000Z',
         '2026-09-21T09:30:00.000Z',
         '2026-11-22T15:00:00.000Z',
       ]) {

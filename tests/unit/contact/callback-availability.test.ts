@@ -16,18 +16,33 @@ const slots = (
   )!.slots;
 
 describe('callback availability', () => {
-  it('offers 15-minute calls only inside the published weekday office hours', () => {
+  it('offers 15-minute calls from 9 AM until the weekday closing time', () => {
     const monday = slots('2026-09-21');
-    expect(monday).toHaveLength(52);
-    expect(monday[0]).toBe('2026-09-21T11:00:00.000Z');
+    expect(monday).toHaveLength(44);
+    expect(monday[0]).toBe('2026-09-21T13:00:00.000Z');
     expect(monday.at(-1)).toBe('2026-09-21T23:45:00.000Z');
   });
   it('uses shorter weekend hours', () => {
     const saturday = slots('2026-09-26');
-    expect(saturday).toHaveLength(24);
-    expect(saturday[0]).toBe('2026-09-26T12:00:00.000Z');
+    expect(saturday).toHaveLength(20);
+    expect(saturday[0]).toBe('2026-09-26T13:00:00.000Z');
     expect(saturday.at(-1)).toBe('2026-09-26T17:45:00.000Z');
-    expect(slots('2026-09-27')).toHaveLength(24);
+    expect(slots('2026-09-27')).toHaveLength(20);
+  });
+  it.each([
+    '2026-09-21',
+    '2026-09-22',
+    '2026-09-23',
+    '2026-09-24',
+    '2026-09-25',
+    '2026-09-26',
+    '2026-09-27',
+  ])('never offers a callback before 9 AM Eastern on %s', (date) => {
+    const available = slots(date);
+    expect(available[0]).toBe(`${date}T13:00:00.000Z`);
+    expect(available.some((time) => time < `${date}T13:00:00.000Z`)).toBe(
+      false,
+    );
   });
   it('blocks classes and events with a 15-minute buffer on either side', () => {
     const available = slots('2026-09-21', [
@@ -102,8 +117,8 @@ describe('callback availability', () => {
       [],
       [],
     );
-    expect(availability.days[0].slots[0]).toBe('2026-10-31T12:00:00.000Z');
-    expect(availability.days[1].slots[0]).toBe('2026-11-01T13:00:00.000Z');
+    expect(availability.days[0].slots[0]).toBe('2026-10-31T13:00:00.000Z');
+    expect(availability.days[1].slots[0]).toBe('2026-11-01T14:00:00.000Z');
     expect(callbackDateKey(new Date('2026-11-02T03:00Z'))).toBe('2026-11-01');
   });
   it('blocks cross-midnight classes through the next office opening', () => {
@@ -111,10 +126,10 @@ describe('callback availability', () => {
       slots('2026-09-22', [
         {
           startAt: new Date('2026-09-22T02:00Z'),
-          endAt: new Date('2026-09-22T12:00Z'),
+          endAt: new Date('2026-09-22T13:00Z'),
           status: 'SCHEDULED',
         },
       ])[0],
-    ).toBe('2026-09-22T12:15:00.000Z');
+    ).toBe('2026-09-22T13:15:00.000Z');
   });
 });

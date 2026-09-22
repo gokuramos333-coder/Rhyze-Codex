@@ -3,7 +3,7 @@
 ## Behavior
 
 - `/contact#callback` adds a calendar without replacing the existing contact form.
-- Calls last 15 minutes, in America/New_York. Monday–Friday 7 AM–8 PM; weekends 8 AM–2 PM. Office-hour display and numeric scheduling settings live together in `lib/site.ts`; update both together if hours change.
+- Calls last 15 minutes, in America/New_York. Callback availability starts at **9 AM every day**, ending at 8 PM Monday–Friday and 2 PM on weekends. General studio hours remain unchanged. Office-hour display and numeric scheduling settings live together in `lib/site.ts`; update both together if hours change. `callback-availability.ts` applies the callback-only 9 AM minimum.
 - Offer the next 30 local dates with at least one hour's notice. Exclude all non-cancelled class/event occurrences (including private/inactive templates), plus 15 minutes before and after. Occupied callback slots are also excluded.
 - A fresh database read runs on submission. Serializable transactions, a unique start time, and an idempotent request key prevent competing/double submissions from making duplicate reservations or emails.
 - The public availability endpoint returns dates/times only; no names, email addresses, phone numbers, or internal identifiers. POST enforces same-origin JSON, an 8 KB body limit, validated fields, a honeypot, three requests per email per 24 hours, and ten per trusted Netlify connection hash per hour. Raw IP addresses are not stored.
@@ -32,6 +32,7 @@
 - Full suite: 1,141 tests across 268 files passed, including 33 explicit PostgreSQL integration tests. Typecheck, lint, Prisma validation, production build and migration mirror comparison passed.
 - Browser: synthetic request saved; its slot disappeared after reload; month navigation and time selection worked on desktop and mobile; no callback-widget horizontal overflow or browser console errors. Existing development-only image/smooth-scroll warnings remain outside this change.
 - Production homepage and Contact page were checked read-only. **No production migration, deploy, callback reservation, or email was performed.**
+- Follow-up review change: earliest callback is now 9 AM Eastern on all seven days. All 63 callback tests, typecheck and production build passed; browser checks confirmed weekday/weekend first slots. Earlier times are rejected server-side as well. General studio hours, existing reservations and closing times are unchanged. Still not deployed.
 
 ## Future release gate
 
