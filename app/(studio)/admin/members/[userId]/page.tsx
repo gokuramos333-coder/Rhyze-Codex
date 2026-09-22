@@ -52,6 +52,8 @@ import {
   updateMemberMembershipAction,
 } from './actions';
 import { AdminMembershipStartForm } from '@/components/admin/AdminMembershipStartForm';
+import { AdminMembershipChangeForm, AdminMembershipChangeRecovery } from '@/components/admin/AdminMembershipChangeForm';
+import { quoteMembershipChangeAction, confirmMembershipChangeAction, reconcileMembershipChangeAction } from './membership-change-actions';
 import {
   isQualifyingActiveMembership,
   qualifyingMembershipProductKinds,
@@ -160,6 +162,7 @@ export default async function AdminMemberDetailPage(
           include: {
             ...vipEntitlementInclude,
             freezes: { where: { cancelledAt: null }, orderBy: { startAt: 'desc' } },
+            planChanges: { where: { activeMembershipId: { not: null } }, include: { toProduct: true }, orderBy: { createdAt: 'desc' } },
             changeRequests: {
               where: { status: 'PENDING' },
               include: { requestedProduct: true },
@@ -207,7 +210,7 @@ export default async function AdminMemberDetailPage(
             entries: true,
             sourcePurchase: {
               include: {
-                membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true } },
+                membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true, product: true } },
                 product: { select: { kind: true } },
               },
             },
@@ -222,7 +225,7 @@ export default async function AdminMemberDetailPage(
     }),
     prisma.product.findMany({
       where: { isActive: true, kind: { in: qualifyingMembershipProductKinds } },
-      select: { id: true, name: true, priceCents: true, stripePriceId: true },
+      select: { id: true, name: true, priceCents: true, stripePriceId: true, billingInterval: true },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     }),
   ]);
@@ -499,8 +502,9 @@ export default async function AdminMemberDetailPage(
         <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">The request could not be completed. No billing or access change was saved.</p>
       )}
       {searchParams.error === 'change-policy' && (
-        <p className="mt-6 border-l-4 border-rhyze-gold bg-orange-50 p-4 font-bold">Vanessa’s plan-change terms are not finalized. Contact the member and deny or leave this request pending; automatic plan switching is locked.</p>
+        <p className="mt-6 border-l-4 border-rhyze-gold bg-orange-50 p-4 font-bold">Use “Change membership” to review the new plan, start date and Stripe billing adjustment before confirming.</p>
       )}
+      {searchParams.error === 'billing-review' && <p role="alert" className="mt-6 border-l-4 border-red-600 bg-red-50 p-4 font-bold text-red-800">Billing needs review before another change. Check the saved membership change and Stripe status; do not submit a duplicate charge.</p>}
       {searchParams.error === 'message' && (
         <p className="mt-6 border-l-4 border-rhyze-coral bg-orange-50 p-4 font-bold text-rhyze-coral">
           Add a subject and message before sending.
@@ -720,6 +724,20 @@ export default async function AdminMemberDetailPage(
                   </p>
                 )}
                 {membership.cancelAtPeriodEnd && <p className="mt-2 bg-red-100 p-2 text-xs font-black uppercase text-red-900">Cancels at period end</p>}
+                {membership.planChanges.map(change => <div key={change.id} className="mt-3 border-l-4 border-rhyze-orange bg-orange-50 p-3 text-sm">
+                  <strong>{change.toProduct.name} · {change.status.replaceAll('_', ' ')}</strong>
+                  <p>Starts {date(change.effectiveAt)} · renewal date unchanged.</p>
+                  <p className="mt-1 text-xs">The current paid plan stays in place until the new plan payment is confirmed.</p>
+                  {change.lastError && <p className="mt-2 font-bold text-red-800">Stripe review needed. Do not create a duplicate change.</p>}
+                  {(change.lastError || change.status === 'SUBMITTING') && <AdminMembershipChangeRecovery userId={member.id} quoteId={change.id} action={reconcileMembershipChangeAction} />}
+                </div>)}
+                {membership.billingLockNeedsReview && membership.planChanges.length === 0 && <p className="mt-3 bg-red-50 p-3 text-sm font-bold text-red-800">A previous billing action needs Stripe verification before another billing change. No new charge will be attempted.</p>}
+                {membership.status === 'ACTIVE' && membership.planChanges.length === 0 && <AdminMembershipChangeForm
+                  userId={member.id} membershipId={membership.id} currentProductId={membership.productId}
+                  renewalAt={membership.currentPeriodEnd?.toISOString() || ''} today={dateInputValue(now)}
+                  products={membershipProducts.filter(product => product.billingInterval === 'MONTHLY' && product.stripePriceId && product.priceCents > 0)}
+                  quoteAction={quoteMembershipChangeAction} confirmAction={confirmMembershipChangeAction}
+                />}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(membership.status === 'ACTIVE' || membership.status === 'TRIALING') && (
                     <form action={updateMemberMembershipAction}>
@@ -779,7 +797,7 @@ export default async function AdminMemberDetailPage(
                       {request.type === 'CANCEL' && <button name="decision" value="APPROVE" className="bg-rhyze-black px-3 py-2 text-[10px] font-black uppercase text-white">Approve period-end cancellation</button>}
                       <button name="decision" value="DENY" className="border border-red-700 bg-red-100 px-3 py-2 text-[10px] font-black uppercase text-red-900">Deny request</button>
                     </div>
-                    {request.type === 'CHANGE' && <p className="text-xs font-bold text-rhyze-black/50">Automatic plan switching remains locked until management confirms the plan-change terms.</p>}
+                    {request.type === 'CHANGE' && <p className="text-xs font-bold text-rhyze-black/50">Use “Change membership” above to review and confirm this plan and its start date with Stripe.</p>}
                   </form>
                   );
                 })}
@@ -899,7 +917,7 @@ export default async function AdminMemberDetailPage(
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
                     <span>
                       <strong className="block">
-                        {payment.membership?.product.name ||
+                        {payment.productName || payment.membership?.product.name ||
                           payment.purchase?.product.name ||
                           payment.commerceOrder?.occurrence?.template.name ||
                           payment.commerceOrder?.items.map((item) => item.name).join(', ') ||

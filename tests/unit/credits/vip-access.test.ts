@@ -39,6 +39,16 @@ describe('paid VIP entitlement, independent of background jobs', () => {
   it('does not authorize classes beyond the paid window', () => {
     expect(vipCreditAccountCanBook({ account: monthly, memberships: [membership()], now, occurrenceStartsAt: end })).toBe(false);
   });
+  it('uses a separately paid managed invoice, not a refunded historical receipt', () => {
+    const m = membership();
+    const managed = { ...m, purchase: { ...m.purchase, status: 'REFUNDED' }, planChangeState: {
+      paidAt: Math.floor(now.getTime() / 1000), paidEnd: Math.floor(end.getTime() / 1000), lastInvoiceId: 'in_current_paid',
+    } };
+    expect(vipMembershipPaidThrough(managed, now)).toEqual(end);
+    expect(vipMembershipPaidThrough({ ...managed, status: 'PAST_DUE' }, now)).toBeNull();
+    expect(vipMembershipPaidThrough({ ...managed, purchase: m.purchase, planChangeState: { ...managed.planChangeState, fundingReversedAt: 1 } }, now)).toBeNull();
+    expect(vipMembershipPaidThrough({ ...managed, planChangeState: { ...managed.planChangeState, lastInvoiceId: null } }, now)).toBeNull();
+  });
   it('also gates old unlinked VIP event credits', () => {
     expect(vipCreditAccountCanBook({ account: { ...monthly, label: 'Event credit — September 2026 VIP complimentary event credit' }, memberships: [], now })).toBe(false);
   });

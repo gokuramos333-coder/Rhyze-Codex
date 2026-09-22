@@ -1,4 +1,5 @@
 import { requireArea } from '@/lib/auth/session';
+import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { prisma } from '@/lib/db/prisma';
 import { startCheckoutAction, startSombleRecoveryAction } from './actions';
 import { eligibleRecovery, recoveryForUser } from '@/lib/domain/memberships/somble-billing-recovery';
@@ -111,7 +112,7 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true } },
+            membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true, product: true } },
             product: { select: { includedCredits: true, kind: true } },
           },
         },
@@ -173,7 +174,7 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
       isUnlimited: account.isUnlimited,
       available: availableMembershipCredits({
           entries: account.entries,
-          includedCredits: account.sourcePurchase?.product.includedCredits ?? null,
+          includedCredits: currentCreditProduct(account)?.includedCredits ?? null,
       }),
     })));
   const classCreditLabel = classCreditDisplayLabel(

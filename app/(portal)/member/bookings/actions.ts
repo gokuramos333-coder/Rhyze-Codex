@@ -1,4 +1,6 @@
 'use server';
+import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -70,6 +72,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
 
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+    await lockMembershipEntitlements(tx, user.id);
     const occurrence = await tx.classOccurrence.findUnique({
       where: { id: occurrenceId },
       include: { template: true, instructor: { select: { name: true } } },
@@ -206,7 +209,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { id: true, status: true } },
+            membership: { select: { id: true, status: true, product: true } },
             product: { select: { includedCredits: true, kind: true, customPlanType: true } },
           },
         },
@@ -215,7 +218,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     });
     const account = accounts.find(
       (item) => {
-        const productKind = item.sourcePurchase?.product.kind ?? null;
+        const productKind = currentCreditProduct(item)?.kind ?? null;
         const isEventCredit = eventCreditCanBook({
           label: item.label,
           sourceProductKind: productKind,
@@ -229,7 +232,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         const isSingleClassCredit = productKind === 'DROP_IN';
         const validIntroTrialCredit = productKind !== 'INTRO_TRIAL' || trialAccess?.allowed === true;
         const productAllowsOccurrence = complimentaryStandardAccessCanBook({
-          customPlanType: item.sourcePurchase?.product.customPlanType,
+          customPlanType: currentCreditProduct(item)?.customPlanType,
           isEvent: occurrence.template.isEvent,
           durationMinutes: occurrence.template.durationMinutes,
         });
@@ -250,7 +253,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           (item.isUnlimited ||
             availableMembershipCredits({
               entries: item.entries,
-              includedCredits: item.sourcePurchase?.product.includedCredits ?? null,
+              includedCredits: currentCreditProduct(item)?.includedCredits ?? null,
             }) > 0)
         );
       },
@@ -261,7 +264,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       if (trialAccess?.reason === 'outside-window' || trialAccess?.reason === 'expired') return 'trial-window';
       return 'access';
     }
-    const accessProductKind = instructorAccess ? null : (account && vipCreditBenefit(account) ? 'VIP' : account?.sourcePurchase?.product.kind
+    const accessProductKind = instructorAccess ? null : (account && vipCreditBenefit(account) ? 'VIP' : currentCreditProduct(account)?.kind
       ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null));
     const accessType = instructorAccess
       ? 'COMPLIMENTARY'
@@ -429,6 +432,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   try {
     transactionOutcome = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+    await lockMembershipEntitlements(tx, user.id);
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, userId: user.id, status: 'CONFIRMED' },
       include: {
@@ -462,7 +466,10 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
     });
     const creditDecision = cancellationCreditDecision({
       isEvent: booking.occurrence.template.isEvent,
-      restoreCredit: decision.restoreCredit,
+      // A concurrent paid downgrade may have added the booking's reservation
+      // after the confirmation prompt. Preserve fees, but return that debit on
+      // an advance cancellation using the fresh, locked reservation.
+      restoreCredit: decision.restoreCredit || decision.window === 'ADVANCE' && Boolean(reservation),
       hasReservation: Boolean(reservation),
     });
     let creditReturned = false;

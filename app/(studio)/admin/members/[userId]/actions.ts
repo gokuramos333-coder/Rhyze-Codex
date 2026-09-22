@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireApprovedOwner, requireArea } from '@/lib/auth/session';
+import { assertNoPendingPlanChange, withMembershipBillingLock, UncertainBillingChangeError, updateMembershipStripeBilling } from '@/lib/domain/memberships/billing-lock';
 import { prisma } from '@/lib/db/prisma';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
@@ -575,6 +576,19 @@ export async function sendMemberMessageAction(formData: FormData) {
 }
 
 export async function updateMemberMembershipAction(formData: FormData) {
+  await requireApprovedOwner();
+  return runAdminBillingAction(formData, String(formData.get('membershipId') || ''), () => updateLockedMemberMembership(formData));
+}
+
+async function runAdminBillingAction(formData: FormData, membershipId: string, run: () => Promise<void>) {
+  try { return await withMembershipBillingLock(prisma, membershipId, run); }
+  catch (error) {
+    if (error && typeof error === 'object' && 'digest' in error && String(error.digest).startsWith('NEXT_REDIRECT')) throw error;
+    redirect(`/admin/members/${String(formData.get('userId') || '')}?error=billing-review#memberships`);
+  }
+}
+
+async function updateLockedMemberMembership(formData: FormData) {
   const actor = await requireApprovedOwner();
   const membershipId = String(formData.get('membershipId') || '');
   const userId = String(formData.get('userId') || '');
@@ -587,15 +601,18 @@ export async function updateMemberMembershipAction(formData: FormData) {
 
   let transition: ReturnType<typeof membershipAdminTransition>;
   try {
+    await assertNoPendingPlanChange(prisma, membershipId);
+    if (action === 'UNPAUSE' && (membership.planChangeState as { fundingReversedAt?: number } | null)?.fundingReversedAt) throw Error('Current membership payment was refunded or disputed. Resolve billing before resuming.');
     transition = membershipAdminTransition(action, membership.status);
     if (membership.stripeSubscriptionId) {
-      await getStripe().subscriptions.update(
+      await updateMembershipStripeBilling(getStripe(),
         membership.stripeSubscriptionId,
         transition.stripeUpdate,
         { idempotencyKey: `admin-membership-${membership.id}-${action}-${membership.updatedAt.getTime()}` },
       );
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof UncertainBillingChangeError) throw error;
     redirect(`/admin/members/${userId}?error=membership-action`);
   }
 
@@ -649,9 +666,15 @@ export async function updateMemberMembershipAction(formData: FormData) {
 }
 
 export async function scheduleMembershipFreezeAction(formData: FormData) {
+  await requireApprovedOwner();
+  return runAdminBillingAction(formData, String(formData.get('membershipId') || ''), () => scheduleLockedMembershipFreeze(formData));
+}
+
+async function scheduleLockedMembershipFreeze(formData: FormData) {
   const actor = await requireApprovedOwner();
   const membershipId = String(formData.get('membershipId') || '');
   const userId = String(formData.get('userId') || '');
+  if (await prisma.membershipPlanChange.findUnique({ where: { activeMembershipId: membershipId } })) redirect(`/admin/members/${userId}?error=membership-action#memberships`);
   const startDate = String(formData.get('startDate') || '');
   const resumeDate = String(formData.get('resumeDate') || '');
   const startAt = new Date(`${startDate}T12:00:00.000Z`);
@@ -681,7 +704,7 @@ export async function scheduleMembershipFreezeAction(formData: FormData) {
   try {
     if (activateNow && membership.stripeSubscriptionId) {
       if (!stripeIsConfigured()) throw new Error('Stripe is not configured');
-      await getStripe().subscriptions.update(
+      await updateMembershipStripeBilling(getStripe(),
         membership.stripeSubscriptionId,
         { pause_collection: { behavior: 'void' } },
         { idempotencyKey: `membership-freeze-${membership.id}-${startDate}` },
@@ -723,7 +746,8 @@ export async function scheduleMembershipFreezeAction(formData: FormData) {
         dedupeKey: `membership-freeze:${membership.id}:${startDate}:${resumeDate}`,
       });
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof UncertainBillingChangeError) throw error;
     redirect(`/admin/members/${userId}?error=freeze`);
   }
   revalidatePath(`/admin/members/${userId}`);
@@ -733,6 +757,13 @@ export async function scheduleMembershipFreezeAction(formData: FormData) {
 }
 
 export async function reviewMembershipChangeRequestAction(formData: FormData) {
+  await requireApprovedOwner();
+  const request = await prisma.membershipChangeRequest.findFirst({ where: { id: String(formData.get('requestId') || ''), userId: String(formData.get('userId') || '') }, select: { membershipId: true } });
+  if (!request) redirect('/admin/members');
+  return runAdminBillingAction(formData, request.membershipId, () => reviewLockedMembershipChangeRequest(formData));
+}
+
+async function reviewLockedMembershipChangeRequest(formData: FormData) {
   const actor = await requireApprovedOwner();
   const requestId = String(formData.get('requestId') || '');
   const userId = String(formData.get('userId') || '');
@@ -751,9 +782,10 @@ export async function reviewMembershipChangeRequestAction(formData: FormData) {
 
   if (decision === 'APPROVE') {
     try {
+      await assertNoPendingPlanChange(prisma, request.membershipId);
       const transition = membershipAdminTransition('CANCEL_AT_PERIOD_END', request.membership.status);
       if (request.membership.stripeSubscriptionId) {
-        await getStripe().subscriptions.update(
+        await updateMembershipStripeBilling(getStripe(),
           request.membership.stripeSubscriptionId,
           transition.stripeUpdate,
           { idempotencyKey: `approve-cancel-${request.id}` },
@@ -793,7 +825,8 @@ export async function reviewMembershipChangeRequestAction(formData: FormData) {
           dedupeKey: `membership-cancellation-approved:${request.id}`,
         });
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof UncertainBillingChangeError) throw error;
       redirect(`/admin/members/${userId}?error=request-review`);
     }
   } else {

@@ -1,4 +1,5 @@
 import { recoveryForUser } from '@/lib/domain/memberships/somble-billing-recovery';
+import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 
 export const vipEntitlementInclude = {
   product: true,
@@ -11,6 +12,7 @@ export type VipEntitlementMembership = {
   purchaseId: string | null;
   status: string;
   currentPeriodEnd: Date | null;
+  planChangeState?: unknown;
   product: { kind: string; slug?: string; customPlanType?: string | null };
   purchase?: {
     status: string;
@@ -19,8 +21,8 @@ export type VipEntitlementMembership = {
   } | null;
 };
 
-export function vipCreditBenefit(account: { id?: string; label: string; sourcePurchase?: { product: { kind: string } } | null }) {
-  return account.id === 'rhyze-erika-gifted-vip-credit-2026' || account.sourcePurchase?.product.kind === 'VIP' || (!account.sourcePurchase && (
+export function vipCreditBenefit(account: { id?: string; label: string; sourcePurchase?: { product: { kind: string }; membership?: { product?: { kind: string } } | null } | null }) {
+  return account.id === 'rhyze-erika-gifted-vip-credit-2026' || currentCreditProduct(account)?.kind === 'VIP' || (!account.sourcePurchase && (
     account.label.startsWith('VIP membership — unlimited standard class credits') ||
     account.label.toLowerCase().includes('vip complimentary event credit')
   ));
@@ -47,7 +49,10 @@ export function vipMembershipPaidThrough(membership: VipEntitlementMembership, n
   }
   const purchase = membership.purchase;
   const account = purchase?.creditAccount;
-  if (!purchase?.paidAt || !['PAID', 'PARTIALLY_REFUNDED'].includes(purchase.status) ||
+  const managed = membership.planChangeState as { lastInvoiceId?: string; paidAt?: number; paidEnd?: number; fundingReversedAt?: number } | null;
+  if (managed?.fundingReversedAt) return null;
+  const independentlyPaid = Boolean(managed?.lastInvoiceId && !managed.fundingReversedAt && managed.paidAt && managed.paidAt <= now.getTime() / 1000 && managed.paidEnd && managed.paidEnd >= (membership.currentPeriodEnd?.getTime() || Infinity) / 1000);
+  if ((!independentlyPaid && (!purchase?.paidAt || !['PAID', 'PARTIALLY_REFUNDED'].includes(purchase.status))) ||
       !account?.isUnlimited || account.validFrom > now || !account.validUntil || !membership.currentPeriodEnd) return null;
   const end = new Date(Math.min(account.validUntil.getTime(), membership.currentPeriodEnd.getTime()));
   return end > now ? end : null;
@@ -57,14 +62,14 @@ export function vipCreditAccountCanBook(input: {
   account: {
     id?: string;
     label: string;
-    sourcePurchase?: { product: { kind: string }; membership?: { id: string } | null } | null;
+    sourcePurchase?: { product: { kind: string }; membership?: { id: string; product?: { kind: string } } | null } | null;
   };
   memberships: VipEntitlementMembership[];
   now: Date;
   occurrenceStartsAt?: Date;
 }) {
   const source = input.account.sourcePurchase;
-  const linkedVip = source?.product.kind === 'VIP';
+  const linkedVip = currentCreditProduct(input.account)?.kind === 'VIP';
   const legacyVipBenefit = vipCreditBenefit(input.account);
   if (!linkedVip && !legacyVipBenefit) return true;
   return input.memberships.some(membership => {

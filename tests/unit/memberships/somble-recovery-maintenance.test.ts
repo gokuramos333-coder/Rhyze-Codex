@@ -109,6 +109,7 @@ function fixture(person: {
     $executeRaw: async () => 0,
     membershipFreeze: { findMany: async () => [] },
     membership: {
+      findUnique: async ({ where }: any) => membership.stripeSubscriptionId === where.stripeSubscriptionId ? membership : null,
       findMany: async () => membership.status === 'ACTIVE' ? [{
         ...membership,
         purchase: membership.purchaseId ? {

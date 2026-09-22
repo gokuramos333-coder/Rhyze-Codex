@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import {
@@ -37,7 +38,7 @@ export default async function MemberHomePage() {
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true } },
+            membership: { select: { id: true, status: true, activatedAt: true, currentPeriodEnd: true, product: true } },
             product: { select: { includedCredits: true, kind: true } },
           },
         },
@@ -100,7 +101,7 @@ export default async function MemberHomePage() {
       isUnlimited: account.isUnlimited,
       available: availableMembershipCredits({
           entries: account.entries,
-          includedCredits: account.sourcePurchase?.product.includedCredits ?? null,
+          includedCredits: currentCreditProduct(account)?.includedCredits ?? null,
       }),
     })));
   const classCreditLabel = classCreditDisplayLabel(

@@ -616,6 +616,8 @@ model Product {
   purchases                  Purchase[]
   memberships                Membership[]
   requestedMembershipChanges MembershipChangeRequest[] @relation("RequestedMembershipProduct")
+  planChangesFrom MembershipPlanChange[] @relation("PlanChangeFrom")
+  planChangesTo MembershipPlanChange[] @relation("PlanChangeTo")
 
   @@index([isActive, isPublic, kind])
 }
@@ -663,6 +665,9 @@ model Membership {
   currentPeriodEnd     DateTime?
   activatedAt          DateTime?
   cancelAtPeriodEnd    Boolean          @default(false)
+  planChangeState      Json?
+  billingLockToken     String?
+  billingLockNeedsReview Boolean @default(false)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -672,8 +677,41 @@ model Membership {
   paymentRecords PaymentRecord[]
   changeRequests MembershipChangeRequest[]
   freezes        MembershipFreeze[]
+  planChanges    MembershipPlanChange[]
 
   @@index([userId, status, currentPeriodEnd])
+}
+
+model MembershipPlanChange {
+  id                 String @id @default(cuid())
+  membershipId       String
+  activeMembershipId String? @unique
+  fromProductId      String
+  toProductId        String
+  actorId            String
+  status             String @default("QUOTED")
+  timing             String
+  effectiveAt        DateTime
+  periodStart        DateTime
+  periodEnd          DateTime
+  expiresAt          DateTime
+  stripeSubscriptionId String
+  stripeCustomerId   String
+  stripeItemId       String
+  fromPriceId        String
+  toPriceId          String
+  stripeScheduleId   String? @unique
+  stripeInvoiceId    String?
+  quote              Json
+  submittedAt        DateTime?
+  appliedAt          DateTime?
+  lastError          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  fromProduct Product @relation("PlanChangeFrom", fields: [fromProductId], references: [id], onDelete: Restrict)
+  toProduct Product @relation("PlanChangeTo", fields: [toProductId], references: [id], onDelete: Restrict)
+  @@index([membershipId, createdAt])
 }
 
 model MembershipFreeze {
@@ -792,6 +830,7 @@ model PaymentRecord {
   customerName            String?
   customerEmail           String?
   stripeEventId           String              @unique
+  productName             String?
   stripeCustomerId        String?
   stripeCheckoutSessionId String?             @unique
   stripePaymentIntentId   String?             @unique

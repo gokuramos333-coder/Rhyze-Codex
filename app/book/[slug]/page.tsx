@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import {
   ArrowLeft,
   Calendar,
@@ -113,7 +114,7 @@ export default async function BookingPage(
           include: {
             entries: true,
             sourcePurchase: {
-              include: { membership: { select: { id: true, status: true } }, product: { select: { kind: true, customPlanType: true } } },
+              include: { membership: { select: { id: true, status: true, product: true } }, product: { select: { kind: true, customPlanType: true } } },
             },
           },
         })
@@ -125,9 +126,9 @@ export default async function BookingPage(
   const trialAccess = trial && occurrence ? evaluateIntroTrialBooking({ activatedAt: trial.activatedAt, occurrenceStartsAt: occurrence.startAt, now, isEvent: occurrence.template.isEvent }).allowed : false;
   const eligibleCreditAccounts = occurrence
     ? creditAccounts.filter((account) => {
-        const productKind = account.sourcePurchase?.product.kind ?? null;
+        const productKind = currentCreditProduct(account)?.kind ?? null;
         const productAllowsOccurrence = complimentaryStandardAccessCanBook({
-          customPlanType: account.sourcePurchase?.product.customPlanType,
+          customPlanType: currentCreditProduct(account)?.customPlanType,
           isEvent: occurrence.template.isEvent,
           durationMinutes: occurrence.template.durationMinutes,
         });

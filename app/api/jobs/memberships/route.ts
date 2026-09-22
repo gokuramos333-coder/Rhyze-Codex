@@ -17,12 +17,12 @@ export async function POST(request: Request) {
   const now = new Date();
   const [startingFreezes, endingFreezes] = await Promise.all([
     prisma.membershipFreeze.findMany({
-      where: { cancelledAt: null, activatedAt: null, startAt: { lte: now } },
+      where: { cancelledAt: null, activatedAt: null, startAt: { lte: now }, membership: { planChanges: { none: { activeMembershipId: { not: null } } } } },
       include: { membership: true },
       orderBy: { startAt: 'asc' },
     }),
     prisma.membershipFreeze.findMany({
-      where: { cancelledAt: null, activatedAt: { not: null }, resumedAt: null, endAt: { lte: now } },
+      where: { cancelledAt: null, activatedAt: { not: null }, resumedAt: null, endAt: { lte: now }, membership: { planChanges: { none: { activeMembershipId: { not: null } } } } },
       include: { membership: true },
       orderBy: { endAt: 'asc' },
     }),
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
 
   for (const freeze of endingFreezes) {
     try {
+      if ((freeze.membership.planChangeState as { fundingReversedAt?: number } | null)?.fundingReversedAt) throw new Error('Current membership payment was reversed; billing review required before resume');
       if (freeze.membership.stripeSubscriptionId) {
         if (!stripeIsConfigured()) throw new Error('Stripe is not configured');
         await getStripe().subscriptions.update(

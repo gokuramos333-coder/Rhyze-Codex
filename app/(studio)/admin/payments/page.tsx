@@ -34,7 +34,7 @@ type PaymentRecordRow = Prisma.PaymentRecordGetPayload<{
 }>;
 
 function paymentRecordSource(record: PaymentRecordRow) {
-  return record.membership?.product.name ||
+  return record.productName || record.membership?.product.name ||
     record.purchase?.product.name ||
     record.commerceOrder?.occurrence?.template.name ||
     record.commerceOrder?.items.map((item) => item.name).join(', ') ||

@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => {
     $executeRaw: vi.fn(), user: { findUnique: vi.fn(), findFirst: vi.fn() },
     classOccurrence: { findUnique: vi.fn(), findFirst: vi.fn() }, waiverVersion: { findFirst: vi.fn() }, waiverAcceptance: { findUnique: vi.fn() },
     booking: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn() },
-    membership: { findFirst: vi.fn() }, creditAccount: { findMany: vi.fn() },
+    membership: { findFirst: vi.fn(), findMany: vi.fn() }, creditAccount: { findMany: vi.fn() },
     creditLedgerEntry: { create: vi.fn(), findFirst: vi.fn() }, auditLog: { create: vi.fn() }, bookingTransfer: { create: vi.fn() },
   };
   return { tx, actor: { id: 'instructor', email: 'instructor@example.test', role: 'INSTRUCTOR' }, queue: vi.fn(), charge: vi.fn() };
@@ -34,6 +34,7 @@ function fixture(isEvent = false, role = 'INSTRUCTOR') {
   mocks.tx.booking.findUnique.mockResolvedValue(null); mocks.tx.booking.findFirst.mockResolvedValue(null); mocks.tx.booking.count.mockResolvedValue(0);
   mocks.tx.booking.create.mockResolvedValue({ id: 'booking' }); mocks.tx.booking.upsert.mockResolvedValue({ id: 'booking' });
   mocks.tx.membership.findFirst.mockResolvedValue(null);
+  mocks.tx.membership.findMany.mockImplementation(async () => user.memberships);
   const accounts: any[] = [{ id: 'finite', isUnlimited: false, label: 'Manual class credit', entries: [{ quantity: 1 }], sourcePurchase: null }];
   mocks.tx.creditAccount.findMany.mockResolvedValue(accounts);
   const form = new FormData(); form.set('occurrenceId', 'class'); form.set('memberQuery', 'instructor@example.test');

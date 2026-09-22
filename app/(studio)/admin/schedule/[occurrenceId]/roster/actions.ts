@@ -1,4 +1,6 @@
 'use server';
+import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -61,6 +63,9 @@ export async function addMemberToClassAction(formData: FormData) {
       include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } },
     });
     if (!member) return 'member-not-found';
+    await lockMembershipEntitlements(tx, member.id);
+    // The user search preceded the lock; reread paid entitlement after acquiring it.
+    member.memberships = await tx.membership.findMany({ where: { userId: member.id }, include: vipEntitlementInclude });
     const now = new Date();
     const instructorAccess = instructorStandardClassAccess({ user: member, isEvent: occurrence.template.isEvent });
 
@@ -94,7 +99,7 @@ export async function addMemberToClassAction(formData: FormData) {
         entries: true,
         sourcePurchase: {
           include: {
-            membership: { select: { id: true, status: true } },
+            membership: { select: { id: true, status: true, product: true } },
             product: { select: { includedCredits: true, kind: true, customPlanType: true } },
           },
         },
@@ -102,7 +107,7 @@ export async function addMemberToClassAction(formData: FormData) {
       orderBy: { createdAt: 'asc' },
     });
     const creditAccount = accounts.find((account) => {
-      const productKind = account.sourcePurchase?.product.kind ?? null;
+      const productKind = currentCreditProduct(account)?.kind ?? null;
       const isEventCredit = eventCreditCanBook({
         label: account.label,
         sourceProductKind: productKind,
@@ -114,7 +119,7 @@ export async function addMemberToClassAction(formData: FormData) {
         ? isEventCredit
         : true;
       const productAllowsOccurrence = complimentaryStandardAccessCanBook({
-        customPlanType: account.sourcePurchase?.product.customPlanType,
+        customPlanType: currentCreditProduct(account)?.customPlanType,
         isEvent: occurrence.template.isEvent,
         durationMinutes: occurrence.template.durationMinutes,
       });
@@ -133,13 +138,13 @@ export async function addMemberToClassAction(formData: FormData) {
         validSingleClassCredit &&
         (account.isUnlimited || creditBalance(
           account.entries,
-          account.sourcePurchase?.product.includedCredits ?? null,
+          currentCreditProduct(account)?.includedCredits ?? null,
         ) > 0)
       );
     });
     if (!creditAccount && !instructorAccess) return 'member-no-credit';
 
-    const accessProductKind = instructorAccess ? null : creditAccount && vipCreditBenefit(creditAccount) ? 'VIP' : creditAccount?.sourcePurchase?.product.kind ?? null;
+    const accessProductKind = instructorAccess ? null : creditAccount && vipCreditBenefit(creditAccount) ? 'VIP' : currentCreditProduct(creditAccount)?.kind ?? null;
     const policySnapshot = bookingPolicySnapshotWithAccess({
       currentSnapshot: { creditAccountId: instructorAccess ? null : creditAccount?.id ?? null },
       accessType: instructorAccess ? 'COMPLIMENTARY' : accessTypeForProductKind(accessProductKind),

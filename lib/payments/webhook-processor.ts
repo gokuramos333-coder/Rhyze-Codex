@@ -4,6 +4,7 @@ import { queueEmail } from '@/lib/notifications/email-queue';
 import { commissionCentsForProduct } from '@/lib/domain/referrals/referral-service';
 import { renewalCreditReset } from '@/lib/domain/credits/membership-renewal';
 import { processSombleRecoveryEvent } from '@/lib/payments/somble-recovery-webhook';
+import { processMembershipPlanChangeEvent } from '@/lib/payments/membership-plan-change-webhook';
 
 type StripeObject = Record<string, any>;
 
@@ -255,10 +256,12 @@ async function fulfillProductPurchase(
   action: Extract<ReturnType<typeof deriveStripeEventAction>, { type: 'CHECKOUT_PAID' }>,
 ) {
   if (!action.purchaseId) return;
-  let prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true } });
+  let prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true, membership: true } });
+  // A paid receipt replay must never overwrite an admin-switched entitlement.
+  if (prior?.paidAt && prior.membership?.planChangeState) return;
   if (prior?.product.kind === 'VIP') {
     await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${action.purchaseId} FOR UPDATE`;
-    prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true } });
+    prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true, membership: true } });
   }
   const settledNative = prior?.product.kind === 'VIP' && prior.paidAt ? prior : null;
   const purchase = await tx.purchase.update({
@@ -577,6 +580,7 @@ async function fulfillCommerceOrder(
 }
 
 export async function processStripeEvent(tx: Prisma.TransactionClient, event: Stripe.Event) {
+  if (await processMembershipPlanChangeEvent(tx, event)) return;
   if (await processSombleRecoveryEvent(tx, event)) return;
   const action = deriveStripeEventAction(event);
   if (action.type === 'IGNORE') return;
