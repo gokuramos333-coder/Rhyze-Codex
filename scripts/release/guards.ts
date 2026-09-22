@@ -162,6 +162,24 @@ export function baseEnvironment(source: Record<string, string | undefined>) {
   );
 }
 
+export function netlifyEnvironment(
+  source: Record<string, string | undefined>,
+  operation: 'link' | 'api',
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...baseEnvironment(source),
+    NODE_ENV: 'production',
+    NETLIFY_TELEMETRY_DISABLED: '1',
+    NO_UPDATE_NOTIFIER: '1',
+  };
+  // With NETLIFY_SITE_ID set, `link` reports "already linked" but does not
+  // persist .netlify/state.json in a fresh snapshot. The --id argument pins it.
+  if (operation !== 'link') env.NETLIFY_SITE_ID = SITE_ID;
+  if (source.NETLIFY_AUTH_TOKEN)
+    env.NETLIFY_AUTH_TOKEN = source.NETLIFY_AUTH_TOKEN;
+  return env;
+}
+
 export function releaseTestEnvironment(
   source: Record<string, string | undefined>,
 ): NodeJS.ProcessEnv {

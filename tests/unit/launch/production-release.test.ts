@@ -19,6 +19,7 @@ import {
   parseOptions,
   redact,
   SITE_ID,
+  netlifyEnvironment,
 } from '../../../scripts/release/guards';
 import {
   runRelease,
@@ -76,6 +77,18 @@ afterEach(() =>
 );
 
 describe('release input and production isolation', () => {
+  it('does not let an environment site ID make Netlify skip writing the snapshot link', () => {
+    const env = {
+      PATH: '/bin',
+      NETLIFY_SITE_ID: 'wrong-inherited-site',
+      STRIPE_SECRET_KEY: 'sk_live_not_inherited',
+    };
+    expect(netlifyEnvironment(env, 'link').NETLIFY_SITE_ID).toBeUndefined();
+    expect(netlifyEnvironment(env, 'api').NETLIFY_SITE_ID).toBe(
+      'e7002b82-50f2-4760-8a35-e4f9591bec4f',
+    );
+    expect(netlifyEnvironment(env, 'link').STRIPE_SECRET_KEY).toBeUndefined();
+  });
   it('requires a pinned deployed revision and rejects any bypass/deploy-preview flags', () => {
     for (const args of [
       [],

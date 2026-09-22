@@ -22,7 +22,7 @@ import {
   assertMigrationMirrors,
   assertProductionDeploy,
   assertProductionEnvironment,
-  baseEnvironment,
+  netlifyEnvironment,
   parseOptions,
   productionDeployArgs,
   redact,
@@ -82,15 +82,7 @@ async function main() {
   if (realpathSync(git('rev-parse', '--show-toplevel')) !== root)
     throw Error('Run from the reviewed repository root.');
   const cli = findCli();
-  const remoteEnv: NodeJS.ProcessEnv = {
-    ...baseEnvironment(process.env),
-    NODE_ENV: 'production',
-    NETLIFY_SITE_ID: SITE_ID,
-    NETLIFY_TELEMETRY_DISABLED: '1',
-    NO_UPDATE_NOTIFIER: '1',
-  };
-  if (process.env.NETLIFY_AUTH_TOKEN)
-    remoteEnv.NETLIFY_AUTH_TOKEN = process.env.NETLIFY_AUTH_TOKEN;
+  const remoteEnv = netlifyEnvironment(process.env, 'api');
   const run = async (
     bin: string,
     args: string[],
@@ -350,7 +342,7 @@ async function main() {
         process.execPath,
         [cli, 'link', '--id', SITE_ID],
         snapshot,
-        remoteEnv,
+        netlifyEnvironment(process.env, 'link'),
         'Link only the existing production project',
       );
       if (
