@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   }
 
   const result = await syncRecentStripePaymentRecords(prisma, { lookbackDays: 14, limit: 100 });
+  if (!result.attempted) return NextResponse.json(result, { status: 503 });
   // Bounded contact-only retries piggyback on the existing job, without a new
   // schedule or making payment synchronization depend on contact delivery.
   let contactSync: { succeeded: number; failed: number } | { deferred: true };

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   purchaseFindUnique: vi.fn(),
   revalidatePath: vi.fn(),
+  processEvent: vi.fn(),
 }));
 
 vi.mock('@/auth', () => ({
@@ -16,7 +17,7 @@ vi.mock('next/cache', () => ({
 vi.mock('@/lib/db/prisma', () => ({
   prisma: {
     purchase: { findUnique: mocks.purchaseFindUnique },
-    $transaction: vi.fn(),
+    $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({}),
   },
 }));
 
@@ -26,19 +27,20 @@ vi.mock('@/lib/payments/stripe', () => ({
 }));
 
 vi.mock('@/lib/payments/transaction-retry', () => ({
-  retrySerializableTransaction: vi.fn(),
+  retrySerializableTransaction: (callback: () => Promise<unknown>) => callback(),
 }));
 
 vi.mock('@/lib/payments/webhook-processor', () => ({
-  processStripeEvent: vi.fn(),
+  processStripeEvent: mocks.processEvent,
 }));
 
 vi.mock('@/lib/payments/membership-checkout-return', () => ({
   fulfillMembershipCheckoutReturn: async (
     _input: unknown,
-    gateway: { findPurchase: (purchaseId: string) => Promise<unknown> },
+    gateway: { findPurchase: (purchaseId: string) => Promise<unknown>; fulfillSession: (session: unknown) => Promise<unknown> },
   ) => {
     await gateway.findPurchase('purchase_ritual');
+    await gateway.fulfillSession({ id: 'cs_ritual', livemode: true, created: 1 });
     return 'fulfilled';
   },
 }));
@@ -67,5 +69,6 @@ describe('membership checkout success route attribution', () => {
     expect(response.headers.get('location')).toBe(
       'https://www.rhyzefitness.com/member/membership?result=success&plan=ritual&session_id=cs_ritual',
     );
+    expect(mocks.processEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ livemode: true }));
   });
 });

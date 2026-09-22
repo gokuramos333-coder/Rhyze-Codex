@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import type { PrismaClient } from '@prisma/client';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
 import { processStripeEvent } from '@/lib/payments/webhook-processor';
+import { assertStripeObjectMode } from '@/lib/payments/stripe-mode';
 
 const DEFAULT_LOOKBACK_DAYS = 7;
 
@@ -59,6 +60,7 @@ export function syntheticCheckoutEvent(session: Stripe.Checkout.Session, charge:
   return {
     id: `stripe-sync-checkout-${session.id}`,
     type: 'checkout.session.completed',
+    livemode: session.livemode,
     created: session.created || charge.created,
     data: { object: session },
   } as Stripe.Event;
@@ -90,6 +92,8 @@ export async function syncRecentStripePaymentRecords(
     paidUsdCharges: charges.data.filter((charge) => charge.paid && charge.currency.toLowerCase() === 'usd').length,
     newestChargeAt: charges.data[0]?.created ? fromUnix(charges.data[0].created).toISOString() : null,
   };
+  // Validate the entire provider batch before touching any local payment record.
+  charges.data.forEach(assertStripeObjectMode);
   const sombleBackedPaymentIds = new Set(
     (
       await prisma.sombleTransaction.findMany({

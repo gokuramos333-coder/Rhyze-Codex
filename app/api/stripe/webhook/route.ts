@@ -7,6 +7,7 @@ import { getStripe } from '@/lib/payments/stripe';
 import { hydrateInvoiceEvent } from '@/lib/payments/stripe-event-hydration';
 import { processStripeEvent } from '@/lib/payments/webhook-processor';
 import { retrySerializableTransaction } from '@/lib/payments/transaction-retry';
+import { requiresLiveStripe } from '@/lib/payments/stripe-mode';
 
 export async function POST(request: Request) {
   const signature = request.headers.get('stripe-signature');
@@ -20,6 +21,10 @@ export async function POST(request: Request) {
     event = getStripe().webhooks.constructEvent(rawBody, signature, secret);
   } catch {
     return NextResponse.json({ error: 'Invalid signature.' }, { status: 400 });
+  }
+
+  if (requiresLiveStripe() && event.livemode !== true) {
+    return NextResponse.json({ received: true, ignored: 'non-live-event' });
   }
 
   const existing = await prisma.stripeEvent.findUnique({ where: { id: event.id } });

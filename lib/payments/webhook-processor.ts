@@ -5,6 +5,7 @@ import { commissionCentsForProduct } from '@/lib/domain/referrals/referral-servi
 import { renewalCreditReset } from '@/lib/domain/credits/membership-renewal';
 import { processSombleRecoveryEvent } from '@/lib/payments/somble-recovery-webhook';
 import { processMembershipPlanChangeEvent } from '@/lib/payments/membership-plan-change-webhook';
+import { assertStripeObjectMode } from '@/lib/payments/stripe-mode';
 
 type StripeObject = Record<string, any>;
 
@@ -580,6 +581,7 @@ async function fulfillCommerceOrder(
 }
 
 export async function processStripeEvent(tx: Prisma.TransactionClient, event: Stripe.Event) {
+  assertStripeObjectMode(event);
   if (await processMembershipPlanChangeEvent(tx, event)) return;
   if (await processSombleRecoveryEvent(tx, event)) return;
   const action = deriveStripeEventAction(event);

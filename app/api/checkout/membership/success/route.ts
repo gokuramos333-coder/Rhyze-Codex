@@ -31,6 +31,7 @@ function checkoutReturnEvent(checkoutSession: Stripe.Checkout.Session) {
   return {
     id: `checkout-return-${checkoutSession.id}`,
     type: 'checkout.session.completed',
+    livemode: checkoutSession.livemode,
     created: checkoutSession.created,
     data: { object: checkoutSession },
   } as Stripe.Event;

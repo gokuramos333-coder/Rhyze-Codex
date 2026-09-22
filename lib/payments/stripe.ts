@@ -1,13 +1,15 @@
 import Stripe from 'stripe';
+import { requiresLiveStripe } from '@/lib/payments/stripe-mode';
 
 let stripeClient: Stripe | null = null;
+let clientKey: string | undefined;
 
 export function stripeIsConfigured() {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
+  return Boolean(process.env.STRIPE_SECRET_KEY) && (!requiresLiveStripe() || stripeAccountMode() === 'live');
 }
 
 export function stripeConfiguration() {
-  const checkout = Boolean(process.env.STRIPE_SECRET_KEY);
+  const checkout = stripeIsConfigured();
   return {
     checkout,
     webhooks: checkout && Boolean(process.env.STRIPE_WEBHOOK_SECRET),
@@ -18,12 +20,18 @@ export function stripeConfiguration() {
 export function stripeAccountMode(): 'test' | 'live' | 'unconfigured' {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return 'unconfigured';
-  return key.startsWith('sk_live_') ? 'live' : 'test';
+  return /^(sk|rk)_live_/.test(key) ? 'live' : 'test';
 }
 
 export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('Stripe is not connected yet.');
-  stripeClient ??= new Stripe(key);
+  if (requiresLiveStripe() && stripeAccountMode() !== 'live') {
+    throw new Error('Production requires a live Stripe key; test payments are disabled.');
+  }
+  if (!stripeClient || clientKey !== key) {
+    stripeClient = new Stripe(key);
+    clientKey = key;
+  }
   return stripeClient;
 }

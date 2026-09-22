@@ -1,5 +1,5 @@
 import type Stripe from 'stripe';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const stripeMocks = vi.hoisted(() => ({
   chargesList: vi.fn(),
@@ -78,6 +78,15 @@ function database(record: ReturnType<typeof linkedRecord> | null) {
 }
 
 describe('scheduled Stripe reconciliation', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it('refuses a test charge batch before database reads or writes on the live site', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.rhyzefitness.com');
+    stripeMocks.chargesList.mockResolvedValue({ data: [charge({ livemode: false })] });
+    const { db, writes } = database(null);
+    await expect(syncRecentStripePaymentRecords(db as never)).rejects.toThrow(/live Stripe/);
+    expect(writes).toEqual([]);
+    expect(db.sombleTransaction.findMany).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     stripeMocks.accountRetrieve.mockResolvedValue({ id: 'acct_rhyze' });

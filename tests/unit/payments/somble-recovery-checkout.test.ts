@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startSombleRecoveryCheckout } from '@/lib/payments/somble-recovery-checkout';
 
 const now = new Date('2026-09-21T18:00:00Z');
@@ -9,6 +9,7 @@ function fixture() {
     created: [],
     customers: [],
     subscriptions: [],
+    audits: [],
   };
   const user = {
     id: 'cmryg3hyo000zw9wrhuigtu3y',
@@ -45,9 +46,14 @@ function fixture() {
     user: {
       findUnique: async () => user,
       update: async ({ data }: any) => Object.assign(user, data),
+      updateMany: async ({ where, data }: any) => {
+        if (where.stripeCustomerId !== user.stripeCustomerId) return { count: 0 };
+        Object.assign(user, data); return { count: 1 };
+      },
     },
     product: { findUnique: async () => product, upsert: async () => product },
     purchase: {
+      count: async () => 0,
       upsert: async ({ create }: any) =>
         (state.purchase ||= {
           ...create,
@@ -67,10 +73,17 @@ function fixture() {
       },
       findUnique: async () => state.purchase,
     },
+    membership: { count: async () => 0 },
+    paymentRecord: { count: async () => 0 },
+    commerceOrder: { count: async () => 0 },
+    auditLog: { create: async (args: any) => { state.audits.push(args.data); } },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback(db),
   };
   const stripe: any = {
+    balance: { retrieve: async () => ({ livemode: true }) },
     accounts: { retrieve: async () => ({ id: 'acct_1Tu0UqRIYui0I7dP' }) },
     customers: {
+      list: async () => ({ data: [], has_more: false }),
       retrieve: async () => ({
         id: user.stripeCustomerId,
         email: user.email,
@@ -120,6 +133,51 @@ function fixture() {
 }
 
 describe('Somble recovery checkout orchestration', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it('repairs an unpaid test-mode attempt on explicit member retry without changing benefits or charging a card', async () => {
+    const f = fixture();
+    await startSombleRecoveryCheckout(f.db, f.stripe, f.input);
+    f.state.purchase.stripeCheckoutSessionId = 'cs_test_wrong_mode';
+    f.user.stripeCustomerId = 'cus_test_only';
+    f.state.purchase.policyAcceptance.customerId = 'cus_test_only';
+    f.state.sessions = [];
+    const read = f.stripe.customers.retrieve;
+    f.stripe.customers.retrieve = async (id: string) => {
+      if (id === 'cus_test_only') throw Object.assign(new Error('No such customer'), { code: 'resource_missing' });
+      return read(id);
+    };
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.rhyzefitness.com');
+    const result = await startSombleRecoveryCheckout(f.db, f.stripe, { ...f.input, now: new Date('2026-09-23T18:00:00Z') });
+    expect(result).toBe('https://checkout.stripe.com/secure');
+    expect(f.user.stripeCustomerId).toBe('cus_created');
+    expect(f.state.purchase.status).toBe('PENDING');
+    expect(f.state.purchase.policyAcceptance.attempt).toBe(2);
+    expect(f.state.audits).toHaveLength(1);
+    expect(f.state.audits[0].before.stripeCheckoutSessionId).toBe('cs_test_wrong_mode');
+    expect(f.user.memberships[0].purchaseId).toBeNull();
+  });
+  it('does not detach a customer that exists in live mode just because a test session was stored', async () => {
+    const f = fixture();
+    await startSombleRecoveryCheckout(f.db, f.stripe, f.input);
+    f.state.purchase.stripeCheckoutSessionId = 'cs_test_wrong_mode';
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.rhyzefitness.com');
+    await expect(startSombleRecoveryCheckout(f.db, f.stripe, f.input)).rejects.toThrow(/review/i);
+    expect(f.state.audits).toHaveLength(0);
+    expect(f.user.stripeCustomerId).toBe('cus_verified');
+  });
+  it('never overwrites a live customer attached concurrently while a recovery customer is being created', async () => {
+    const f = fixture();
+    Object.assign(f.user, { stripeCustomerId: null });
+    const create = f.stripe.customers.create;
+    f.stripe.customers.create = async (...args: any[]) => {
+      const customer = await create(...args);
+      f.user.stripeCustomerId = 'cus_concurrent_live';
+      return customer;
+    };
+    await expect(startSombleRecoveryCheckout(f.db, f.stripe, f.input)).rejects.toThrow(/changed|review/i);
+    expect(f.user.stripeCustomerId).toBe('cus_concurrent_live');
+    expect(f.state.created).toHaveLength(0);
+  });
   it('keeps source metadata absent for existing untracked members', async () => {
     const f = fixture();
     await startSombleRecoveryCheckout(f.db, f.stripe, f.input);

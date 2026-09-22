@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 import { attributionMetadata } from '@/lib/attribution/first-touch';
-import type { PrismaClient, Product } from '@prisma/client';
+import { requiresLiveStripe } from '@/lib/payments/stripe-mode';
+import { Prisma, type PrismaClient, type Product } from '@prisma/client';
 import {
   eligibleRecovery,
   RECOVERY_VERSION,
@@ -32,6 +33,7 @@ type Acceptance = {
   attemptAt: string;
   origin: string;
   customerId?: string;
+  previousTestCheckoutSessionId?: string;
 };
 export async function startSombleRecoveryCheckout(
   db: PrismaClient,
@@ -114,10 +116,58 @@ export async function startSombleRecoveryCheckout(
   const account = await stripe.accounts.retrieve();
   if (account.id !== 'acct_1Tu0UqRIYui0I7dP')
     throw new Error('Unexpected Stripe account; contact the studio.');
+  // The September incident promoted a preview with test credentials. Repair only
+  // a still-unpaid recovery attempt, on the member's explicit billing consent.
+  // Never detach a real customer, subscription, or paid purchase.
+  if (requiresLiveStripe() && purchase.stripeCheckoutSessionId?.startsWith('cs_test_')) {
+    const oldCustomerId = user.stripeCustomerId;
+    if (!oldCustomerId || acceptance.customerId !== oldCustomerId || !(await stripe.balance.retrieve()).livemode)
+      throw new Error('Recovery customer needs studio review.');
+    try {
+      await stripe.customers.retrieve(oldCustomerId);
+      throw new Error('Existing live customer needs studio review.');
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'resource_missing')) throw error;
+    }
+    const liveMatches = await stripe.customers.list({ email: r.email, limit: 2 });
+    if (liveMatches.has_more || liveMatches.data.length)
+      throw new Error('Existing live customer needs studio review.');
+    const previousSessionId = purchase.stripeCheckoutSessionId;
+    const next: Acceptance = {
+      recovery: acceptance.recovery, membershipId: acceptance.membershipId,
+      attempt: acceptance.attempt + 1, attemptAt: now.toISOString(), origin: input.origin,
+      previousTestCheckoutSessionId: previousSessionId,
+    };
+    await db.$transaction(async (tx) => {
+      const references = await Promise.all([
+        tx.purchase.count({ where: { userId: user.id, id: { not: purchase.id }, stripeCheckoutSessionId: { not: null } } }),
+        tx.membership.count({ where: { userId: user.id, stripeSubscriptionId: { not: null } } }),
+        tx.paymentRecord.count({ where: { OR: [{ userId: user.id }, { stripeCustomerId: oldCustomerId }] } }),
+        tx.commerceOrder.count({ where: { userId: user.id, stripeCheckoutSessionId: { not: null } } }),
+      ]);
+      if (references.some(Boolean)) throw new Error('Existing payment history needs studio review.');
+      const claimed = await tx.purchase.updateMany({
+        where: { id: purchase.id, status: 'PENDING', stripeCheckoutSessionId: previousSessionId, policyAcceptance: { equals: acceptance } },
+        data: { stripeCheckoutSessionId: null, policyAcceptance: next },
+      });
+      const detached = await tx.user.updateMany({
+        where: { id: user.id, stripeCustomerId: oldCustomerId }, data: { stripeCustomerId: null },
+      });
+      if (claimed.count !== 1 || detached.count !== 1) throw new Error('Recovery changed; refresh before retrying.');
+      await tx.auditLog.create({ data: {
+        actorId: user.id, action: 'somble-recovery.test-mode-repaired', entityType: 'Purchase', entityId: purchase.id,
+        before: { stripeCheckoutSessionId: previousSessionId, stripeCustomerId: oldCustomerId, policyAcceptance: acceptance },
+        after: { stripeCheckoutSessionId: null, stripeCustomerId: null, policyAcceptance: next },
+      } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    user.stripeCustomerId = null;
+    purchase = { ...purchase, stripeCheckoutSessionId: null };
+    acceptance = next;
+  }
   let customerId = user.stripeCustomerId;
   if (!customerId) {
     // Never replay a potentially completed customer create beyond Stripe's minimum retention.
-    if (now.getTime() - purchase.createdAt.getTime() >= 23 * 3600000)
+    if (now.getTime() - Date.parse(acceptance.attemptAt) >= 23 * 3600000)
       throw new Error('Customer setup needs studio review.');
     const created = await stripe.customers.create(
       {
@@ -125,13 +175,15 @@ export async function startSombleRecoveryCheckout(
         name: r.firstName,
         metadata: { userId: r.userId, recovery: RECOVERY_VERSION },
       },
-      { idempotencyKey: `${RECOVERY_VERSION}:customer:${r.userId}` },
+      { idempotencyKey: `${RECOVERY_VERSION}:customer:${r.userId}${acceptance.previousTestCheckoutSessionId ? ':live-mode-repair' : ''}` },
     );
     customerId = created.id;
-    await db.user.update({
-      where: { id: r.userId },
+    const attached = await db.user.updateMany({
+      where: { id: r.userId, stripeCustomerId: null },
       data: { stripeCustomerId: customerId },
     });
+    if (attached.count !== 1)
+      throw new Error('Stripe customer changed during setup; contact the studio for review.');
   }
   const customer = await stripe.customers.retrieve(customerId);
   if (
