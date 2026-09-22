@@ -1,6 +1,6 @@
 # Payment-mode incident — September 22, 2026
 
-Status: fixes prepared locally; **not deployed**. Production remains affected until a true production-context release is published and verified.
+Status: **deployed September 22, 2026 at 12:12:59 EDT**. Source `6c20eaa` is published as READY deploy `6ab2a8b3789eb5b336e1a842`, with actual API context `production`. Runtime Stripe LIVE/readiness, authenticated portal HTTP checks, public routes/assets, migrations, and restored restricted deployment-token database access passed. Customers still need to complete their own payments; no live checkout was submitted during verification. See [release verification](2026-09-22-payment-production-release.md).
 
 ## Verified cause (read-only production and Stripe inspection)
 
@@ -33,7 +33,7 @@ Status: fixes prepared locally; **not deployed**. Production remains affected un
 - The test-mode reconciliation imported 20 recent sandbox charge records (all unlinked to members/purchases) into the production ledger, including synthetic test-clock charges. Existing verified-revenue logic excludes unlinked records, but these remain visible as unmatched records and raw telemetry. They were **not deleted, refunded, or relabeled** during diagnosis. Two older July test-event-linked records also remain. Review/quarantine separately without destroying financial audit history; never treat test charges as money received.
 - Amy's repair prerequisites were checked read-only: zero other Stripe purchases, subscriptions, payment records, or commerce checkouts. Her benefits and September amount/October renewal date were not changed during diagnosis.
 - No production payment, member, booking, email, or credential writes were performed during this task.
-- Deployment currently requires an actual writable managed production DB binding. Explicit confirmation was requested for temporarily enabling Netlify PAT production database access, restoring OFF afterward. Until answered, do not change that security setting or publish with a read-only binding.
-- After publication: verify deploy context production, live catalog access, webhook configuration, public assets, protected portal redirects, and authenticated role checks. Confirm Amy can create a live replacement checkout; Susan and Lori can retry without being charged twice. Actual payment success requires the customers to complete payment; do not claim 100% success from unit tests alone.
+- The user explicitly approved temporary Netlify PAT production database access for this release. It was restored OFF after publication; a fresh API binding request again returned `netlifydb_readonly`. The application retains its deployment-scoped writable binding.
+- Production context, runtime LIVE checkout readiness/webhook-secret presence, public assets, anonymous redirects, and authenticated role checks passed. The live trial price was previously verified to exist through Stripe's wrong-mode error, but no independent live-secret price retrieval or completed card transaction was performed during release checks. Amy's guarded repair runs only on her explicit checkout consent. Actual payment success requires the customers to complete payment; do not claim 100% success from unit tests alone.
 
 References: [Netlify CLI deploy flags](https://cli.netlify.com/commands/deploy/), [Netlify deployment contexts](https://docs.netlify.com/deploy/deploy-overview/), [Stripe API authentication and modes](https://docs.stripe.com/api/authentication).
