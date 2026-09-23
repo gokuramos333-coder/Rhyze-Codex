@@ -123,6 +123,37 @@ describe('membership checkout return', () => {
     });
   });
 
+  it('creates one-time pack checkout even when the saved price is recurring, without charging or subscribing', async () => {
+    mocks.productFindFirst.mockResolvedValue({
+      id: 'product-eight-class-pack-2026', name: '8-Class Pack', slug: 'eight-class-pack',
+      description: 'Eight classes, valid for three months', kind: 'CLASS_PACK',
+      billingInterval: 'ONE_TIME', customPlanType: 'QUARTERLY_8_CLASS_PACK',
+      priceCents: 17900, stripePriceId: 'price_stale_recurring', isPublic: true, isActive: true,
+    });
+    mocks.checkoutCreate.mockImplementation(async (params) => {
+      if (params.mode === 'payment' && params.line_items[0].price === 'price_stale_recurring') {
+        throw new Error('You specified payment mode but passed a recurring price');
+      }
+      return { id: 'cs_pack', url: 'https://checkout.stripe.com/c/pay/cs_pack' };
+    });
+    const form = new FormData();
+    form.set('productId', 'product-eight-class-pack-2026');
+    // Browser-submitted amounts/cadences must never override the database.
+    form.set('priceCents', '1');
+    form.set('billingInterval', 'MONTHLY');
+    await expect(startCheckoutAction(form)).rejects.toThrow('redirect:https://checkout.stripe.com/c/pay/cs_pack');
+    expect(mocks.checkoutCreate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      mode: 'payment', subscription_data: undefined,
+      line_items: [{ quantity: 1, price_data: {
+        currency: 'usd', unit_amount: 17900,
+        product_data: { name: '8-Class Pack', description: 'Eight classes, valid for three months', metadata: { rhyzeProductId: 'product-eight-class-pack-2026' } },
+      } }],
+      metadata: expect.objectContaining({ purchaseId: 'purchase_intro' }),
+    }), { idempotencyKey: 'checkout-purchase_intro' });
+    expect(mocks.purchaseCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ amountCents: 17900 }) });
+    expect(mocks.purchaseUpdate).toHaveBeenCalledExactlyOnceWith({ where: { id: 'purchase_intro' }, data: { stripeCheckoutSessionId: 'cs_pack' } });
+  });
+
   it('adds the saved member first-touch source to Session metadata without changing checkout URLs', async () => {
     mocks.userFindUnique.mockResolvedValue({
       stripeCustomerId: null, source_label: 'Meta Ad', source_fbclid: 'abc123',

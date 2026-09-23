@@ -18,6 +18,7 @@ import {
 import { canAccessPrivateMembership } from '@/lib/catalog/private-membership';
 import {
   buildCheckoutCustomerParameters,
+  buildProductCheckoutLineItem,
   buildSubscriptionData,
 } from '@/lib/payments/checkout-config';
 import {
@@ -205,7 +206,7 @@ export async function startCheckoutAction(formData: FormData) {
       redirect('/member/membership?result=trial-ineligible');
     }
   }
-  if (!stripeIsConfigured() || !product.stripePriceId) redirect('/member/membership?result=stripe');
+  if (!stripeIsConfigured() || (product.billingInterval !== 'ONE_TIME' && !product.stripePriceId)) redirect('/member/membership?result=stripe');
 
   const referralEligible = isReferralEligibleProduct(product.kind);
   if (usesRhyze2026Promo) {
@@ -294,7 +295,7 @@ export async function startCheckoutAction(formData: FormData) {
         email: user.email,
         mode: product.billingInterval === 'ONE_TIME' ? 'payment' : 'subscription',
       }),
-      line_items: [{ price: product.stripePriceId!, quantity: 1 }],
+      line_items: [buildProductCheckoutLineItem(product)],
       billing_address_collection: 'required',
       payment_intent_data: product.billingInterval === 'ONE_TIME'
         ? {
