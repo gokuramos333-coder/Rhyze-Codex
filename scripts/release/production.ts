@@ -37,6 +37,7 @@ const {
   assertIsolatedLocation,
   verifySnapshot,
   acquireReleaseLock,
+  environmentFingerprint,
 } = require('./boundary.cjs');
 
 const exec = promisify(execFile);
@@ -135,7 +136,7 @@ async function main() {
     });
     assertProductionEnvironment(variables, deploy.created_at);
     // Persist only a fingerprint, never credentials (even masked API values).
-    return digest(JSON.stringify(variables));
+    return environmentFingerprint(variables);
   };
   let artifact = '';
   let snapshot = '';

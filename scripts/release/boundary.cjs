@@ -3,6 +3,23 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
+function environmentFingerprint(variables) {
+  // Netlify does not guarantee record/property order. Preserve every field;
+  // normalize only object keys and the unordered environment/scopes/values lists.
+  const normalize = (value) => {
+    if (Array.isArray(value)) return value.map(normalize);
+    if (value && typeof value === 'object')
+      return Object.fromEntries(Object.keys(value).sort().map((key) => [key, normalize(value[key])]));
+    return value;
+  };
+  const ordered = (items) => items.map((item) => JSON.stringify(normalize(item))).sort().map((item) => JSON.parse(item));
+  return hash(JSON.stringify(ordered(variables.map((variable) => ({
+    ...variable,
+    ...(variable.scopes ? { scopes: ordered(variable.scopes) } : {}),
+    ...(variable.values ? { values: ordered(variable.values) } : {}),
+  })))));
+}
+
 function assertIsolatedLocation(root) {
   let parent = path.dirname(fs.realpathSync(root));
   for (;;) {
@@ -107,13 +124,14 @@ function verifyBoundary(manifest, actual, api) {
     account_id: manifest.accountId,
     site_id: manifest.siteId,
   });
-  if (hash(JSON.stringify(config)) !== manifest.configHash)
+  if (environmentFingerprint(config) !== manifest.configHash)
     throw Error(
       'Production configuration changed during the build. Publication blocked.',
     );
 }
 
 module.exports = {
+  environmentFingerprint,
   assertIsolatedLocation,
   verifySnapshot,
   acquireReleaseLock,

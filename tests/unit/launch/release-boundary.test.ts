@@ -17,6 +17,7 @@ const {
   verifySnapshot,
   acquireReleaseLock,
   verifyBoundary,
+  environmentFingerprint,
 } = require('../../../scripts/release/boundary.cjs');
 const roots: string[] = [];
 const fixture = () => {
@@ -40,6 +41,50 @@ afterEach(() =>
 );
 
 describe('Netlify final build boundary', () => {
+  it('normalizes context ordering without mutating the input', () => {
+    const first = [{ key: 'A', values: [{ context: 'production', value: 'live' }, { context: 'dev', value: 'test' }] }];
+    const before = JSON.stringify(first);
+    const reordered = [{ key: 'A', values: [...first[0].values].reverse() }];
+    expect(environmentFingerprint(first)).toBe(environmentFingerprint(reordered));
+    expect(JSON.stringify(first)).toBe(before);
+  });
+  it.each(['value', 'context', 'scope', 'key', 'timestamp', 'added', 'removed'])(
+    'still blocks an actual environment change: %s', (change) => {
+      const { root, hashes } = fixture();
+      const before = [{ key: 'A', scopes: ['builds', 'functions'], updated_at: '2026-09-22', values: [{ context: 'production', value: 'live' }] }];
+      const after = structuredClone(before);
+      if (change === 'value') after[0].values[0].value = 'test';
+      if (change === 'context') after[0].values[0].context = 'dev';
+      if (change === 'scope') after[0].scopes.pop();
+      if (change === 'key') after[0].key = 'B';
+      if (change === 'timestamp') after[0].updated_at = '2026-09-23';
+      if (change === 'added') after.push({ ...after[0], key: 'B' });
+      if (change === 'removed') after.pop();
+      expect(() => verifyBoundary({ root, hashes, siteId: 'expected-site', expectedDeploy: 'old', configHash: environmentFingerprint(before) },
+        { root, siteId: 'expected-site' }, (operation: string) => operation === 'getSite'
+          ? { id: 'expected-site', published_deploy: { id: 'old' } } : after,
+      )).toThrow(/configuration changed/);
+    },
+  );
+  it('accepts unchanged environment settings returned in a different API order', () => {
+    const { root, hashes } = fixture();
+    const config = [
+      { key: 'A', scopes: ['builds', 'functions'], values: [{ context: 'production', value: 'one' }] },
+      { key: 'B', scopes: ['builds'], values: [{ context: 'production', value: 'two' }] },
+    ];
+    const manifest = {
+      root, hashes, siteId: 'expected-site', expectedDeploy: 'old',
+      configHash: createHash('sha256').update(JSON.stringify(config)).digest('hex'),
+    };
+    const reordered = [...config].reverse().map((item) => ({
+      values: item.values, scopes: [...item.scopes].reverse(), key: item.key,
+    }));
+    expect(() => verifyBoundary(manifest, { root, siteId: 'expected-site' },
+      (operation: string) => operation === 'getSite'
+        ? { id: 'expected-site', published_deploy: { id: 'old' } }
+        : reordered,
+    )).not.toThrow();
+  });
   it('runs the actual post-build plugin before recording permission to publish', () => {
     const { root, hashes } = fixture();
     const control = mkdtempSync(join(tmpdir(), 'rhyze-plugin-test-'));
