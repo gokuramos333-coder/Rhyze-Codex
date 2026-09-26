@@ -40,6 +40,7 @@ import {
   assignAdminMembershipAction,
   deleteManualMemberCreditsAction,
   grantManualMemberCreditsAction,
+  refundMemberCommerceOrderAction,
   refundMemberPurchaseAction,
   returnTransactionCreditAction,
   reviewMembershipChangeRequestAction,
@@ -114,6 +115,14 @@ function dateTime(value: Date | null | undefined) {
     : '—';
 }
 
+function currency(value: string | null | undefined) {
+  return (value || 'usd').toUpperCase();
+}
+
+function paymentIntentLabel(value: string | null | undefined) {
+  return value || 'Not recorded';
+}
+
 export default async function AdminMemberDetailPage(
   props: {
     params: Promise<{ userId: string }>;
@@ -186,6 +195,7 @@ export default async function AdminMemberDetailPage(
             commerceOrder: {
               include: {
                 items: true,
+                refunds: true,
                 occurrence: { include: { template: true } },
               },
             },
@@ -482,6 +492,18 @@ export default async function AdminMemberDetailPage(
       )}
       {(searchParams.error === 'refund' || searchParams.error === 'credit-return') && (
         <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">That transaction action could not be completed. No additional credit or refund was recorded.</p>
+      )}
+      {searchParams.error === 'refund-pending' && (
+        <p className="mt-6 border-l-4 border-rhyze-gold bg-orange-50 p-4 font-bold">Stripe reports this refund is still pending. Rhyze did not close booking cleanup or send a success email.</p>
+      )}
+      {searchParams.error === 'refund-failed' && (
+        <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Stripe reported the refund failed or was canceled. No additional credit or refund cleanup was recorded.</p>
+      )}
+      {searchParams.error === 'refund-provider-mismatch' && (
+        <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Stripe refund details did not match this order. Review the provider record before retrying.</p>
+      )}
+      {searchParams.error === 'refund-review' && (
+        <p className="mt-6 border-l-4 border-rhyze-coral bg-red-50 p-4 font-bold text-red-900">Refund needs manual review because booking, transfer, or returned-credit history prevents automatic cleanup.</p>
       )}
       {searchParams.error === 'manual-credit' && (
         <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">The manual credit grant was not saved. Confirm the quantity, reason, and future expiration date.</p>
@@ -866,9 +888,9 @@ export default async function AdminMemberDetailPage(
           </section>
 
           <section id="payment-history" className="scroll-mt-24 border-t-4 border-rhyze-gold bg-white p-5">
-            <h2 className="font-display text-4xl tracking-wider">PAYMENT HISTORY</h2>
+            <h2 className="font-display text-4xl tracking-wider">NATIVE RHYZE FINANCIALS</h2>
             <p className="mt-1 text-xs font-bold text-rhyze-black/45">
-              Native Rhyze purchases and preserved Somble transfer history.
+              Native Rhyze financials, purchases, event orders, refunds, and preserved Somble transfer history.
             </p>
             {importedClassReservations.length > 0 && (
               <div className="mt-4 border-l-4 border-rhyze-orange bg-orange-50 p-4">
@@ -929,13 +951,40 @@ export default async function AdminMemberDetailPage(
                   </summary>
                   <div className="mt-3 border-l-4 border-rhyze-orange bg-orange-50 p-4">
                     <p className="text-xs font-black uppercase tracking-widest">Transaction details</p>
-                    <p className="mt-2 text-sm">Original amount: {money(payment.amountCents)} · Refunded: {money(payment.refundedAmountCents)}</p>
+                    <p className="mt-2 text-sm">Original amount: {money(payment.amountCents)} {currency(payment.currency)} · Refunded: {money(payment.refundedAmountCents)}</p>
+                    <p className="mt-1 text-sm">Payment intent: <span className="font-mono text-xs">{paymentIntentLabel(payment.stripePaymentIntentId)}</span></p>
+                    <p className="mt-1 text-sm">
+                      Refund status: {payment.status.replaceAll('_', ' ')} · {payment.commerceOrder?.refunds.length ? payment.commerceOrder.refunds.map((refund) => `${refund.status}${refund.providerStatus ? `/${refund.providerStatus}` : ''}`).join(', ') : 'No refund record'}
+                    </p>
+                    {payment.commerceOrder?.occurrence && (
+                      <p className="mt-1 text-sm">
+                        Event: {payment.commerceOrder.occurrence.template.name} · {dateTime(payment.commerceOrder.occurrence.startAt)}
+                      </p>
+                    )}
                     <div className="mt-4 flex flex-wrap gap-2">
                       {payment.purchaseId && ['SUCCEEDED', 'PARTIALLY_REFUNDED'].includes(payment.status) && payment.stripePaymentIntentId && (
                         <form action={refundMemberPurchaseAction}>
                           <input type="hidden" name="userId" value={member.id} />
                           <input type="hidden" name="purchaseId" value={payment.purchaseId} />
                           <button className="border border-red-700 bg-red-100 px-4 py-2 text-[10px] font-black uppercase text-red-900">Refund payment</button>
+                        </form>
+                      )}
+                      {payment.commerceOrderId && payment.commerceOrder && ['SUCCEEDED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(payment.status) && payment.stripePaymentIntentId && (
+                        <form action={refundMemberCommerceOrderAction} className="grid gap-2 border border-red-700/30 bg-white p-3 sm:grid-cols-[1fr_12rem_auto] sm:items-end">
+                          <input type="hidden" name="userId" value={member.id} />
+                          <input type="hidden" name="commerceOrderId" value={payment.commerceOrderId} />
+                          <p className="sm:col-span-3 text-[10px] font-bold uppercase text-rhyze-black/55">
+                            DB remaining, provider-verified on submit: {money(Math.max(0, payment.amountCents - payment.refundedAmountCents))}
+                          </p>
+                          <label className="grid gap-1 text-[10px] font-black uppercase">
+                            Refund reason
+                            <input name="reason" minLength={5} maxLength={240} required defaultValue={payment.status === 'REFUNDED' ? 'Provider refund reconciliation' : undefined} className="min-h-10 border bg-white px-3 text-sm font-normal normal-case" />
+                          </label>
+                          <label className="grid gap-1 text-[10px] font-black uppercase">
+                            Type REFUND to confirm
+                            <input name="confirmation" pattern="REFUND" required className="min-h-10 border bg-white px-3 text-sm font-normal normal-case" />
+                          </label>
+                          <button className="min-h-10 border border-red-700 bg-red-100 px-4 text-[10px] font-black uppercase text-red-900">{payment.status === 'REFUNDED' ? 'Check / reconcile refund' : 'Refund remaining cash'}</button>
                         </form>
                       )}
                       {payment.purchaseId && (

@@ -39,6 +39,7 @@ import {
   chargeAttendanceFee,
   refundAttendanceFee,
 } from '@/lib/payments/attendance-fee';
+import { assertNoCashRefundForBooking } from '@/lib/domain/bookings/cash-refund-guard';
 
 function emailDate(value: Date) {
   return value.toLocaleDateString('en-US', {
@@ -472,6 +473,9 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       restoreCredit: decision.restoreCredit || decision.window === 'ADVANCE' && Boolean(reservation),
       hasReservation: Boolean(reservation),
     });
+    if (creditDecision !== 'NONE') {
+      await assertNoCashRefundForBooking(tx, booking);
+    }
     let creditReturned = false;
     let creditResult = accessType === 'STANDARD'
       ? 'This cancellation falls inside the late-cancel window, so the credit was not returned.'

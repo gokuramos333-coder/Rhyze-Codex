@@ -798,15 +798,24 @@ model CommerceOrder {
 model CommerceRefund {
   id              String   @id @default(cuid())
   commerceOrderId String
+  bookingId       String?
   amountCents     Int
   reason          String?
   stripeRefundId  String?  @unique
+  status          String   @default("SUCCEEDED")
+  providerStatus  String?
+  operationKey    String?  @unique
+  actorId         String?
+  verifiedAt      DateTime?
+  failureReason   String?
   createdAt       DateTime @default(now())
 
   commerceOrder CommerceOrder @relation(fields: [commerceOrderId], references: [id], onDelete: Restrict)
 
   @@index([commerceOrderId, createdAt])
+  @@index([bookingId, status])
   @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model CommerceOrderItem {

@@ -23,6 +23,7 @@ describe('admin client transaction actions', () => {
   it('full native refunds close membership access, clear source credits, and refresh Activity', () => {
     const memberAction = readFileSync('app/(studio)/admin/members/[userId]/actions.ts', 'utf8');
     const paymentsAction = readFileSync('app/(studio)/admin/payments/actions.ts', 'utf8');
+    const commerceRefundHelper = readFileSync('lib/payments/commerce-refunds.ts', 'utf8');
 
     for (const source of [memberAction, paymentsAction]) {
       expect(source).toContain("data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents }");
@@ -32,6 +33,10 @@ describe('admin client transaction actions', () => {
       expect(source).toContain("data: { validUntil:");
       expect(source).toContain("revalidatePath('/admin/activity')");
     }
-    expect(paymentsAction).toContain("where: { stripePaymentIntentId: order.stripePaymentIntentId }");
+    expect(paymentsAction).toContain('refundCommerceOrderFullRemainder');
+    expect(commerceRefundHelper).toContain('{ commerceOrderId: order.id }');
+    expect(commerceRefundHelper).toContain('{ stripePaymentIntentId: order.stripePaymentIntentId }');
+    expect(commerceRefundHelper).toContain("data: { status: 'CANCELLED'");
+    expect(commerceRefundHelper).toContain("template: 'CLASS_REMINDER'");
   });
 });

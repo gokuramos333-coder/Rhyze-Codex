@@ -13,6 +13,7 @@ import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
 import { getStripe } from '@/lib/payments/stripe';
 import { stripeIsConfigured } from '@/lib/payments/stripe';
 import { queueSombleRecoveryInvitation } from '@/lib/notifications/somble-recovery-invitation';
+import { CommerceRefundError, refundCommerceOrderFullRemainder } from '@/lib/payments/commerce-refunds';
 
 export async function sendSombleRecoveryInvitationAction(formData: FormData) {
   const actor = await requireApprovedOwner();
@@ -56,6 +57,26 @@ const transactionActionSchema = z.object({
   sourceId: z.string().min(1),
   sourceType: z.enum(['RHYZE', 'SOMBLE']),
 });
+
+const commerceRefundActionSchema = z.object({
+  userId: z.string().min(1),
+  commerceOrderId: z.string().min(1),
+  confirmation: z.string().trim(),
+  reason: z.string().trim().min(5).max(240),
+});
+
+function commerceRefundErrorCode(error: unknown) {
+  const code = error instanceof CommerceRefundError
+    ? error.code
+    : typeof error === 'object' && error && 'code' in error
+      ? (error as { code?: unknown }).code
+      : null;
+  if (code === 'provider_pending') return 'refund-pending';
+  if (code === 'provider_failed') return 'refund-failed';
+  if (code === 'provider_mismatch') return 'refund-provider-mismatch';
+  if (code === 'not_refundable') return 'refund-review';
+  return 'refund';
+}
 
 const manualCreditGrantSchema = z.object({
   userId: z.string().min(1),
@@ -510,6 +531,48 @@ export async function refundMemberPurchaseAction(formData: FormData) {
   revalidatePath('/member');
   revalidatePath('/member/membership');
   redirect(`/admin/members/${userId}?sent=refund`);
+}
+
+export async function refundMemberCommerceOrderAction(formData: FormData) {
+  const actor = await requireApprovedOwner();
+  const parsed = commerceRefundActionSchema.safeParse({
+    userId: formData.get('userId'),
+    commerceOrderId: formData.get('commerceOrderId'),
+    confirmation: formData.get('confirmation'),
+    reason: formData.get('reason'),
+  });
+  const fallbackUserId = String(formData.get('userId') || '');
+  if (!parsed.success || !stripeIsConfigured()) {
+    redirect(`/admin/members/${fallbackUserId}?error=refund#payment-history`);
+  }
+
+  try {
+    await refundCommerceOrderFullRemainder(prisma, getStripe(), {
+      orderId: parsed.data.commerceOrderId,
+      memberUserId: parsed.data.userId,
+      actorId: actor.id,
+      reason: parsed.data.reason,
+      confirmation: parsed.data.confirmation,
+    });
+  } catch (error) {
+    if (!(error instanceof CommerceRefundError)) {
+      console.error('Client commerce refund failed', {
+        commerceOrderId: parsed.data.commerceOrderId,
+        userId: parsed.data.userId,
+        message: error instanceof Error ? error.message : 'Unknown refund error',
+      });
+    }
+    redirect(`/admin/members/${parsed.data.userId}?error=${commerceRefundErrorCode(error)}#payment-history`);
+  }
+
+  revalidatePath(`/admin/members/${parsed.data.userId}`);
+  revalidatePath('/admin/activity');
+  revalidatePath('/admin');
+  revalidatePath('/admin/payments');
+  revalidatePath('/member');
+  revalidatePath('/member/bookings');
+  revalidatePath('/member/membership');
+  redirect(`/admin/members/${parsed.data.userId}?sent=refund#payment-history`);
 }
 
 export async function sendMemberMessageAction(formData: FormData) {

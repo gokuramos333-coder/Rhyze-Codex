@@ -22,7 +22,7 @@ const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 type CommerceOrderRow = Prisma.CommerceOrderGetPayload<{
-  include: { user: true; items: true; occurrence: { include: { template: true } } };
+  include: { user: true; items: true; refunds: true; occurrence: { include: { template: true } } };
 }>;
 type PaymentRecordRow = Prisma.PaymentRecordGetPayload<{
   include: {
@@ -52,7 +52,7 @@ export default async function PaymentsPage({
       take: 100,
     }),
     prisma.commerceOrder.findMany({
-      include: { user: true, items: true, occurrence: { include: { template: true } } },
+      include: { user: true, items: true, refunds: true, occurrence: { include: { template: true } } },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
@@ -120,6 +120,24 @@ export default async function PaymentsPage({
       )}
       {result === 'sync-error' && (
         <p className="mt-4 border-l-4 border-rhyze-coral bg-white p-4 text-sm font-bold text-red-800">Stripe refresh failed. Existing payment data has not been deleted; please try again or check the Stripe job log.</p>
+      )}
+      {result === 'refund-issued' && (
+        <p className="mt-4 border-l-4 border-emerald-600 bg-white p-4 text-sm font-bold text-emerald-900">Stripe refund verified. Rhyze payment, refund, and any linked event booking state were reconciled.</p>
+      )}
+      {result === 'refund-error' && (
+        <p className="mt-4 border-l-4 border-red-700 bg-white p-4 text-sm font-bold text-red-900">Refund was not completed. No success email or refunded booking cleanup was recorded.</p>
+      )}
+      {result === 'refund-pending' && (
+        <p className="mt-4 border-l-4 border-rhyze-gold bg-white p-4 text-sm font-bold text-rhyze-black">Stripe reports this refund is still pending. Rhyze left the order open for a later safe check.</p>
+      )}
+      {result === 'refund-failed' && (
+        <p className="mt-4 border-l-4 border-red-700 bg-white p-4 text-sm font-bold text-red-900">Stripe reported the refund failed or was canceled. No refunded booking cleanup was recorded.</p>
+      )}
+      {result === 'refund-provider-mismatch' && (
+        <p className="mt-4 border-l-4 border-red-700 bg-white p-4 text-sm font-bold text-red-900">Stripe refund details did not match this order. The order needs provider review before retry.</p>
+      )}
+      {result === 'refund-review' && (
+        <p className="mt-4 border-l-4 border-rhyze-coral bg-white p-4 text-sm font-bold text-red-900">Refund needs manual review because booking, transfer, or returned-credit history prevents automatic cleanup.</p>
       )}
 
       <div className="mt-7 grid gap-3 md:grid-cols-3">
@@ -323,8 +341,8 @@ function CommerceOrderSection({
       <p className="border-b border-black/10 px-5 py-3 text-sm text-rhyze-black/55">
         Stripe Checkout orders appear after signed webhook confirmation.
       </p>
-      <table className="w-full min-w-[58rem] text-left text-sm">
-        <thead><tr className="border-b"><th className="p-4">Customer</th><th>Date &amp; time</th><th>Order</th><th>Status</th><th>Amount</th><th>Action</th></tr></thead>
+      <table className="w-full min-w-[66rem] text-left text-sm">
+        <thead><tr className="border-b"><th className="p-4">Customer</th><th>Date &amp; time</th><th>Order</th><th>Status</th><th>Amount</th><th>Refunded</th><th>Action</th></tr></thead>
         <tbody>
           {orders.map((order) => (
             <tr key={order.id} className="border-b border-black/5">
@@ -334,10 +352,23 @@ function CommerceOrderSection({
               <td>{order.status.replaceAll('_', ' ')}</td>
               <td>{money(order.status === 'DISPUTED' ? 0 : netCollectedAmountCents(order))}</td>
               <td>
-                {(order.status === 'PAID' || order.status === 'FULFILLMENT_REVIEW') && order.stripePaymentIntentId && (
-                  <form action={refundCommerceOrderAction}>
+                <span className="block">{money(order.refundedAmountCents)}</span>
+                {order.refunds.length > 0 && (
+                  <small className="block text-rhyze-black/45">
+                    {order.refunds.map((refund) => `${refund.status}${refund.providerStatus ? `/${refund.providerStatus}` : ''}`).join(', ')}
+                  </small>
+                )}
+              </td>
+              <td>
+                {(order.status === 'PAID' || order.status === 'FULFILLMENT_REVIEW' || order.status === 'PARTIALLY_REFUNDED' || order.status === 'REFUNDED') && order.stripePaymentIntentId && (
+                  <form action={refundCommerceOrderAction} className="grid min-w-60 gap-2">
                     <input type="hidden" name="orderId" value={order.id} />
-                    <button className="text-xs font-black uppercase text-rhyze-coral">Refund</button>
+                    <p className="text-[10px] font-bold uppercase text-rhyze-black/55">
+                      DB remaining, provider-verified on submit: {money(Math.max(0, order.amountCents - order.refundedAmountCents))}
+                    </p>
+                    <input name="reason" required minLength={5} maxLength={240} defaultValue={order.status === 'REFUNDED' ? 'Provider refund reconciliation' : undefined} placeholder="Refund reason" className="min-h-9 border border-black/15 px-2 text-xs" />
+                    <input name="confirmation" required pattern="REFUND" placeholder="Type REFUND to confirm" className="min-h-9 border border-black/15 px-2 text-xs" />
+                    <button className="text-left text-xs font-black uppercase text-rhyze-coral">{order.status === 'REFUNDED' ? 'Check / reconcile refund' : 'Refund remaining cash'}</button>
                   </form>
                 )}
               </td>

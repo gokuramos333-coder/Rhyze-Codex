@@ -54,6 +54,7 @@ type CommerceRefundInput = {
   commerceOrderId: string;
   amountCents: number;
   createdAt: Date;
+  status?: string;
 };
 
 type RefundedPaymentInput = StripeRevenueInput & {
@@ -243,7 +244,7 @@ export function buildReconciledRefundRecords(input: {
 
   const commerceRefundRecords = input.commerceRefunds.flatMap((refund) => {
     const order = commerceOrdersById.get(refund.commerceOrderId);
-    if (!order || refund.amountCents <= 0) return [];
+    if (!order || refund.amountCents <= 0 || (refund.status && refund.status !== 'SUCCEEDED')) return [];
     explicitCommerceRefundCents.set(
       refund.commerceOrderId,
       (explicitCommerceRefundCents.get(refund.commerceOrderId) ?? 0) +

@@ -148,6 +148,13 @@ export async function syncRecentStripePaymentRecords(
     const amountCents = charge.amount_captured || charge.amount;
     const existingByCharge = recordByPaymentIntent.get(paymentIntentId) ||
       recordByEventId.get(`stripe-sync-charge-${charge.id}`);
+    if (
+      existingByCharge?.commerceOrderId &&
+      ['REFUNDED', 'PARTIALLY_REFUNDED'].includes(status)
+    ) {
+      unchanged += 1;
+      continue;
+    }
     const purchaseResolved = existingByCharge?.purchase?.status === (
       status === 'SUCCEEDED' ? 'PAID' : status
     );

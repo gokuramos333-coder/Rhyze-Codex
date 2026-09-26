@@ -138,6 +138,22 @@ describe('scheduled Stripe reconciliation', () => {
     expect(writes[0]).toMatchObject({ data: { status: 'PARTIALLY_REFUNDED', refundedAmountCents: 500 } });
   });
 
+  it('does not mark linked commerce orders refunded from charge amount_refunded alone', async () => {
+    stripeMocks.chargesList.mockResolvedValue({ data: [charge({ amount_refunded: 700, refunded: true })] });
+    const { db, writes } = database(linkedRecord({
+      purchaseId: null,
+      purchase: null,
+      commerceOrderId: 'order_event',
+      commerceOrder: { status: 'PAID' },
+    }));
+
+    const result = await syncRecentStripePaymentRecords(db as never, { lookbackDays: 14 });
+
+    expect(result).toMatchObject({ synced: 0, unchanged: 1 });
+    expect(writes).toEqual([]);
+    expect(stripeMocks.processEvent).not.toHaveBeenCalled();
+  });
+
   it('continues checkout recovery when a matching purchase is still pending', async () => {
     stripeMocks.chargesList.mockResolvedValue({ data: [charge()] });
     stripeMocks.sessionsList.mockResolvedValue({ data: [{

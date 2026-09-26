@@ -14,22 +14,35 @@ export function creditGrantForPayment(
   payment: 'CHECKOUT' | 'INVOICE',
 ) {
   if (!product.includedCredits) return null;
-  if (payment === 'CHECKOUT') return product.billingInterval === 'ONE_TIME' ? product.includedCredits : null;
-  return product.billingInterval === 'ONE_TIME' ? null : product.includedCredits;
+  if (payment === 'CHECKOUT')
+    return product.billingInterval === 'ONE_TIME'
+      ? product.includedCredits
+      : null;
+  return product.billingInterval === 'ONE_TIME'
+    ? null
+    : product.includedCredits;
 }
 
 function idOf(value: unknown) {
   if (typeof value === 'string') return value;
-  if (value && typeof value === 'object' && 'id' in value) return String(value.id);
+  if (value && typeof value === 'object' && 'id' in value)
+    return String(value.id);
   return null;
 }
 
 function invoiceSubscriptionId(invoice: StripeObject) {
-  return idOf(invoice.subscription) || idOf(invoice.parent?.subscription_details?.subscription);
+  return (
+    idOf(invoice.subscription) ||
+    idOf(invoice.parent?.subscription_details?.subscription)
+  );
 }
 
 function invoicePurchaseId(invoice: StripeObject) {
-  return invoice.parent?.subscription_details?.metadata?.purchaseId || invoice.metadata?.purchaseId || null;
+  return (
+    invoice.parent?.subscription_details?.metadata?.purchaseId ||
+    invoice.metadata?.purchaseId ||
+    null
+  );
 }
 
 function invoicePaymentIntentId(invoice: StripeObject) {
@@ -50,7 +63,8 @@ function eventDate(seconds: unknown, fallback: number) {
 export function stripeMembershipStatus(status: string): MembershipStatus {
   if (status === 'trialing') return 'TRIALING';
   if (status === 'active') return 'ACTIVE';
-  if (status === 'past_due' || status === 'unpaid' || status === 'incomplete') return 'PAST_DUE';
+  if (status === 'past_due' || status === 'unpaid' || status === 'incomplete')
+    return 'PAST_DUE';
   if (status === 'paused') return 'PAUSED';
   if (status === 'incomplete_expired') return 'EXPIRED';
   return 'CANCELLED';
@@ -66,7 +80,10 @@ export function deriveStripeEventAction(event: Stripe.Event) {
   ) {
     return { type: 'IGNORE' as const };
   }
-  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+  if (
+    event.type === 'checkout.session.completed' ||
+    event.type === 'checkout.session.async_payment_succeeded'
+  ) {
     return {
       type: 'CHECKOUT_PAID' as const,
       sessionId: String(object.id),
@@ -75,8 +92,13 @@ export function deriveStripeEventAction(event: Stripe.Event) {
       customerId: idOf(object.customer),
       paymentIntentId: idOf(object.payment_intent),
       subscriptionId: idOf(object.subscription),
-      customerName: object.customer_details?.name || object.metadata?.customerName || null,
-      customerEmail: object.customer_details?.email || object.customer_email || object.metadata?.customerEmail || null,
+      customerName:
+        object.customer_details?.name || object.metadata?.customerName || null,
+      customerEmail:
+        object.customer_details?.email ||
+        object.customer_email ||
+        object.metadata?.customerEmail ||
+        null,
       occurredAt: eventDate(object.created, event.created),
     };
   }
@@ -117,7 +139,10 @@ export function deriveStripeEventAction(event: Stripe.Event) {
       currentPeriodEnd: invoicePeriodEnd(object, event.created),
     };
   }
-  if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+  if (
+    event.type === 'customer.subscription.updated' ||
+    event.type === 'customer.subscription.deleted'
+  ) {
     return {
       type: 'SUBSCRIPTION_CHANGED' as const,
       subscriptionId: String(object.id),
@@ -164,7 +189,11 @@ async function notifyPaymentFailure(
     to: user.email,
     subject: 'Your Rhyze payment needs attention',
     template: 'PAYMENT_FAILED',
-    payload: { name: user.name || 'Rhyzer', amountCents, billingUrl: '/member/billing' },
+    payload: {
+      name: user.name || 'Rhyzer',
+      amountCents,
+      billingUrl: '/member/billing',
+    },
   });
 }
 
@@ -176,40 +205,97 @@ async function notifyPaymentFailure(
 async function nativeVipEntitlementDecision(
   tx: Prisma.TransactionClient,
   event: Stripe.Event,
-  action: Extract<ReturnType<typeof deriveStripeEventAction>, { type: 'INVOICE_PAID' | 'INVOICE_FAILED' | 'SUBSCRIPTION_CHANGED' }>,
+  action: Extract<
+    ReturnType<typeof deriveStripeEventAction>,
+    { type: 'INVOICE_PAID' | 'INVOICE_FAILED' | 'SUBSCRIPTION_CHANGED' }
+  >,
   membership: { id: string; purchaseId: string | null },
 ) {
-  if (!membership.purchaseId) return { apply: false, settled: false, periodStart: null };
+  if (!membership.purchaseId)
+    return { apply: false, settled: false, periodStart: null };
   await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${membership.purchaseId} FOR UPDATE`;
-  const purchase = await tx.purchase.findUnique({ where: { id: membership.purchaseId }, include: { creditAccount: true } });
-  const fresh = await tx.membership.findUnique({ where: { id: membership.id } });
-  if (!purchase || !fresh) return { apply: false, settled: false, periodStart: null };
-  const acceptance = purchase.policyAcceptance && typeof purchase.policyAcceptance === 'object' && !Array.isArray(purchase.policyAcceptance)
-    ? purchase.policyAcceptance : {};
+  const purchase = await tx.purchase.findUnique({
+    where: { id: membership.purchaseId },
+    include: { creditAccount: true },
+  });
+  const fresh = await tx.membership.findUnique({
+    where: { id: membership.id },
+  });
+  if (!purchase || !fresh)
+    return { apply: false, settled: false, periodStart: null };
+  const acceptance =
+    purchase.policyAcceptance &&
+    typeof purchase.policyAcceptance === 'object' &&
+    !Array.isArray(purchase.policyAcceptance)
+      ? purchase.policyAcceptance
+      : {};
   const rawState = acceptance.nativeVipEntitlement;
-  const state = rawState && typeof rawState === 'object' && !Array.isArray(rawState) ? rawState : {};
-  const paidEnd = Math.max(Number(state.paidEnd || 0), (purchase.creditAccount?.validUntil?.getTime() ?? 0) / 1000);
-  const paidAt = Math.max(Number(state.paidAt || 0), (purchase.paidAt?.getTime() ?? 0) / 1000);
+  const state =
+    rawState && typeof rawState === 'object' && !Array.isArray(rawState)
+      ? rawState
+      : {};
+  const paidEnd = Math.max(
+    Number(state.paidEnd || 0),
+    (purchase.creditAccount?.validUntil?.getTime() ?? 0) / 1000,
+  );
+  const paidAt = Math.max(
+    Number(state.paidAt || 0),
+    (purchase.paidAt?.getTime() ?? 0) / 1000,
+  );
   const lifecycleAt = Number(state.lifecycleAt || 0);
   const restrictiveAt = Number(state.restrictiveAt || 0);
   const restrictiveEnd = Number(state.restrictiveEnd || 0);
-  const explicitlyRestricted = ['CANCELLED', 'PAUSED', 'EXPIRED'].includes(fresh.status);
+  const explicitlyRestricted = ['CANCELLED', 'PAUSED', 'EXPIRED'].includes(
+    fresh.status,
+  );
   const object = event.data.object as unknown as StripeObject;
-  const save = (next: Record<string, number | string>) => tx.purchase.update({ where: { id: purchase.id },
-    data: { policyAcceptance: { ...acceptance, nativeVipEntitlement: { ...state, ...next } } } });
+  const save = (next: Record<string, number | string>) =>
+    tx.purchase.update({
+      where: { id: purchase.id },
+      data: {
+        policyAcceptance: {
+          ...acceptance,
+          nativeVipEntitlement: { ...state, ...next },
+        },
+      },
+    });
   if (action.type === 'INVOICE_PAID') {
-    const recorded = await tx.paymentRecord.findUnique({ where: { stripeInvoiceId: action.invoiceId } });
-    const settled = Boolean(recorded && ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(recorded.status));
+    const recorded = await tx.paymentRecord.findUnique({
+      where: { stripeInvoiceId: action.invoiceId },
+    });
+    const settled = Boolean(
+      recorded &&
+      ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(
+        recorded.status,
+      ),
+    );
     if (settled) return { apply: false, settled: true, periodStart: null };
-    const recurring = object.lines?.data?.filter((item: StripeObject) => item.type === 'subscription' || item.parent?.type === 'subscription_item_details');
-    const line = object.lines?.data?.length === 1 ? object.lines.data[0] : recurring?.length === 1 ? recurring[0] : null;
+    const recurring = object.lines?.data?.filter(
+      (item: StripeObject) =>
+        item.type === 'subscription' ||
+        item.parent?.type === 'subscription_item_details',
+    );
+    const line =
+      object.lines?.data?.length === 1
+        ? object.lines.data[0]
+        : recurring?.length === 1
+          ? recurring[0]
+          : null;
     const start = Number(line?.period?.start);
     const end = Number(line?.period?.end);
     const invoicePaidAt = Number(object.status_transitions?.paid_at);
     // No fallback to subscription dates or event delivery time as payment proof.
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start ||
-        !Number.isFinite(invoicePaidAt) || object.status !== 'paid' ||
-        !(object.amount_paid > 0 || (object.amount_paid === 0 && object.amount_due === 0))) {
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      end <= start ||
+      !Number.isFinite(invoicePaidAt) ||
+      object.status !== 'paid' ||
+      !(
+        object.amount_paid > 0 ||
+        (object.amount_paid === 0 && object.amount_due === 0)
+      )
+    ) {
       return { apply: false, settled: false, periodStart: null };
     }
     // Paid proof can clear dunning, including a failure/settlement in the same
@@ -217,73 +303,150 @@ async function nativeVipEntitlementDecision(
     // An approved local resume changes fresh.status to ACTIVE; obsolete block
     // dates must then not poison a genuinely paid renewal. Stripe ACTIVE alone
     // never performs that resume or extends the account's paid window.
-    const dunningAllowsPayment = fresh.status !== 'PAST_DUE' ||
-      (invoicePaidAt >= restrictiveAt && (!restrictiveEnd || end >= restrictiveEnd));
-    const apply = !explicitlyRestricted && end > paidEnd && invoicePaidAt >= paidAt && dunningAllowsPayment;
+    const dunningAllowsPayment =
+      fresh.status !== 'PAST_DUE' ||
+      (invoicePaidAt >= restrictiveAt &&
+        (!restrictiveEnd || end >= restrictiveEnd));
+    const apply =
+      !explicitlyRestricted &&
+      end > paidEnd &&
+      invoicePaidAt >= paidAt &&
+      dunningAllowsPayment;
     if (apply) {
-      await save({ paidEnd: end, paidAt: invoicePaidAt, invoiceId: action.invoiceId });
-      await tx.purchase.update({ where: { id: purchase.id }, data: { status: 'PAID', paidAt: purchase.paidAt ?? new Date(invoicePaidAt * 1000) } });
+      await save({
+        paidEnd: end,
+        paidAt: invoicePaidAt,
+        invoiceId: action.invoiceId,
+      });
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          status: 'PAID',
+          paidAt: purchase.paidAt ?? new Date(invoicePaidAt * 1000),
+        },
+      });
     }
-    return { apply, settled: false, periodStart: new Date(start * 1000), periodEnd: new Date(end * 1000) };
+    return {
+      apply,
+      settled: false,
+      periodStart: new Date(start * 1000),
+      periodEnd: new Date(end * 1000),
+    };
   }
   if (action.type === 'INVOICE_FAILED') {
-    const recorded = await tx.paymentRecord.findUnique({ where: { stripeInvoiceId: action.invoiceId } });
-    const settled = Boolean(recorded && ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(recorded.status));
-    const apply = !explicitlyRestricted && !settled && event.created > Math.max(paidAt, lifecycleAt) &&
-      event.created >= paidEnd && action.currentPeriodEnd.getTime() / 1000 > paidEnd;
+    const recorded = await tx.paymentRecord.findUnique({
+      where: { stripeInvoiceId: action.invoiceId },
+    });
+    const settled = Boolean(
+      recorded &&
+      ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(
+        recorded.status,
+      ),
+    );
+    const apply =
+      !explicitlyRestricted &&
+      !settled &&
+      event.created > Math.max(paidAt, lifecycleAt) &&
+      event.created >= paidEnd &&
+      action.currentPeriodEnd.getTime() / 1000 > paidEnd;
     if (apply) {
-      await tx.membership.update({ where: { id: fresh.id }, data: { status: 'PAST_DUE' } });
-      await save({ lifecycleAt: event.created, restrictiveAt: event.created, restrictiveEnd: action.currentPeriodEnd.getTime() / 1000 });
+      await tx.membership.update({
+        where: { id: fresh.id },
+        data: { status: 'PAST_DUE' },
+      });
+      await save({
+        lifecycleAt: event.created,
+        restrictiveAt: event.created,
+        restrictiveEnd: action.currentPeriodEnd.getTime() / 1000,
+      });
     }
     return { apply, settled, periodStart: null };
   }
   const end = action.currentPeriodEnd.getTime() / 1000;
-  if (event.created < Math.max(paidAt, lifecycleAt) || end < paidEnd) return { apply: false, settled: false, periodStart: null };
+  if (event.created < Math.max(paidAt, lifecycleAt) || end < paidEnd)
+    return { apply: false, settled: false, periodStart: null };
   const restrictive = !['ACTIVE', 'TRIALING'].includes(action.status);
   // Dunning cannot revoke time already paid; cancellation/pause remain explicit restrictions.
-  const applyRestriction = restrictive && (action.status !== 'PAST_DUE' ||
-    (!explicitlyRestricted && event.created > paidAt && event.created >= paidEnd));
-  await tx.membership.update({ where: { id: fresh.id }, data: {
-    cancelAtPeriodEnd: action.cancelAtPeriodEnd,
-    ...(applyRestriction ? { status: action.status } : {}),
-  } });
-  await save({ lifecycleAt: event.created, ...(applyRestriction ? { restrictiveAt: event.created, restrictiveEnd: end } : {}) });
+  const applyRestriction =
+    restrictive &&
+    (action.status !== 'PAST_DUE' ||
+      (!explicitlyRestricted &&
+        event.created > paidAt &&
+        event.created >= paidEnd));
+  await tx.membership.update({
+    where: { id: fresh.id },
+    data: {
+      cancelAtPeriodEnd: action.cancelAtPeriodEnd,
+      ...(applyRestriction ? { status: action.status } : {}),
+    },
+  });
+  await save({
+    lifecycleAt: event.created,
+    ...(applyRestriction
+      ? { restrictiveAt: event.created, restrictiveEnd: end }
+      : {}),
+  });
   return { apply: false, settled: false, periodStart: null };
 }
 
 async function fulfillProductPurchase(
   tx: Prisma.TransactionClient,
   event: Stripe.Event,
-  action: Extract<ReturnType<typeof deriveStripeEventAction>, { type: 'CHECKOUT_PAID' }>,
+  action: Extract<
+    ReturnType<typeof deriveStripeEventAction>,
+    { type: 'CHECKOUT_PAID' }
+  >,
 ) {
   if (!action.purchaseId) return;
-  let prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true, membership: true } });
+  let prior = await tx.purchase.findUnique({
+    where: { id: action.purchaseId },
+    include: { product: true, membership: true },
+  });
   // A paid receipt replay must never overwrite an admin-switched entitlement.
   if (prior?.paidAt && prior.membership?.planChangeState) return;
   if (prior?.product.kind === 'VIP') {
     await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${action.purchaseId} FOR UPDATE`;
-    prior = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true, membership: true } });
+    prior = await tx.purchase.findUnique({
+      where: { id: action.purchaseId },
+      include: { product: true, membership: true },
+    });
   }
-  const settledNative = prior?.product.kind === 'VIP' && prior.paidAt ? prior : null;
+  const settledNative =
+    prior?.product.kind === 'VIP' && prior.paidAt ? prior : null;
   const purchase = await tx.purchase.update({
     where: { id: action.purchaseId },
     data: {
       status: settledNative?.status ?? 'PAID',
       paidAt: settledNative?.paidAt ?? action.occurredAt,
       stripeCheckoutSessionId: action.sessionId,
-      stripePaymentIntentId: settledNative ? settledNative.stripePaymentIntentId : action.paymentIntentId,
+      stripePaymentIntentId: settledNative
+        ? settledNative.stripePaymentIntentId
+        : action.paymentIntentId,
     },
     include: { product: true, user: true },
   });
   if (action.customerId) {
-    await tx.user.update({ where: { id: purchase.userId }, data: { stripeCustomerId: action.customerId } });
+    await tx.user.update({
+      where: { id: purchase.userId },
+      data: { stripeCustomerId: action.customerId },
+    });
   }
   let membershipId: string | null = null;
-  if (purchase.product.kind === 'INTRO_TRIAL' || purchase.product.billingInterval !== 'ONE_TIME') {
+  if (
+    purchase.product.kind === 'INTRO_TRIAL' ||
+    purchase.product.billingInterval !== 'ONE_TIME'
+  ) {
     const membership = await tx.membership.upsert({
       where: { purchaseId: purchase.id },
       update: {
-        ...(purchase.product.kind === 'VIP' ? {} : { status: purchase.product.kind === 'INTRO_TRIAL' ? 'TRIALING' as const : 'ACTIVE' as const }),
+        ...(purchase.product.kind === 'VIP'
+          ? {}
+          : {
+              status:
+                purchase.product.kind === 'INTRO_TRIAL'
+                  ? ('TRIALING' as const)
+                  : ('ACTIVE' as const),
+            }),
         stripeSubscriptionId: action.subscriptionId,
       },
       create: {
@@ -317,7 +480,11 @@ async function fulfillProductPurchase(
     });
   }
   const checkoutCredits = creditGrantForPayment(purchase.product, 'CHECKOUT');
-  if (purchase.product.kind !== 'INTRO_TRIAL' && purchase.product.billingInterval === 'ONE_TIME' && (checkoutCredits || purchase.product.isUnlimited)) {
+  if (
+    purchase.product.kind !== 'INTRO_TRIAL' &&
+    purchase.product.billingInterval === 'ONE_TIME' &&
+    (checkoutCredits || purchase.product.isUnlimited)
+  ) {
     await tx.creditAccount.upsert({
       where: { sourcePurchaseId: purchase.id },
       update: {},
@@ -327,7 +494,13 @@ async function fulfillProductPurchase(
         label: purchase.product.name,
         isUnlimited: purchase.product.isUnlimited,
         entries: checkoutCredits
-          ? { create: { type: 'GRANT', quantity: checkoutCredits, reason: 'Purchase' } }
+          ? {
+              create: {
+                type: 'GRANT',
+                quantity: checkoutCredits,
+                reason: 'Purchase',
+              },
+            }
           : undefined,
       },
     });
@@ -338,8 +511,12 @@ async function fulfillProductPurchase(
       const linked = await tx.paymentRecord.updateMany({
         where: {
           OR: [
-            ...(action.paymentIntentId ? [{ stripePaymentIntentId: action.paymentIntentId }] : []),
-            ...(action.sessionId ? [{ stripeCheckoutSessionId: action.sessionId }] : []),
+            ...(action.paymentIntentId
+              ? [{ stripePaymentIntentId: action.paymentIntentId }]
+              : []),
+            ...(action.sessionId
+              ? [{ stripeCheckoutSessionId: action.sessionId }]
+              : []),
           ],
         },
         data: {
@@ -380,14 +557,21 @@ async function fulfillProductPurchase(
         where: {
           OR: [
             { stripeEventId: event.id },
-            ...(action.sessionId ? [{ stripeCheckoutSessionId: action.sessionId }] : []),
-            ...(action.paymentIntentId ? [{ stripePaymentIntentId: action.paymentIntentId }] : []),
+            ...(action.sessionId
+              ? [{ stripeCheckoutSessionId: action.sessionId }]
+              : []),
+            ...(action.paymentIntentId
+              ? [{ stripePaymentIntentId: action.paymentIntentId }]
+              : []),
           ],
         },
         select: { id: true },
       });
       if (existingPaymentRecord) {
-        await tx.paymentRecord.update({ where: { id: existingPaymentRecord.id }, data: paymentRecordData });
+        await tx.paymentRecord.update({
+          where: { id: existingPaymentRecord.id },
+          data: paymentRecordData,
+        });
       } else {
         await tx.paymentRecord.create({ data: paymentRecordData });
       }
@@ -398,31 +582,50 @@ async function fulfillProductPurchase(
       where: { referredUserId: purchase.userId },
       include: { referralCode: true },
     });
-    const redeemed = await tx.discountRedemption.findUnique({ where: { purchaseId: purchase.id } });
+    const redeemed = await tx.discountRedemption.findUnique({
+      where: { purchaseId: purchase.id },
+    });
     const commission = commissionCentsForProduct(purchase.product.kind);
     if (attribution && !redeemed && commission > 0) {
       await tx.discountRedemption.create({
-        data: { userId: purchase.userId, purchaseId: purchase.id, referralCodeId: attribution.referralCodeId, discountCents: purchase.discountCents },
+        data: {
+          userId: purchase.userId,
+          purchaseId: purchase.id,
+          referralCodeId: attribution.referralCodeId,
+          discountCents: purchase.discountCents,
+        },
       });
       await tx.referralCommission.create({
-        data: { instructorId: attribution.referralCode.instructorId, referredUserId: purchase.userId, purchaseId: purchase.id, amountCents: commission },
+        data: {
+          instructorId: attribution.referralCode.instructorId,
+          referredUserId: purchase.userId,
+          purchaseId: purchase.id,
+          amountCents: commission,
+        },
       });
     }
   }
-  const membershipPurchase = purchase.product.kind === 'INTRO_TRIAL' || purchase.product.billingInterval !== 'ONE_TIME';
+  const membershipPurchase =
+    purchase.product.kind === 'INTRO_TRIAL' ||
+    purchase.product.billingInterval !== 'ONE_TIME';
   await queueEmail(tx, {
     userId: purchase.userId,
     to: purchase.user.email,
     subject: membershipPurchase
       ? `Welcome to ${purchase.product.name}`
       : 'Your Rhyze purchase is confirmed',
-    template: membershipPurchase ? 'MEMBERSHIP_PURCHASE_CONFIRMATION' : 'PURCHASE_CONFIRMATION',
+    template: membershipPurchase
+      ? 'MEMBERSHIP_PURCHASE_CONFIRMATION'
+      : 'PURCHASE_CONFIRMATION',
     payload: {
       name: purchase.user.name || 'Rhyzer',
       planName: purchase.product.name,
       itemName: purchase.product.name,
       amount: purchase.amountCents,
-      billingSchedule: purchase.product.billingInterval === 'ONE_TIME' ? 'One-time purchase' : 'Recurring membership',
+      billingSchedule:
+        purchase.product.billingInterval === 'ONE_TIME'
+          ? 'One-time purchase'
+          : 'Recurring membership',
       billingUrl: '/member/billing',
       receiptUrl: '/member/billing',
     },
@@ -462,9 +665,54 @@ async function fulfillProductPurchase(
 async function fulfillCommerceOrder(
   tx: Prisma.TransactionClient,
   event: Stripe.Event,
-  action: Extract<ReturnType<typeof deriveStripeEventAction>, { type: 'CHECKOUT_PAID' }>,
+  action: Extract<
+    ReturnType<typeof deriveStripeEventAction>,
+    { type: 'CHECKOUT_PAID' }
+  >,
 ) {
   if (!action.commerceOrderId) return;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${action.commerceOrderId}))`;
+  const existingOrder = await tx.commerceOrder.findUnique({
+    where: { id: action.commerceOrderId },
+    include: {
+      occurrence: { include: { template: true } },
+      items: true,
+      user: true,
+    },
+  });
+  if (!existingOrder) return;
+  if (
+    ['PARTIALLY_REFUNDED', 'REFUNDED', 'DISPUTED'].includes(
+      existingOrder.status,
+    )
+  )
+    return;
+  const inFlightRefund = await tx.commerceRefund.findFirst({
+    where: {
+      commerceOrderId: existingOrder.id,
+      status: { in: ['PENDING', 'SUCCEEDED'] },
+    },
+    select: { id: true },
+  });
+  if (inFlightRefund) return;
+  if (
+    existingOrder.kind === 'EVENT' &&
+    existingOrder.userId &&
+    existingOrder.occurrenceId
+  ) {
+    const existingBooking = await tx.booking.findUnique({
+      where: {
+        occurrenceId_userId: {
+          occurrenceId: existingOrder.occurrenceId,
+          userId: existingOrder.userId,
+        },
+      },
+      select: { id: true },
+    });
+    if (existingBooking) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${existingBooking.id}))`;
+    }
+  }
   const order = await tx.commerceOrder.update({
     where: { id: action.commerceOrderId },
     data: {
@@ -482,17 +730,46 @@ async function fulfillCommerceOrder(
     },
   });
   if (order.userId && action.customerId) {
-    await tx.user.update({ where: { id: order.userId }, data: { stripeCustomerId: action.customerId } });
+    await tx.user.update({
+      where: { id: order.userId },
+      data: { stripeCustomerId: action.customerId },
+    });
   }
-  if (order.kind === 'EVENT' && order.userId && order.occurrenceId && order.occurrence) {
-    const booked = await tx.booking.count({ where: { occurrenceId: order.occurrenceId, status: 'CONFIRMED' } });
-    if (booked + order.occurrence.historicalSignupCount >= order.occurrence.capacity) {
-      await tx.commerceOrder.update({ where: { id: order.id }, data: { status: 'FULFILLMENT_REVIEW' } });
+  if (
+    order.kind === 'EVENT' &&
+    order.userId &&
+    order.occurrenceId &&
+    order.occurrence
+  ) {
+    const booked = await tx.booking.count({
+      where: { occurrenceId: order.occurrenceId, status: 'CONFIRMED' },
+    });
+    if (
+      booked + order.occurrence.historicalSignupCount >=
+      order.occurrence.capacity
+    ) {
+      await tx.commerceOrder.update({
+        where: { id: order.id },
+        data: { status: 'FULFILLMENT_REVIEW' },
+      });
     } else {
       await tx.booking.upsert({
-        where: { occurrenceId_userId: { occurrenceId: order.occurrenceId, userId: order.userId } },
-        update: { status: 'CONFIRMED', cancelledAt: null, source: 'STRIPE_EVENT' },
-        create: { occurrenceId: order.occurrenceId, userId: order.userId, source: 'STRIPE_EVENT' },
+        where: {
+          occurrenceId_userId: {
+            occurrenceId: order.occurrenceId,
+            userId: order.userId,
+          },
+        },
+        update: {
+          status: 'CONFIRMED',
+          cancelledAt: null,
+          source: 'STRIPE_EVENT',
+        },
+        create: {
+          occurrenceId: order.occurrenceId,
+          userId: order.userId,
+          source: 'STRIPE_EVENT',
+        },
       });
     }
   }
@@ -504,7 +781,8 @@ async function fulfillCommerceOrder(
     amountCents: order.amountCents,
     currency: order.currency,
     customerName: order.user?.name || order.customerName || action.customerName,
-    customerEmail: order.user?.email || order.customerEmail || action.customerEmail,
+    customerEmail:
+      order.user?.email || order.customerEmail || action.customerEmail,
     stripeEventId: event.id,
     stripeCustomerId: action.customerId,
     stripeCheckoutSessionId: action.sessionId,
@@ -515,33 +793,57 @@ async function fulfillCommerceOrder(
     where: {
       OR: [
         { stripeEventId: event.id },
-        ...(action.sessionId ? [{ stripeCheckoutSessionId: action.sessionId }] : []),
-        ...(action.paymentIntentId ? [{ stripePaymentIntentId: action.paymentIntentId }] : []),
+        ...(action.sessionId
+          ? [{ stripeCheckoutSessionId: action.sessionId }]
+          : []),
+        ...(action.paymentIntentId
+          ? [{ stripePaymentIntentId: action.paymentIntentId }]
+          : []),
       ],
     },
     select: { id: true },
   });
   if (existingPaymentRecord) {
-    await tx.paymentRecord.update({ where: { id: existingPaymentRecord.id }, data: paymentRecordData });
+    await tx.paymentRecord.update({
+      where: { id: existingPaymentRecord.id },
+      data: paymentRecordData,
+    });
   } else {
     await tx.paymentRecord.create({ data: paymentRecordData });
   }
-  const itemName = order.kind === 'EVENT'
-    ? order.occurrence?.template.name || 'Rhyze special event'
-    : order.items.map((item) => item.name).join(', ') || 'Rhyze shop purchase';
+  const itemName =
+    order.kind === 'EVENT'
+      ? order.occurrence?.template.name || 'Rhyze special event'
+      : order.items.map((item) => item.name).join(', ') ||
+        'Rhyze shop purchase';
   const recipient = order.user?.email || order.customerEmail;
   if (recipient) {
     await queueEmail(tx, {
       userId: order.userId || undefined,
       to: recipient,
-      subject: order.kind === 'EVENT' ? `You’re booked for ${itemName}` : 'Your Rhyze purchase is confirmed',
-      template: order.kind === 'EVENT' ? 'EVENT_PURCHASE_CONFIRMATION' : 'PURCHASE_CONFIRMATION',
+      subject:
+        order.kind === 'EVENT'
+          ? `You’re booked for ${itemName}`
+          : 'Your Rhyze purchase is confirmed',
+      template:
+        order.kind === 'EVENT'
+          ? 'EVENT_PURCHASE_CONFIRMATION'
+          : 'PURCHASE_CONFIRMATION',
       payload: {
         name: order.user?.name || 'Rhyzer',
         eventName: itemName,
         itemName,
-        eventDate: order.occurrence?.startAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric' }),
-        eventTime: order.occurrence?.startAt.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }),
+        eventDate: order.occurrence?.startAt.toLocaleDateString('en-US', {
+          timeZone: 'America/New_York',
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+        }),
+        eventTime: order.occurrence?.startAt.toLocaleTimeString('en-US', {
+          timeZone: 'America/New_York',
+          hour: 'numeric',
+          minute: '2-digit',
+        }),
         amount: order.amountCents,
         bookingsUrl: '/member/bookings',
         receiptUrl: '/member/billing',
@@ -580,7 +882,10 @@ async function fulfillCommerceOrder(
   }
 }
 
-export async function processStripeEvent(tx: Prisma.TransactionClient, event: Stripe.Event) {
+export async function processStripeEvent(
+  tx: Prisma.TransactionClient,
+  event: Stripe.Event,
+) {
   assertStripeObjectMode(event);
   if (await processMembershipPlanChangeEvent(tx, event)) return;
   if (await processSombleRecoveryEvent(tx, event)) return;
@@ -592,8 +897,16 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
     return;
   }
   if (action.type === 'CHECKOUT_FAILED') {
-    if (action.purchaseId) await tx.purchase.updateMany({ where: { id: action.purchaseId, status: 'PENDING' }, data: { status: 'FAILED', failedAt: action.occurredAt } });
-    if (action.commerceOrderId) await tx.commerceOrder.updateMany({ where: { id: action.commerceOrderId, status: 'PENDING' }, data: { status: 'PAYMENT_FAILED', failedAt: action.occurredAt } });
+    if (action.purchaseId)
+      await tx.purchase.updateMany({
+        where: { id: action.purchaseId, status: 'PENDING' },
+        data: { status: 'FAILED', failedAt: action.occurredAt },
+      });
+    if (action.commerceOrderId)
+      await tx.commerceOrder.updateMany({
+        where: { id: action.commerceOrderId, status: 'PENDING' },
+        data: { status: 'PAYMENT_FAILED', failedAt: action.occurredAt },
+      });
     return;
   }
   if (action.type === 'INVOICE_PAID' && action.subscriptionId) {
@@ -602,15 +915,35 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
       include: { user: true, purchase: true, product: true },
     });
     if (!membership && action.purchaseId) {
-      const purchase = await tx.purchase.findUnique({ where: { id: action.purchaseId }, include: { product: true } });
+      const purchase = await tx.purchase.findUnique({
+        where: { id: action.purchaseId },
+        include: { product: true },
+      });
       if (purchase && purchase.product.billingInterval !== 'ONE_TIME') {
         if (purchase.product.kind === 'VIP') {
           await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${purchase.id} FOR UPDATE`;
         }
-        await tx.purchase.update({ where: { id: purchase.id }, data: { status: 'PAID', paidAt: purchase.product.kind === 'VIP' ? purchase.paidAt ?? action.occurredAt : action.occurredAt } });
+        await tx.purchase.update({
+          where: { id: purchase.id },
+          data: {
+            status: 'PAID',
+            paidAt:
+              purchase.product.kind === 'VIP'
+                ? (purchase.paidAt ?? action.occurredAt)
+                : action.occurredAt,
+          },
+        });
         await tx.membership.upsert({
           where: { purchaseId: purchase.id },
-          update: { stripeSubscriptionId: action.subscriptionId, ...(purchase.product.kind === 'VIP' ? {} : { status: 'ACTIVE' as const, currentPeriodEnd: action.currentPeriodEnd }) },
+          update: {
+            stripeSubscriptionId: action.subscriptionId,
+            ...(purchase.product.kind === 'VIP'
+              ? {}
+              : {
+                  status: 'ACTIVE' as const,
+                  currentPeriodEnd: action.currentPeriodEnd,
+                }),
+          },
           create: {
             userId: purchase.userId,
             productId: purchase.productId,
@@ -630,30 +963,53 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
     }
     if (!membership) return;
     const nativeVip = membership.product.kind === 'VIP';
-    const entitlement = nativeVip ? await nativeVipEntitlementDecision(tx, event, action, membership) : null;
+    const entitlement = nativeVip
+      ? await nativeVipEntitlementDecision(tx, event, action, membership)
+      : null;
     if (entitlement?.settled) return;
     const paidPeriodEnd = entitlement?.periodEnd ?? action.currentPeriodEnd;
-    if ((!nativeVip || entitlement?.apply) && membership.purchaseId && action.paymentIntentId) {
+    if (
+      (!nativeVip || entitlement?.apply) &&
+      membership.purchaseId &&
+      action.paymentIntentId
+    ) {
       await tx.purchase.update({
         where: { id: membership.purchaseId },
         data: { stripePaymentIntentId: action.paymentIntentId },
       });
     }
-    if (!nativeVip || entitlement?.apply) await tx.membership.update({
-      where: { id: membership.id },
-      data: { status: 'ACTIVE', currentPeriodStart: entitlement?.periodStart ?? action.occurredAt, currentPeriodEnd: paidPeriodEnd },
-    });
+    if (!nativeVip || entitlement?.apply)
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: {
+          status: 'ACTIVE',
+          currentPeriodStart: entitlement?.periodStart ?? action.occurredAt,
+          currentPeriodEnd: paidPeriodEnd,
+        },
+      });
     const invoiceCredits = creditGrantForPayment(membership.product, 'INVOICE');
-    if ((!nativeVip || entitlement?.apply) && membership.purchaseId && (invoiceCredits || membership.product.isUnlimited)) {
+    if (
+      (!nativeVip || entitlement?.apply) &&
+      membership.purchaseId &&
+      (invoiceCredits || membership.product.isUnlimited)
+    ) {
       const account = await tx.creditAccount.upsert({
         where: { sourcePurchaseId: membership.purchaseId },
-        update: { isUnlimited: membership.product.isUnlimited, validUntil: paidPeriodEnd, ...(entitlement?.periodStart ? { validFrom: entitlement.periodStart } : {}) },
+        update: {
+          isUnlimited: membership.product.isUnlimited,
+          validUntil: paidPeriodEnd,
+          ...(entitlement?.periodStart
+            ? { validFrom: entitlement.periodStart }
+            : {}),
+        },
         create: {
           userId: membership.userId,
           sourcePurchaseId: membership.purchaseId,
           label: membership.product.name,
           isUnlimited: membership.product.isUnlimited,
-          ...(entitlement?.periodStart ? { validFrom: entitlement.periodStart } : {}),
+          ...(entitlement?.periodStart
+            ? { validFrom: entitlement.periodStart }
+            : {}),
           validUntil: paidPeriodEnd,
         },
         include: { entries: true },
@@ -669,7 +1025,9 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
           });
           if (reset.expirationQuantity !== 0) {
             await tx.creditLedgerEntry.upsert({
-              where: { sourceReturnKey: `membership-renewal-expiry:${action.invoiceId}` },
+              where: {
+                sourceReturnKey: `membership-renewal-expiry:${action.invoiceId}`,
+              },
               update: {},
               create: {
                 creditAccountId: account.id,
@@ -740,12 +1098,21 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
     return;
   }
   if (action.type === 'INVOICE_FAILED' && action.subscriptionId) {
-    const membership = await tx.membership.findUnique({ where: { stripeSubscriptionId: action.subscriptionId }, include: { user: true, product: true } });
+    const membership = await tx.membership.findUnique({
+      where: { stripeSubscriptionId: action.subscriptionId },
+      include: { user: true, product: true },
+    });
     if (!membership) return;
     const nativeVip = membership.product?.kind === 'VIP';
-    const entitlement = nativeVip ? await nativeVipEntitlementDecision(tx, event, action, membership) : null;
+    const entitlement = nativeVip
+      ? await nativeVipEntitlementDecision(tx, event, action, membership)
+      : null;
     if (entitlement?.settled) return;
-    if (!nativeVip) await tx.membership.update({ where: { id: membership.id }, data: { status: 'PAST_DUE' } });
+    if (!nativeVip)
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: { status: 'PAST_DUE' },
+      });
     await tx.paymentRecord.upsert({
       where: { stripeInvoiceId: action.invoiceId },
       update: {
@@ -772,11 +1139,15 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
         occurredAt: action.occurredAt,
       },
     });
-    if (!nativeVip || entitlement?.apply) await notifyPaymentFailure(tx, membership.user, action.amountCents);
+    if (!nativeVip || entitlement?.apply)
+      await notifyPaymentFailure(tx, membership.user, action.amountCents);
     return;
   }
   if (action.type === 'SUBSCRIPTION_CHANGED') {
-    const membership = await tx.membership.findUnique({ where: { stripeSubscriptionId: action.subscriptionId }, include: { product: true } });
+    const membership = await tx.membership.findUnique({
+      where: { stripeSubscriptionId: action.subscriptionId },
+      include: { product: true },
+    });
     if (membership?.product.kind === 'VIP') {
       await nativeVipEntitlementDecision(tx, event, action, membership);
       return;
@@ -792,27 +1163,57 @@ export async function processStripeEvent(tx: Prisma.TransactionClient, event: St
     });
     return;
   }
-  if ((action.type === 'PAYMENT_REFUNDED' || action.type === 'PAYMENT_DISPUTED') && action.paymentIntentId) {
-    const record = await tx.paymentRecord.findUnique({ where: { stripePaymentIntentId: action.paymentIntentId } });
+  if (
+    (action.type === 'PAYMENT_REFUNDED' ||
+      action.type === 'PAYMENT_DISPUTED') &&
+    action.paymentIntentId
+  ) {
+    const record = await tx.paymentRecord.findUnique({
+      where: { stripePaymentIntentId: action.paymentIntentId },
+    });
     if (!record) return;
-    const status = action.type === 'PAYMENT_DISPUTED'
-      ? 'DISPUTED'
-      : action.fullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+    if (action.type === 'PAYMENT_REFUNDED' && record.commerceOrderId) return;
+    const status =
+      action.type === 'PAYMENT_DISPUTED'
+        ? 'DISPUTED'
+        : action.fullyRefunded
+          ? 'REFUNDED'
+          : 'PARTIALLY_REFUNDED';
     await tx.paymentRecord.update({
       where: { id: record.id },
-      data: { status, refundedAmountCents: action.type === 'PAYMENT_REFUNDED' ? action.amountCents : record.refundedAmountCents },
+      data: {
+        status,
+        refundedAmountCents:
+          action.type === 'PAYMENT_REFUNDED'
+            ? action.amountCents
+            : record.refundedAmountCents,
+      },
     });
-    if (record.purchaseId) await tx.purchase.update({
-      where: { id: record.purchaseId },
-      data: action.type === 'PAYMENT_DISPUTED'
-        ? { status: 'FAILED' }
-        : { status: action.fullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED', refundedAmountCents: action.amountCents },
-    });
-    if (record.commerceOrderId) await tx.commerceOrder.update({
-      where: { id: record.commerceOrderId },
-      data: action.type === 'PAYMENT_DISPUTED'
-        ? { status: 'DISPUTED' }
-        : { status: action.fullyRefunded ? 'REFUNDED' : 'PARTIALLY_REFUNDED', refundedAmountCents: action.amountCents },
-    });
+    if (record.purchaseId)
+      await tx.purchase.update({
+        where: { id: record.purchaseId },
+        data:
+          action.type === 'PAYMENT_DISPUTED'
+            ? { status: 'FAILED' }
+            : {
+                status: action.fullyRefunded
+                  ? 'REFUNDED'
+                  : 'PARTIALLY_REFUNDED',
+                refundedAmountCents: action.amountCents,
+              },
+      });
+    if (record.commerceOrderId)
+      await tx.commerceOrder.update({
+        where: { id: record.commerceOrderId },
+        data:
+          action.type === 'PAYMENT_DISPUTED'
+            ? { status: 'DISPUTED' }
+            : {
+                status: action.fullyRefunded
+                  ? 'REFUNDED'
+                  : 'PARTIALLY_REFUNDED',
+                refundedAmountCents: action.amountCents,
+              },
+      });
   }
 }

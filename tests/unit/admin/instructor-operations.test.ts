@@ -27,15 +27,20 @@ describe('instructor operations', () => {
     expect(revoked.profileActive).toBe(false);
     expect(canAccessArea(revoked.role, 'member')).toBe(true);
     expect(canAccessArea(revoked.role, 'instructor')).toBe(false);
-    expect(instructorAugustStandardClassAccess({
-      role: revoked.role,
-      occurrenceStartsAt: new Date('2026-08-15T14:00:00.000Z'),
-      isEvent: false,
-    })).toBe(false);
+    expect(
+      instructorAugustStandardClassAccess({
+        role: revoked.role,
+        occurrenceStartsAt: new Date('2026-08-15T14:00:00.000Z'),
+        isEvent: false,
+      }),
+    ).toBe(false);
   });
 
   it('uses the full revocation transition when an instructor is removed from the directory', () => {
-    const actions = readFileSync('app/(studio)/admin/instructors/actions.ts', 'utf8');
+    const actions = readFileSync(
+      'app/(studio)/admin/instructors/actions.ts',
+      'utf8',
+    );
     const removeAction = actions.slice(
       actions.indexOf('export async function removeInstructorAction'),
       actions.indexOf('export async function saveInstructorOrderAction'),
@@ -48,9 +53,18 @@ describe('instructor operations', () => {
   });
 
   it('replaces waiver and booked-value cards with status and pay rates', () => {
-    const admin = readFileSync('app/(studio)/admin/instructors/[userId]/page.tsx', 'utf8');
-    const instructor = readFileSync('app/(portal)/instructor/profile/page.tsx', 'utf8');
-    const editor = readFileSync('components/admin/InstructorPublicProfileForm.tsx', 'utf8');
+    const admin = readFileSync(
+      'app/(studio)/admin/instructors/[userId]/page.tsx',
+      'utf8',
+    );
+    const instructor = readFileSync(
+      'app/(portal)/instructor/profile/page.tsx',
+      'utf8',
+    );
+    const editor = readFileSync(
+      'components/admin/InstructorPublicProfileForm.tsx',
+      'utf8',
+    );
 
     expect(admin).not.toContain('BOOKED CLASS VALUE');
     expect(admin).not.toContain('Metric label="Booked seats"');
@@ -67,8 +81,14 @@ describe('instructor operations', () => {
   });
 
   it('allows every approved instructor profile to update its public photo and bio', () => {
-    const page = readFileSync('app/(portal)/instructor/profile/page.tsx', 'utf8');
-    const actions = readFileSync('app/(portal)/instructor/profile/actions.ts', 'utf8');
+    const page = readFileSync(
+      'app/(portal)/instructor/profile/page.tsx',
+      'utf8',
+    );
+    const actions = readFileSync(
+      'app/(portal)/instructor/profile/actions.ts',
+      'utf8',
+    );
 
     expect(page).toContain('InstructorPublicProfileForm');
     expect(page).toContain('updateOwnInstructorDirectoryAction');
@@ -90,7 +110,10 @@ describe('instructor operations', () => {
   });
 
   it('shows Tricia Johnsen her class revenue for 50/50 split visibility', () => {
-    const schedule = readFileSync('app/(portal)/instructor/schedule/page.tsx', 'utf8');
+    const schedule = readFileSync(
+      'app/(portal)/instructor/schedule/page.tsx',
+      'utf8',
+    );
 
     expect(schedule).toContain('isTriciaJohnsen');
     expect(schedule).toContain('Class revenue');
@@ -99,9 +122,18 @@ describe('instructor operations', () => {
   });
 
   it('shows instructors when assigned classes are canceled instead of leaving the class looking active', () => {
-    const schedule = readFileSync('app/(portal)/instructor/schedule/page.tsx', 'utf8');
-    const roster = readFileSync('app/(portal)/instructor/classes/[occurrenceId]/roster/page.tsx', 'utf8');
-    const message = readFileSync('app/(portal)/instructor/classes/[occurrenceId]/message/page.tsx', 'utf8');
+    const schedule = readFileSync(
+      'app/(portal)/instructor/schedule/page.tsx',
+      'utf8',
+    );
+    const roster = readFileSync(
+      'app/(portal)/instructor/classes/[occurrenceId]/roster/page.tsx',
+      'utf8',
+    );
+    const message = readFileSync(
+      'app/(portal)/instructor/classes/[occurrenceId]/message/page.tsx',
+      'utf8',
+    );
 
     expect(schedule).toContain("status: { in: ['SCHEDULED', 'CANCELLED'] }");
     expect(schedule).toContain('CLASS CANCELED');
@@ -111,8 +143,14 @@ describe('instructor operations', () => {
   });
 
   it('requires instructor emergency cancellations to use the approved reason options before emails are sent', () => {
-    const message = readFileSync('app/(portal)/instructor/classes/[occurrenceId]/message/page.tsx', 'utf8');
-    const actions = readFileSync('app/(portal)/instructor/classes/[occurrenceId]/message/actions.ts', 'utf8');
+    const message = readFileSync(
+      'app/(portal)/instructor/classes/[occurrenceId]/message/page.tsx',
+      'utf8',
+    );
+    const actions = readFileSync(
+      'app/(portal)/instructor/classes/[occurrenceId]/message/actions.ts',
+      'utf8',
+    );
 
     expect(message).toContain('Before emails are sent');
     expect(message).toContain('name="cancellationReasonType"');
@@ -126,12 +164,20 @@ describe('instructor operations', () => {
   });
 
   it('shows only selected referral range controls and detailed referrals, defaulting admin/instructor views to monthly earnings', () => {
-    const admin = readFileSync('app/(studio)/admin/instructors/[userId]/page.tsx', 'utf8');
-    const instructor = readFileSync('app/(portal)/instructor/referrals/page.tsx', 'utf8');
+    const admin = readFileSync(
+      'app/(studio)/admin/instructors/[userId]/page.tsx',
+      'utf8',
+    );
+    const instructor = readFileSync(
+      'app/(portal)/instructor/referrals/page.tsx',
+      'utf8',
+    );
 
     expect(admin).toContain(": 'month';");
     expect(instructor).toContain(": 'month';");
-    expect(readFileSync('lib/domain/bookings/known-cancellations.ts', 'utf8')).toContain('careesonnett@gmail.com');
+    expect(
+      readFileSync('lib/domain/bookings/known-cancellations.ts', 'utf8'),
+    ).toContain('careesonnett@gmail.com');
     for (const source of [admin, instructor]) {
       expect(source).toContain('Bi-weekly');
       expect(source).toContain('From date');
@@ -142,15 +188,29 @@ describe('instructor operations', () => {
   });
 
   it('keeps referral commissions linked to the instructor and separates unpaid from paid earnings', () => {
-    const checkout = readFileSync('app/(portal)/member/membership/actions.ts', 'utf8');
+    const checkout = readFileSync(
+      'app/(portal)/member/membership/actions.ts',
+      'utf8',
+    );
     const webhook = readFileSync('lib/payments/webhook-processor.ts', 'utf8');
-    const admin = readFileSync('app/(studio)/admin/instructors/[userId]/page.tsx', 'utf8');
-    const instructor = readFileSync('app/(portal)/instructor/referrals/page.tsx', 'utf8');
+    const admin = readFileSync(
+      'app/(studio)/admin/instructors/[userId]/page.tsx',
+      'utf8',
+    );
+    const instructor = readFileSync(
+      'app/(portal)/instructor/referrals/page.tsx',
+      'utf8',
+    );
 
     expect(checkout).toContain('referralAttribution.upsert');
     expect(checkout).toContain('referralCodeId: referral.id');
-    expect(webhook).toContain('const redeemed = await tx.discountRedemption.findUnique({ where: { purchaseId: purchase.id } })');
-    expect(webhook).toContain('instructorId: attribution.referralCode.instructorId');
+    expect(webhook).toContain(
+      'const redeemed = await tx.discountRedemption.findUnique({',
+    );
+    expect(webhook).toContain('where: { purchaseId: purchase.id },');
+    expect(webhook).toContain(
+      'instructorId: attribution.referralCode.instructorId',
+    );
     expect(webhook).toContain('referredUserId: purchase.userId');
     expect(webhook).toContain('purchaseId: purchase.id');
 

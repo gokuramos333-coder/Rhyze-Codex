@@ -202,6 +202,7 @@ export default async function AdminHomePage(
     }),
   ]);
   const commerceRefunds = await prisma.commerceRefund.findMany({
+    where: { status: 'SUCCEEDED' },
     include: {
       commerceOrder: { include: { user: true, items: true } },
     },

@@ -2,15 +2,29 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { requireArea } from '@/lib/auth/session';
+import { requireApprovedOwner, requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import { linkStripePaymentRecordToMember } from '@/lib/admin/stripe-payment-linking';
 import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
+import { CommerceRefundError, refundCommerceOrderFullRemainder } from '@/lib/payments/commerce-refunds';
 
 function adminPaymentsPath(result?: string) {
   return `/admin/payments${result ? `?result=${result}` : ''}#native-payment-records`;
+}
+
+function commerceRefundResult(error: unknown) {
+  const code = error instanceof CommerceRefundError
+    ? error.code
+    : typeof error === 'object' && error && 'code' in error
+      ? (error as { code?: unknown }).code
+      : null;
+  if (code === 'provider_pending') return 'refund-pending';
+  if (code === 'provider_failed') return 'refund-failed';
+  if (code === 'provider_mismatch') return 'refund-provider-mismatch';
+  if (code === 'not_refundable') return 'refund-review';
+  return 'refund-error';
 }
 
 export async function refreshStripePaymentsAction() {
@@ -102,57 +116,32 @@ export async function refundPurchaseAction(formData: FormData) {
 }
 
 export async function refundCommerceOrderAction(formData: FormData) {
-  await requireArea('admin');
+  const actor = await requireApprovedOwner();
   const orderId = String(formData.get('orderId') || '');
-  const order = await prisma.commerceOrder.findFirst({
-    where: { id: orderId, status: { in: ['PAID', 'FULFILLMENT_REVIEW'] } },
-    include: { user: true, items: true },
-  });
-  if (!order?.stripePaymentIntentId || !stripeIsConfigured()) return;
+  const reason = String(formData.get('reason') || '').trim();
+  const confirmation = String(formData.get('confirmation') || '').trim();
+  if (!orderId || !stripeIsConfigured()) {
+    redirect(adminPaymentsPath('refund-error'));
+  }
 
-  const refund = await getStripe().refunds.create(
-    { payment_intent: order.stripePaymentIntentId },
-    { idempotencyKey: `admin-order-refund-${order.id}` },
-  );
-  await prisma.$transaction(async (tx) => {
-    await tx.commerceRefund.create({
-      data: {
-        commerceOrderId: order.id,
-        amountCents: refund.amount,
-        stripeRefundId: refund.id,
-        reason: 'Admin full refund',
-      },
+  try {
+    await refundCommerceOrderFullRemainder(prisma, getStripe(), {
+      orderId,
+      actorId: actor.id,
+      reason,
+      confirmation,
     });
-    await tx.commerceOrder.update({
-      where: { id: order.id },
-      data: { status: 'REFUNDED', refundedAmountCents: refund.amount },
-    });
-    await tx.paymentRecord.updateMany({
-      where: { stripePaymentIntentId: order.stripePaymentIntentId },
-      data: { status: 'REFUNDED', refundedAmountCents: refund.amount },
-    });
-    const recipient = order.user?.email || order.customerEmail;
-    if (recipient) {
-      await queueEmail(tx, {
-        userId: order.userId || undefined,
-        to: recipient,
-        subject: 'Your Rhyze refund was issued',
-        template: 'PAYMENT_REFUND_CONFIRMATION',
-        payload: {
-          name: order.user?.name || 'Rhyzer',
-          itemName: order.items.map((item) => item.name).join(', ') || 'Rhyze purchase',
-          amount: refund.amount,
-          billingUrl: '/member/billing',
-        },
-        dedupeKey: `refund-confirmation:${refund.id}`,
+  } catch (error) {
+    if (!(error instanceof CommerceRefundError)) {
+      console.error('Commerce refund failed', {
+        orderId,
+        message: error instanceof Error ? error.message : 'Unknown refund error',
       });
     }
-  });
-  if (order.kind === 'EVENT' && order.occurrenceId && order.userId) {
-    await prisma.booking.updateMany({
-      where: { occurrenceId: order.occurrenceId, userId: order.userId, source: 'STRIPE_EVENT' },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
-    });
+    redirect(adminPaymentsPath(commerceRefundResult(error)));
   }
   revalidatePath('/admin/payments');
+  revalidatePath('/admin/activity');
+  revalidatePath('/admin');
+  redirect(adminPaymentsPath('refund-issued'));
 }

@@ -20,6 +20,7 @@ import {
 import { noShowFeeDecision } from '@/lib/domain/bookings/booking-rules';
 import { bookingAccessType } from '@/lib/domain/bookings/booking-access';
 import { hasPermission } from '@/lib/auth/permissions';
+import { assertNoCashRefundForBooking } from '@/lib/domain/bookings/cash-refund-guard';
 
 const validStatuses = new Set<AttendanceStatus>([
   'CHECKED_IN',
@@ -253,6 +254,7 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
       },
     });
     if (!booking) return null;
+    await assertNoCashRefundForBooking(tx, booking);
 
     const reservation = await tx.creditLedgerEntry.findFirst({
       where: { bookingId, type: 'RESERVE' },

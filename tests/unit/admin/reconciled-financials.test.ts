@@ -219,6 +219,32 @@ describe('reconciled ADMIN revenue', () => {
     expect(refunds.reduce((total, item) => total + item.amountCents, 0)).toBe(12_200);
   });
 
+  it('excludes pending commerce refund attempts from financial refund totals', () => {
+    const refundAt = new Date('2026-09-12T15:00:00.000Z');
+    const refunds = buildReconciledRefundRecords({
+      purchases: [],
+      commerceOrders: [{
+        id: 'order-pending-refund',
+        amountCents: 3_000,
+        paidAt: new Date('2026-09-02T14:00:00.000Z'),
+        createdAt: new Date('2026-09-02T14:00:00.000Z'),
+        userId: 'member-2',
+        kind: 'EVENT',
+      }],
+      purchaseRefunds: [],
+      commerceRefunds: [{
+        id: 'pending-row',
+        commerceOrderId: 'order-pending-refund',
+        amountCents: 3_000,
+        createdAt: refundAt,
+        status: 'PENDING',
+      }],
+      paymentRecords: [],
+    });
+
+    expect(refunds).toEqual([]);
+  });
+
   it('keeps separate refunded subscription renewals as separate money movements', () => {
     const refunds = buildReconciledRefundRecords({
       purchases: [{
