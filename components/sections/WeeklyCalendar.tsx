@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
+import { CalendarDayStrip } from '@/components/sections/CalendarDayStrip';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -157,9 +158,9 @@ export function WeeklyCalendar({
 
       {view === 'daily' && (
         <>
-          <div
+          <CalendarDayStrip
             className="no-scrollbar mb-6 grid auto-cols-[minmax(7.5rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-2 md:grid-cols-7 md:grid-flow-row md:overflow-visible"
-            aria-label="Choose a day this week"
+            selectedDateKey={selectedDate}
           >
             {weekDays.map((day) => (
               <button
@@ -194,7 +195,7 @@ export function WeeklyCalendar({
                 </span>
               </button>
             ))}
-          </div>
+          </CalendarDayStrip>
           <div className="mb-5 flex flex-col gap-2 px-1 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.25em] text-rhyze-gold">

@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { CalendarDayStrip } from '@/components/sections/CalendarDayStrip';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -187,9 +188,9 @@ export function AdminClassesCalendar({
 
       {view === 'day' && (
         <>
-          <div
+          <CalendarDayStrip
             className="no-scrollbar mb-6 grid auto-cols-[minmax(7.5rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-2 xl:grid-cols-7 xl:grid-flow-row xl:overflow-visible"
-            aria-label="Choose a day this week"
+            selectedDateKey={selectedDateKey}
           >
             {weekDays.map((day) => (
               <Link
@@ -224,7 +225,7 @@ export function AdminClassesCalendar({
                 </span>
               </Link>
             ))}
-          </div>
+          </CalendarDayStrip>
           <div className="mb-5 flex flex-wrap items-end justify-between gap-2 px-1">
             <h3 className="text-sm font-black uppercase tracking-[0.25em] text-rhyze-gold">
               {formatDateKey(selectedDateKey, {
