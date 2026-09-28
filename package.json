@@ -15,7 +15,7 @@
     "stripe:configure-portal": "tsx scripts/configure-stripe-portal.ts",
     "netlify:stage-native-bindings": "node scripts/stage-netlify-native-bindings.mjs",
     "release:check": "tsx scripts/release/production.ts check",
-    "deploy:production": "tsx scripts/release/production.ts publish",
+    "deploy:production": "tsx scripts/release/hosted.ts",
     "release:verify": "tsx scripts/release/production.ts verify",
     "automation:setup-accounts": "tsx scripts/setup-automation-test-accounts.ts",
     "automation:portal-smoke": "tsx scripts/portal-auth-smoke.ts",
@@ -28,7 +28,8 @@
     "prisma:validate": "prisma validate",
     "import:somble": "tsx scripts/import-somble.ts",
     "import:somble-attendees": "tsx scripts/import-somble-attendees.ts",
-    "somble:send-claims": "tsx scripts/send-somble-account-invites.ts"
+    "somble:send-claims": "tsx scripts/send-somble-account-invites.ts",
+    "release:hosted": "tsx scripts/release/hosted.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

@@ -5,6 +5,11 @@ const { verifyBoundary } = require('../../scripts/release/boundary.cjs');
 
 function guard({ constants }, final) {
   if (process.env.CONTEXT !== 'production') return;
+  if (constants.IS_LOCAL === false)
+    return require('../../scripts/release/hosted-guard.cjs').hostedGuard(
+      { constants },
+      final,
+    );
   try {
     if (
       !constants.IS_LOCAL ||

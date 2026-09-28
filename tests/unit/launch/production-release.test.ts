@@ -116,7 +116,7 @@ describe('release input and production isolation', () => {
     // Never execute an arbitrary changed npm command in a regression test: a
     // reversion to raw `netlify deploy` must fail BEFORE any child is started.
     expect(bin).toBe('tsx');
-    expect(args).toEqual(['scripts/release/production.ts', 'publish']);
+    expect(args).toEqual(['scripts/release/hosted.ts']);
     let result = '';
     try {
       execFileSync(resolve('node_modules/.bin', bin), args, {

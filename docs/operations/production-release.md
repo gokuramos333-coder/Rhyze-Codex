@@ -2,7 +2,58 @@
 
 Production: `https://www.rhyzefitness.com` · Netlify project `rhyze-fitness-rhyze-2` · site `e7002b82-50f2-4760-8a35-e4f9591bec4f`.
 
-## Supported commands (fail closed)
+## Git-hosted releases (new default)
+
+`npm run deploy:production -- --expected-deploy DEPLOY_ID --base-ref SOURCE_COMMIT`
+now uses `scripts/release/hosted.ts`. `npm run release:hosted` is an alias. Supply
+fresh provider pins and the same explicit disposable PostgreSQL test connections
+listed below. The command runs the complete existing `release:check` before it
+allows a hosted build. It does not enable PAT production database access.
+
+The existing Netlify site is connected to `gokuramos333-coder/Rhyze-Codex`, branch
+`production-reviewed`, using a repository-only read-only deploy key. `main` is
+not the production branch. No push webhook or GitHub status token is required:
+the command explicitly requests each hosted build through the Netlify API.
+Netlify automatic publication must remain locked between releases.
+
+The hosted command checks the current source/site/configuration, PAT access OFF,
+and the repository/branch/lock settings. It then runs the full existing checks,
+pushes only an ancestor-preserving revision with an explicit remote lease, and
+sets a temporary production/build-only approval for that exact SHA and nonce.
+The hosted guard verifies source contents against Git before and after the build,
+LIVE payment configuration, and managed database privileges in a read-only
+transaction. A SHA-256 identity derived from the existing database endpoint/name
+must match the managed connection; credentials are not included in that identity
+or in the public build receipt.
+
+Only the exact READY **production-context** Git artifact with the matching
+`/_rhyze-release.json` receipt may be published. Live/configuration pins and PAT
+restriction are rechecked before publication. This is not preview promotion.
+The new production deploy is locked immediately, authenticated live checks run,
+and the temporary approval is removed. Cleanup attempts approval removal,
+publication locking and PAT verification independently, even after errors.
+
+A `VERIFIED` receipt under `.releases/hosted-*/release.json` means all required
+checks completed. `BLOCKED` means publication was not attempted; it may still
+leave a branch push or hosted build. `REQUIRES_ATTENTION` means publication or
+cleanup needs inspection. Never retry an uncertain publication automatically.
+The provider publication API is not compare-and-swap; other administrators must
+not publish/unlock/change production settings during a guarded release.
+
+One-time configuration: preserve the current live source, lock its deployment,
+connect the dedicated branch with builds stopped, then enable hosted builds after
+review. Do not attach divergent `main` to production. Deploy keys are scoped to
+read this repository; the GitHub CLI token is never copied to Netlify.
+
+## Legacy local CLI procedure (explicit exception only)
+
+The following documents the older local upload path and its temporary PAT
+permission requirement. It is no longer the default npm publishing command.
+To use it for an explicitly approved recovery, invoke
+`npx tsx scripts/release/production.ts publish` with the pinned inputs. Do not
+silently fall back to it when the hosted workflow is blocked.
+
+## Local check and legacy workflow details
 
 Use the reviewed `rhyze-sign-in-plan-repair` repository, not the obsolete `rhyze-fitness-new` checkout. `npm run deploy:production` now runs the guarded release workflow; invoking it without the pinned release inputs does **not** publish anything. Do not bypass it with a raw CLI upload, preview promotion, or `--no-build`.
 
@@ -23,7 +74,7 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 npm run release:check -- --expected-deploy DEPLOY_ID --base-ref SOURCE_COMMIT
 
 # Only after explicit release approval and the temporary DB permission approval:
-npm run deploy:production -- --expected-deploy DEPLOY_ID --base-ref SOURCE_COMMIT
+npx tsx scripts/release/production.ts publish --expected-deploy DEPLOY_ID --base-ref SOURCE_COMMIT
 
 # Restore PAT database access OFF immediately, even after a failed command.
 # Verify the NEW published deploy ID, or the existing ID for a read-only check:
@@ -56,8 +107,8 @@ A per-site lock under `~/.cache/rhyze-releases/` serializes supported releases o
 
 ## Why the permission step exists
 
-The site currently has no linked Git build. The CLI's managed database binding has previously been read-only or invalid for the running application when PAT production access is disabled. That caused a draft failure; publishing such an artifact would break the live site. Do not leave broad PAT write access enabled permanently to avoid this check.
+Before the Git-hosted migration, the site had no linked Git build. The CLI's managed database binding has previously been read-only or invalid for the running application when PAT production access is disabled. That caused a draft failure; publishing such an artifact would break the live site. Do not leave broad PAT write access enabled permanently to avoid this check.
 
-A future move to a connected Git/managed-build workflow can remove the manual CLI binding step, but linking a repository and changing deployment permissions is a separate configuration change, not implicitly authorized by a routine deploy.
+The Git-hosted workflow above replaces this manual CLI binding step. Its repository connection and deployment changes were separately approved by the owner; permanent PAT production database write access is not part of that approval.
 
 Provider references: [migration lifecycle](https://docs.netlify.com/build/data-and-storage/netlify-database/migrations/), [database access control](https://docs.netlify.com/build/data-and-storage/netlify-database/access-control/).
