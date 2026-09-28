@@ -39,6 +39,11 @@ function assertHostedApproval(env, revision, now = Date.now()) {
     );
   return approval;
 }
+function immutableDeployOrigin(deploy) {
+  if (deploy.site_id !== SITE_ID || !/^[a-f0-9]{24}$/.test(deploy.id || ''))
+    throw Error('Invalid immutable deploy identity.');
+  return `https://${deploy.id}--rhyze-fitness-rhyze-2.netlify.app`;
+}
 function assertHostedCandidate(deploy, expected) {
   if (
     deploy.id !== expected.deployId ||
@@ -228,6 +233,7 @@ module.exports = {
   APPROVAL_KEY,
   RECEIPT_PATH,
   assertHostedApproval,
+  immutableDeployOrigin,
   assertHostedCandidate,
   assertHostedReceipt,
   receiptFor,

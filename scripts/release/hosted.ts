@@ -16,7 +16,6 @@ import {
   ACCOUNT_ID,
   CLI_VERSION,
   SITE_ID,
-  SITE_NAME,
   parseOptions,
   assertProductionDeploy,
   assertProductionEnvironment,
@@ -33,6 +32,7 @@ const {
   BRANCH,
   APPROVAL_KEY,
   assertHostedCandidate,
+  immutableDeployOrigin,
   assertHostedReceipt,
   databaseIdentity,
 } = require('./hosted-guard.cjs');
@@ -303,9 +303,7 @@ async function main() {
             buildId: build.id,
             deployId: candidateId,
           });
-          const origin = `https://${candidateId}--${SITE_NAME}.netlify.app`;
-          if (candidate.deploy_ssl_url !== origin)
-            throw Error('Unexpected immutable deploy URL.');
+          const origin = immutableDeployOrigin(candidate);
           const response = await fetch(`${origin}/_rhyze-release.json`, {
             redirect: 'error',
             cache: 'no-store',
@@ -315,6 +313,21 @@ async function main() {
           const receipt = await response.json();
           assertHostedReceipt(receipt, approval);
           evidence.hostedReceipt = receipt;
+          for (const route of ['/classes', '/api/auth/session']) {
+            const smoke = await fetch(origin + route, {
+              redirect: 'error',
+              cache: 'no-store',
+              signal: AbortSignal.timeout(30000),
+            });
+            if (!smoke.ok)
+              throw Error(
+                'Hosted application route failed before publication.',
+              );
+            if (route === '/api/auth/session') await smoke.json();
+            else if (!(await smoke.text()).includes('Rhyze'))
+              throw Error('Hosted application HTML missing.');
+          }
+          evidence.hostedApplicationRoutes = true;
           if ((await patOff()) !== databaseId)
             throw Error('Site database identity changed.');
           await unchanged();

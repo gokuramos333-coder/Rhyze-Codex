@@ -14,7 +14,10 @@ The existing Netlify site is connected to `gokuramos333-coder/Rhyze-Codex`, bran
 `production-reviewed`, using a repository-only read-only deploy key. `main` is
 not the production branch. No push webhook or GitHub status token is required:
 the command explicitly requests each hosted build through the Netlify API.
-Netlify automatic publication must remain locked between releases.
+Netlify automatic publication must remain locked between releases. The Next.js
+adapter is explicitly pinned to 5.16.0 with `.next` as the publish directory;
+its generated server routes are checked on the immutable deploy URL before
+publication. Review adapter upgrades separately from routine app changes.
 
 The hosted command checks the current source/site/configuration, PAT access OFF,
 and the repository/branch/lock settings. It then runs the full existing checks,

@@ -1,4 +1,5 @@
 [build]
+  publish = ".next"
   command = "npm run netlify:stage-native-bindings && npx prisma generate && NEXT_DIST_DIR=.next next build"
   functions = "netlify/functions"
 
@@ -9,3 +10,7 @@
 
 [[plugins]]
   package = "./plugins/release-safety"
+
+# Explicitly package Next.js for hosted builds as well as CLI builds.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

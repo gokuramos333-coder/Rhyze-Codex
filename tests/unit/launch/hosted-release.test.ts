@@ -299,3 +299,22 @@ it('pins the same database regardless of readonly vs application credentials', (
     databaseIdentity('postgres://netlifydb_owner:two@db.example.com/other'),
   ).not.toBe(first);
 });
+
+it('uses the immutable deploy ID URL even when the provider returns a branch alias', () => {
+  const {
+    immutableDeployOrigin,
+  } = require('../../../scripts/release/hosted-guard.cjs');
+  const deploy = {
+    id: '6ab9e6ccdb1348d2d7b52edc',
+    site_id: env.SITE_ID,
+    deploy_ssl_url:
+      'https://production-reviewed--rhyze-fitness-rhyze-2.netlify.app',
+  };
+  expect(immutableDeployOrigin(deploy)).toBe(
+    'https://6ab9e6ccdb1348d2d7b52edc--rhyze-fitness-rhyze-2.netlify.app',
+  );
+  expect(() => immutableDeployOrigin({ ...deploy, id: '../wrong' })).toThrow();
+  expect(() =>
+    immutableDeployOrigin({ ...deploy, site_id: 'wrong' }),
+  ).toThrow();
+});
