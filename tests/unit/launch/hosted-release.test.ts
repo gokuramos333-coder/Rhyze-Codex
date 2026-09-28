@@ -176,6 +176,21 @@ describe('hosted source and database verification', () => {
     expect(() => verifyHostedSnapshot(root, sha, receipt)).not.toThrow();
     expect(() => verifyHostedSnapshot(root, 'f'.repeat(40), receipt)).toThrow();
   });
+  it('diagnoses source drift without exposing file names or contents', () => {
+    const { root, sha } = fixture();
+    writeFileSync(join(root, 'private-filename.txt'), 'sensitive-value');
+    let failure: Error | undefined;
+    try {
+      verifyHostedSnapshot(root, sha);
+    } catch (error) {
+      failure = error as Error;
+    }
+    expect(failure?.message).toMatch(
+      /^Hosted source added; path fingerprint [a-f0-9]{64}$/,
+    );
+    expect(failure?.message).not.toContain('private-filename');
+    expect(failure?.message).not.toContain('sensitive-value');
+  });
   it('checks each privilege separately inside a read-only transaction', async () => {
     const tx = {
       $executeRawUnsafe: vi.fn(),

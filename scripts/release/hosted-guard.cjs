@@ -79,6 +79,13 @@ function receiptFor(approval) {
     databasePrivileges: true,
   };
 }
+class HostedSourceError extends Error {
+  constructor(reason, relative = '') {
+    const fingerprint = createHash('sha256').update(relative).digest('hex');
+    super(`Hosted source ${reason}; path fingerprint ${fingerprint}`);
+    this.diagnostic = `${reason}:${fingerprint}`;
+  }
+}
 function verifyHostedSnapshot(root, revision, receipt) {
   const git = (...args) =>
     execFileSync('git', args, {
@@ -114,7 +121,8 @@ function verifyHostedSnapshot(root, revision, receipt) {
       const relative = prefix + name;
       const file = path.join(dir, name);
       const info = fs.lstatSync(file);
-      if (info.isSymbolicLink()) throw Error('Symlink in hosted source.');
+      if (info.isSymbolicLink())
+        throw new HostedSourceError('symlink', relative);
       if (
         !prefix &&
         ['.git', 'node_modules', '.next', '.next-build', '.netlify'].includes(
@@ -146,12 +154,19 @@ function verifyHostedSnapshot(root, revision, receipt) {
         .update(bytes)
         .digest('hex');
       if (expected.get(relative) !== blob)
-        throw Error('Hosted source changed or contains unreviewed files.');
+        throw new HostedSourceError(
+          expected.has(relative) ? 'modified' : 'added',
+          relative,
+        );
       seen.add(relative);
     }
   }
   walk(root);
-  if (seen.size !== expected.size) throw Error('Hosted source file missing.');
+  if (seen.size !== expected.size)
+    throw new HostedSourceError(
+      'missing',
+      [...expected.keys()].find((file) => !seen.has(file)),
+    );
 }
 async function verifyDatabasePrivileges(db) {
   await db.$transaction(async (tx) => {
@@ -170,6 +185,7 @@ async function verifyDatabasePrivileges(db) {
   });
 }
 async function hostedGuard({ constants }, final) {
+  let stage = 'checkout';
   try {
     const root = process.cwd();
     const revision = execFileSync('git', ['rev-parse', 'HEAD'], {
@@ -183,9 +199,12 @@ async function hostedGuard({ constants }, final) {
         fs.realpathSync(root)
     )
       throw Error();
+    stage = 'approval';
     const approval = assertHostedApproval(process.env, revision);
     const receipt = receiptFor(approval);
+    stage = 'source';
     verifyHostedSnapshot(root, revision, final ? receipt : undefined);
+    stage = 'live-configuration';
     if (
       process.env.NEXT_PUBLIC_APP_URL !== 'https://www.rhyzefitness.com' ||
       !/^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY || '') ||
@@ -194,6 +213,7 @@ async function hostedGuard({ constants }, final) {
       throw Error();
     if (!final) {
       // Only the platform-managed binding is accepted; no local PAT connection.
+      stage = 'managed-database';
       const value = process.env.NETLIFY_DB_URL;
       const url = new URL(value);
       if (
@@ -220,9 +240,11 @@ async function hostedGuard({ constants }, final) {
     console.info(
       `Rhyze hosted release ${final ? 'post-build' : 'pre-build'} guard passed for ${revision}.`,
     );
-  } catch {
+  } catch (error) {
+    const diagnostic =
+      error instanceof HostedSourceError ? ` (${error.diagnostic})` : '';
     throw Error(
-      'Rhyze hosted release guard blocked this build; verify approval, source, LIVE configuration and managed database access. Sensitive details withheld.',
+      `Rhyze hosted release guard blocked at ${stage}${diagnostic}. Sensitive details withheld.`,
     );
   }
 }
