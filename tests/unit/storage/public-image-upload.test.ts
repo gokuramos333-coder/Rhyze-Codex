@@ -25,7 +25,7 @@ describe('public profile image uploads', () => {
         'node_modules/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.8.18.6',
       ),
     ).toBe(true);
-  });
+  }, 30_000); // Includes npm package staging on a clean release snapshot.
 
   it('allows an 8 MB phone photo through the Server Action boundary', () => {
     expect(nextConfig.experimental?.serverActions?.bodySizeLimit).toBe('10mb');
