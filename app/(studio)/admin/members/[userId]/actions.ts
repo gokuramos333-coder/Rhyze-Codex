@@ -63,6 +63,7 @@ const commerceRefundActionSchema = z.object({
   commerceOrderId: z.string().min(1),
   confirmation: z.string().trim(),
   reason: z.string().trim().min(5).max(240),
+  notificationMode: z.enum(['email', 'staff_only']).default('email'),
 });
 
 function commerceRefundErrorCode(error: unknown) {
@@ -540,6 +541,7 @@ export async function refundMemberCommerceOrderAction(formData: FormData) {
     commerceOrderId: formData.get('commerceOrderId'),
     confirmation: formData.get('confirmation'),
     reason: formData.get('reason'),
+    notificationMode: formData.get('notificationMode') ?? undefined,
   });
   const fallbackUserId = String(formData.get('userId') || '');
   if (!parsed.success || !stripeIsConfigured()) {
@@ -553,6 +555,7 @@ export async function refundMemberCommerceOrderAction(formData: FormData) {
       actorId: actor.id,
       reason: parsed.data.reason,
       confirmation: parsed.data.confirmation,
+      notifyCustomer: parsed.data.notificationMode !== 'staff_only',
     });
   } catch (error) {
     if (!(error instanceof CommerceRefundError)) {

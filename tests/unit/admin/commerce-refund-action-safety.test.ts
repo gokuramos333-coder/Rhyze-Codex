@@ -76,7 +76,7 @@ describe('commerce refund server action safety', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
-  it('passes the client-owned commerce order and owner actor through the member action', async () => {
+  it.each([undefined, 'email', 'staff_only'])('passes the client-owned order, owner actor and notification preference (%s)', async (notificationMode) => {
     mocks.requireApprovedOwner.mockResolvedValue({
       id: 'owner_test',
       email: 'owner@example.test',
@@ -97,6 +97,7 @@ describe('commerce refund server action safety', () => {
     const form = new FormData();
     form.set('userId', 'member_event_refund');
     form.set('commerceOrderId', 'order_event_refund');
+    if (notificationMode) form.set('notificationMode', notificationMode);
     form.set('reason', 'Studio postponed event');
     form.set('confirmation', 'REFUND');
 
@@ -110,6 +111,7 @@ describe('commerce refund server action safety', () => {
       {
         orderId: 'order_event_refund',
         memberUserId: 'member_event_refund',
+        notifyCustomer: notificationMode !== 'staff_only',
         actorId: 'owner_test',
         reason: 'Studio postponed event',
         confirmation: 'REFUND',

@@ -569,6 +569,38 @@ if (!url) {
       ).resolves.toMatchObject({ validUntil: null });
     });
 
+    it('keeps staff-only notification suppressed through pending recovery and later retries', async () => {
+      const pending = stripe('pending');
+      await expect(refundCommerceOrderFullRemainder(db, pending as never, {
+        ...refundInput(), notifyCustomer: false,
+      })).rejects.toMatchObject({ code: 'provider_pending' });
+      const succeeded = stripe('succeeded', [providerRefund('re_refund_integration')]);
+      await refundCommerceOrderFullRemainder(db, succeeded as never, refundInput());
+      await refundCommerceOrderFullRemainder(db, succeeded as never, refundInput());
+      expect(succeeded.refunds.create).not.toHaveBeenCalled();
+      await expect(db.commerceOrder.findUniqueOrThrow({ where: { id: ids.order } }))
+        .resolves.toMatchObject({ status: 'REFUNDED', refundedAmountCents: 3000 });
+      await expect(db.emailMessage.count({ where: {
+        userId: ids.member, template: 'PAYMENT_REFUND_CONFIRMATION',
+      } })).resolves.toBe(0);
+      await expect(db.auditLog.count({ where: {
+        entityId: ids.order, action: 'commerce-refund.notification-suppressed',
+      } })).resolves.toBe(1);
+    });
+
+    it('reconciles an external refund without emailing when staff-only is selected', async () => {
+      const external = providerRefund('re_staff_only_external');
+      const provider = stripe('succeeded', [external]);
+      await refundCommerceOrderFullRemainder(db, provider as never, {
+        ...refundInput(), notifyCustomer: false,
+      });
+      await refundCommerceOrderFullRemainder(db, provider as never, refundInput());
+      expect(provider.refunds.create).not.toHaveBeenCalled();
+      await expect(db.emailMessage.count({ where: {
+        userId: ids.member, template: 'PAYMENT_REFUND_CONFIRMATION',
+      } })).resolves.toBe(0);
+    });
+
     it('rejects a prior event cancellation GRANT before calling Stripe', async () => {
       await db.creditLedgerEntry.create({
         data: {

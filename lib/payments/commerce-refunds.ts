@@ -22,6 +22,7 @@ export type CommerceRefundInput = {
   reason: string;
   confirmation: string;
   memberUserId?: string;
+  notifyCustomer?: boolean;
 };
 
 export type CommerceRefundResult = {
@@ -407,6 +408,19 @@ async function prepareRefundOperation(db: Db, input: CommerceRefundInput) {
         async (tx) => {
           const locked = await getOrderForRefund(tx, input);
           const bookingProof = await proveEventBookingForCashRefund(tx, locked);
+          // Persist staff-only delivery before contacting Stripe so recovery cannot email later.
+          if (input.notifyCustomer === false && !await tx.auditLog.findFirst({
+            where: { entityType: 'CommerceOrder', entityId: locked.id, action: 'commerce-refund.notification-suppressed' },
+            select: { id: true },
+          })) {
+            await tx.auditLog.create({ data: {
+              actorId: input.actorId,
+              action: 'commerce-refund.notification-suppressed',
+              entityType: 'CommerceOrder',
+              entityId: locked.id,
+              after: { operationKey, notificationMode: 'staff_only', reason: input.reason },
+            } });
+          }
           const intendedAmount = Math.max(
             0,
             locked.amountCents - locked.refundedAmountCents,
@@ -941,7 +955,11 @@ async function reconcileSucceededRefunds(
           });
         }
         const recipient = order.user?.email || order.customerEmail;
-        if (fullyRefunded && recipient) {
+        const notificationSuppressed = await tx.auditLog.findFirst({
+          where: { entityType: 'CommerceOrder', entityId: order.id, action: 'commerce-refund.notification-suppressed' },
+          select: { id: true },
+        });
+        if (fullyRefunded && recipient && !notificationSuppressed) {
           await queueEmail(tx, {
             userId: order.userId || undefined,
             to: recipient,

@@ -976,6 +976,13 @@ export default async function AdminMemberDetailPage(
                           <p className="sm:col-span-3 text-[10px] font-bold uppercase text-rhyze-black/55">
                             DB remaining, provider-verified on submit: {money(Math.max(0, payment.amountCents - payment.refundedAmountCents))}
                           </p>
+                          <label className="grid gap-1 text-[10px] font-black uppercase sm:col-span-3">
+                            Customer notification
+                            <select name="notificationMode" defaultValue="email" className="min-h-10 border bg-white px-3 text-sm font-normal normal-case">
+                              <option value="email">Send refund confirmation email</option>
+                              <option value="staff_only">Staff will notify customer manually (no app email, including retries)</option>
+                            </select>
+                          </label>
                           <label className="grid gap-1 text-[10px] font-black uppercase">
                             Refund reason
                             <input name="reason" minLength={5} maxLength={240} required defaultValue={payment.status === 'REFUNDED' ? 'Provider refund reconciliation' : undefined} className="min-h-10 border bg-white px-3 text-sm font-normal normal-case" />
