@@ -278,6 +278,9 @@ async function main() {
         [
           'test',
           '--',
+          // Integration files share disposable databases; isolate suites while
+          // retaining each suite's explicit concurrent transaction tests.
+          '--no-file-parallelism',
           '--reporter=dot',
           '--reporter=json',
           `--outputFile=${resultsFile}`,

@@ -8,7 +8,9 @@ Production: `https://www.rhyzefitness.com` · Netlify project `rhyze-fitness-rhy
 now uses `scripts/release/hosted.ts`. `npm run release:hosted` is an alias. Supply
 fresh provider pins and the same explicit disposable PostgreSQL test connections
 listed below. The command runs the complete existing `release:check` before it
-allows a hosted build. It does not enable PAT production database access.
+allows a hosted build. Test files run sequentially because integration suites
+share disposable databases; explicit concurrency tests inside each suite still
+run. It does not enable PAT production database access.
 
 The existing Netlify site is connected to `gokuramos333-coder/Rhyze-Codex`, branch
 `production-reviewed`, using a repository-only read-only deploy key. `main` is
