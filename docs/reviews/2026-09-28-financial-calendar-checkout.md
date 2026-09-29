@@ -20,3 +20,7 @@ The owner requested consistent historical money reporting and exports, an Octobe
 - Schedule dry run against production's read-only connection validated the 79 complete entries without writes. Two business clarifications remain pending.
 
 Production build, publication and live read-back are separate guarded steps. This document is not a deployment receipt. No database schema migration or temporary PAT database permission is needed. Use the existing Git-hosted release process with fresh source/deployment pins.
+
+## Production origin correction
+
+Live POST readback exposed an intermittent 403 when the hosting adapter's Request URL differed from the public Origin. All three new owner mutation routes now validate against the configured NEXT_PUBLIC_APP_URL, matching the existing contact route's public-origin convention. The shared helper fails closed for absent/invalid production configuration and does not trust forwarded host headers. Approved-owner authentication remains required. Independent origin_fix_review found no blockers; focused origin/route tests passed 8/8 including proxied requests and hostile/missing origins. Full guarded release checks run again before publication.

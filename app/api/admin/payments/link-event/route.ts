@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isTrustedAdminOrigin } from '@/lib/auth/request-origin';
 import { revalidatePath } from 'next/cache';
 import { requireApprovedOwner } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
@@ -7,7 +8,7 @@ import { linkStripeEventPayment, StripeEventPaymentLinkError, stripeEventPayment
 
 export async function POST(request: Request) {
   // Explicit Origin protection: this mutation is an owner-session API, not a webhook.
-  if (request.headers.get('origin') !== new URL(request.url).origin) {
+  if (!isTrustedAdminOrigin(request)) {
     return NextResponse.json({ error: 'Same-origin owner request required.' }, { status: 403 });
   }
   const owner = await requireApprovedOwner();

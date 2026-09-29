@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isTrustedAdminOrigin } from '@/lib/auth/request-origin';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireApprovedOwner } from '@/lib/auth/session';
@@ -18,7 +19,7 @@ const inputSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  if (request.headers.get('origin') !== new URL(request.url).origin) return NextResponse.json({ error: 'Same-origin owner request required.' }, { status: 403 });
+  if (!isTrustedAdminOrigin(request)) return NextResponse.json({ error: 'Same-origin owner request required.' }, { status: 403 });
   const owner = await requireApprovedOwner();
   if (!stripeIsConfigured() || stripeAccountMode() !== 'live') return NextResponse.json({ error: 'Live Stripe is required.' }, { status: 503 });
   const input = inputSchema.safeParse(await request.json().catch(() => null));

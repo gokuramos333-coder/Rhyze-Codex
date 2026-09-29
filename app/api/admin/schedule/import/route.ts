@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { isTrustedAdminOrigin } from '@/lib/auth/request-origin';
 import { revalidatePath } from 'next/cache';
 import { requireApprovedOwner } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { importSchedule, scheduleImportSchema } from '@/lib/admin/schedule-import';
 
 export async function POST(request: Request) {
-  if (request.headers.get('origin') !== new URL(request.url).origin) return NextResponse.json({ error: 'Same-origin request required.' }, { status: 403 });
+  if (!isTrustedAdminOrigin(request)) return NextResponse.json({ error: 'Same-origin request required.' }, { status: 403 });
   const owner = await requireApprovedOwner();
   const input = scheduleImportSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return NextResponse.json({ error: 'Invalid schedule import.' }, { status: 400 });
