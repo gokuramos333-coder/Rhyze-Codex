@@ -8,6 +8,8 @@ import {
   buildReconciledRefundRecords,
 } from '@/lib/admin/reconciled-financials';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
+import { confirmHistoricalEventRow } from './confirmed-historical-events';
+import { summarizeEventReceipts } from './event-receipts';
 
 export type FinancialReportParams = {
   range?: string;
@@ -87,6 +89,7 @@ export type FinancialReportRow = {
   source: 'RHYZE' | 'SOMBLE';
   entryType: 'COLLECTION' | 'REFUND' | 'DISPUTE' | 'UNMATCHED' | 'FEE';
   providerVerified: boolean;
+  ownerConfirmedHistorical?: boolean;
   allocationRequired: boolean;
   feeKnown?: boolean;
   offering: string;
@@ -746,6 +749,7 @@ export function buildFinancialReport(
     [...gross, ...adjustments, ...unmatched],
     raw.providerEvents,
   );
+  providerLedger.rows = providerLedger.rows.map(confirmHistoricalEventRow);
   const rows = providerLedger.rows
     .filter(matches)
     .filter(
@@ -793,6 +797,7 @@ export function buildFinancialReport(
     pageCount,
     pageSize,
     totals: totalRows(rows),
+    eventSummaries: summarizeEventReceipts(providerLedger.rows),
     offerings,
     unknownDateAdjustments,
     staleProviderReceipts: providerLedger.staleProviderReceipts,

@@ -10,9 +10,8 @@ import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-manage
 import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
 import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
 import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
-import {
-  activeEventBookingValueCents,
-} from '@/lib/admin/event-revenue';
+import { EventReceiptSummary } from '@/components/admin/EventReceiptSummary';
+import type { EventReceiptSummary as ReceiptSummary } from '@/lib/admin/event-receipts';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -51,33 +50,6 @@ export default async function AdminEventsPage(
       include: {
         template: { include: { category: true } },
         instructor: { include: { instructorProfile: true } },
-        commerceOrders: {
-          where: {
-            kind: 'EVENT',
-            status: {
-              in: [
-                'PAID',
-                'FULFILLMENT_REVIEW',
-                'PARTIALLY_REFUNDED',
-                'REFUNDED',
-              ],
-            },
-          },
-          select: {
-            userId: true,
-            customerEmail: true,
-            amountCents: true,
-            refundedAmountCents: true,
-            paidAt: true,
-          },
-        },
-        bookings: {
-          where: confirmedRosterBookingWhere(),
-          select: {
-            userId: true,
-            user: { select: { email: true } },
-          },
-        },
         _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
       },
       orderBy: { startAt: 'asc' },
@@ -103,8 +75,8 @@ export default async function AdminEventsPage(
           <EventScheduleRangeControls active={occurrenceRange.key} />
         </div>
         <div className="mt-5 grid gap-6">
-          <EventOccurrenceSection title="UPCOMING" occurrences={upcomingOccurrences} reportQuery={financialReportQuery(searchParams)} />
-          <EventOccurrenceSection title="PAST" occurrences={pastOccurrences} past reportQuery={financialReportQuery(searchParams)} />
+          <EventOccurrenceSection title="UPCOMING" occurrences={upcomingOccurrences} eventSummaries={report.eventSummaries} />
+          <EventOccurrenceSection title="PAST" occurrences={pastOccurrences} past eventSummaries={report.eventSummaries} />
           {!scheduledOccurrences.length && <p className="border border-black/10 p-5 text-sm font-bold text-rhyze-black/50">No scheduled events in this range.</p>}
         </div>
       </section>
@@ -171,29 +143,25 @@ function EventScheduleRangeControls({ active }: { active: string }) {
     </div>
   );
 }
-function EventOccurrenceSection({ title, occurrences, past = false, reportQuery }: { reportQuery: string; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; commerceOrders: Array<{ userId: string | null; customerEmail: string | null; amountCents: number; refundedAmountCents: number; paidAt: Date | null }>; bookings: Array<{ userId: string; user: { email: string } }>; _count: { bookings: number } }>; past?: boolean }) {
+function EventOccurrenceSection({ title, occurrences, past = false, eventSummaries }: { eventSummaries: ReceiptSummary[]; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; _count: { bookings: number } }>; past?: boolean }) {
   if (!occurrences.length) return null;
   return (
     <section>
       <h3 className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-black/45">{title}</h3>
       <div className="mt-3 grid gap-3">
         {occurrences.map((occurrence) => {
-          const activeBookingValue = activeEventBookingValueCents({
-            bookings: occurrence.bookings.map((booking) => ({
-              userId: booking.userId,
-              email: booking.user.email,
-            })),
-            orders: occurrence.commerceOrders,
-          });
+          const eventSummary = eventSummaries.find(item => item.occurrenceId === occurrence.id);
+          const entriesQuery = financialReportQuery({ range: 'custom', from: eventSummary?.from, to: eventSummary?.to, occurrence: occurrence.id });
           return (
             <article key={occurrence.id} className={`grid gap-3 border border-black/10 p-4 md:grid-cols-[1fr_auto] md:items-center ${past ? 'bg-rhyze-black/5' : 'bg-white'}`}>
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.template.category.name}</p>
                 <h3 className="mt-1 font-display text-3xl tracking-wider">{occurrence.template.name}</h3>
-                <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups · Active booking value: ${(activeBookingValue / 100).toFixed(0)}</p>
+                <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups</p>
+                <EventReceiptSummary summary={eventSummary} />
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href={`/admin/payments?${reportQuery}&occurrence=${occurrence.id}`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest">Financial entries</Link>
+                <Link href={`/admin/payments?${entriesQuery}`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest">Financial entries</Link>
                 <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Manage</Link>
                 <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Duplicate / choose date</Link>
                 <Link href={`/admin/schedule/${occurrence.id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>

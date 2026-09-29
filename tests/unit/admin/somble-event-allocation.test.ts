@@ -46,6 +46,34 @@ function data(): FinancialReportSources {
 }
 const params = { range: 'custom', from: '2026-01-01', to: '2026-12-31' };
 describe('archived Somble event attribution', () => {
+  it('uses the owner confirmation for the exact August import without certifying provider cash', () => {
+    const raw = data();
+    raw.sombleTransactions[0].id = 'cmscfu5vr000njr092k7nzgx6';
+    raw.importedBookings![0].occurrence.id = 'owned-event-tcj-hip-hop-happy-hour-tricia';
+    const report = buildFinancialReport(raw, { range: 'custom', from: '2026-08-01', to: '2026-08-31' });
+    // July presales belong to this event, but not to August cash collections.
+    expect(report.rows).toHaveLength(0);
+    expect(report.eventSummaries).toMatchObject([{
+      occurrenceId: 'owned-event-tcj-hip-hop-happy-hour-tricia',
+      currencies: [{ currency: 'USD', confirmedImportCents: 3000, verifiedNetCents: 0, netCents: 3000 }],
+    }]);
+    const year = buildFinancialReport(raw, params);
+    expect(year.rows[0]).toMatchObject({ currency: 'USD', providerVerified: false, ownerConfirmedHistorical: true });
+    expect(year.rows[0].verification).toContain('Owner-confirmed');
+    expect(year.totals[0]).toMatchObject({ verifiedGrossCents: 0, importedCents: 3000 });
+  });
+  it.each(['other-event', 'changed-amount', 'other-import'])(
+    'does not extend the owner confirmation to %s', (change) => {
+      const raw = data();
+      raw.sombleTransactions[0].id = 'cmscfu5vr000njr092k7nzgx6';
+      raw.importedBookings![0].occurrence.id = 'owned-event-tcj-hip-hop-happy-hour-tricia';
+      if (change === 'other-event') raw.importedBookings![0].occurrence.id = 'other';
+      if (change === 'changed-amount') raw.sombleTransactions[0].amountCents = 4000;
+      if (change === 'other-import') raw.sombleTransactions[0].id = 'other';
+      expect(buildFinancialReport(raw, params).rows[0].currency).toBe('UNKNOWN');
+    },
+  );
+
   it('restores a unique imported purchased event without certifying or adding cash', () => {
     const report = buildFinancialReport(data(), params);
     expect(report.rows).toHaveLength(1);

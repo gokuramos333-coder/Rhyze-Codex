@@ -1,4 +1,5 @@
 import React from 'react';
+import { EventReceiptSummary } from './EventReceiptSummary';
 import Link from 'next/link';
 import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControls';
 import {
@@ -26,6 +27,7 @@ export function FinancialReportView({
     `${basePath}?${new URLSearchParams({ ...Object.fromEntries(Object.entries(params).filter(([, v]) => Boolean(v))), ...extra } as Record<string, string>)}`;
   return (
     <section className="mt-6 space-y-5" aria-label="Financial report">
+      {report.params.occurrence && <EventReceiptSummary summary={report.eventSummaries.find(item => item.occurrenceId === report.params.occurrence)} />}
       {summary && (
         <>
           <AnalyticsRangeControls
