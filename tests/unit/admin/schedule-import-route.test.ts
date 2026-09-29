@@ -15,7 +15,7 @@ describe('owner schedule import boundary', () => {
     expect((await POST(proxied)).status).toBe(200);
     expect(mocks.publish).toHaveBeenCalledWith({}, body, 'owner');
   });
-  beforeEach(() => { vi.clearAllMocks(); mocks.owner.mockResolvedValue({ id: 'owner' }); mocks.publish.mockResolvedValue({ dryRun: true, wouldCreate: 1, created: 0 }); });
+  beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.rhyzefitness.com'); vi.clearAllMocks(); mocks.owner.mockResolvedValue({ id: 'owner' }); mocks.publish.mockResolvedValue({ dryRun: true, wouldCreate: 1, created: 0 }); });
   it('rejects cross-origin and unauthorized requests before publication', async () => {
     expect((await POST(request(body, 'https://other.test'))).status).toBe(403);
     mocks.owner.mockRejectedValue(new Error('denied'));

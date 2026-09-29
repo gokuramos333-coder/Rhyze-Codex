@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ owner: vi.fn(), link: vi.fn(), revalidate: vi.fn(), mode: vi.fn(() => 'live') }));
 vi.mock('@/lib/auth/session', () => ({ requireApprovedOwner: mocks.owner }));
 vi.mock('@/lib/db/prisma', () => ({ prisma: {} }));
@@ -10,7 +10,8 @@ import { StripeEventPaymentLinkError } from '@/lib/admin/stripe-event-payment-li
 const body = { paymentIntentId: 'pi_example', userId: 'member', occurrenceId: 'event', amountCents: 3000, currency: 'usd', markAttended: false, reason: 'Owner verified the Stripe receipt' };
 const request = (data: unknown = body, origin = 'https://rhyzefitness.com') => new Request('https://rhyzefitness.com/api/admin/payments/link-event', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(data) });
 describe('owner external event payment route', () => {
-  beforeEach(() => { vi.clearAllMocks(); mocks.owner.mockResolvedValue({ id: 'owner' }); mocks.mode.mockReturnValue('live'); mocks.link.mockResolvedValue({ orderId: 'order', bookingId: 'booking', alreadyLinked: false }); });
+  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://rhyzefitness.com'); vi.clearAllMocks(); mocks.owner.mockResolvedValue({ id: 'owner' }); mocks.mode.mockReturnValue('live'); mocks.link.mockResolvedValue({ orderId: 'order', bookingId: 'booking', alreadyLinked: false }); });
   it('rejects cross-origin requests before any mutation', async () => {
     expect((await POST(request(body, 'https://other.example'))).status).toBe(403);
     expect(mocks.link).not.toHaveBeenCalled();

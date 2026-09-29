@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ owner: vi.fn(), sync: vi.fn(), mode: vi.fn(), auditCreate: vi.fn(), auditUpdate: vi.fn(), revalidate: vi.fn() }));
 vi.mock('@/lib/auth/session', () => ({ requireApprovedOwner: mocks.owner }));
 vi.mock('@/lib/payments/stripe', () => ({ stripeAccountMode: mocks.mode, stripeIsConfigured: () => true }));
@@ -10,7 +10,8 @@ import { POST } from '@/app/api/admin/payments/reconcile-history/route';
 const body = { from: '2026-08-01T04:00:00Z', to: '2026-09-01T04:00:00Z', dryRun: true, reason: 'Verify August financial reporting' };
 const request = (data: unknown = body, origin = 'https://rhyzefitness.com') => new Request('https://rhyzefitness.com/api/admin/payments/reconcile-history', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(data) });
 describe('owner financial history reconciliation', () => {
-  beforeEach(() => { vi.clearAllMocks(); mocks.owner.mockResolvedValue({ id: 'owner' }); mocks.mode.mockReturnValue('live'); mocks.auditCreate.mockResolvedValue({ id: 'audit1' }); mocks.auditUpdate.mockResolvedValue({}); mocks.sync.mockResolvedValue({ attempted: true, synced: 0, wouldSync: 2, hasMore: false }); });
+  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://rhyzefitness.com'); vi.clearAllMocks(); mocks.owner.mockResolvedValue({ id: 'owner' }); mocks.mode.mockReturnValue('live'); mocks.auditCreate.mockResolvedValue({ id: 'audit1' }); mocks.auditUpdate.mockResolvedValue({}); mocks.sync.mockResolvedValue({ attempted: true, synced: 0, wouldSync: 2, hasMore: false }); });
   it('blocks cross-origin requests before audit or payment changes', async () => {
     expect((await POST(request(body, 'https://other.test'))).status).toBe(403);
     expect(mocks.auditCreate).not.toHaveBeenCalled(); expect(mocks.sync).not.toHaveBeenCalled();
