@@ -33,7 +33,7 @@ async function readAdjustmentPages<T extends { id: string }>(read: (cursor?: str
   throw new Error('Provider adjustment history exceeds the safe page bound; review this charge separately.');
 }
 
-async function financialReceipt(stripe: Stripe, account: string, charge: Stripe.Charge) {
+export async function financialReceipt(stripe: Stripe, account: string, charge: Stripe.Charge, expectedMode?: boolean) {
   const refunds = charge.amount_refunded > 0 || charge.refunds?.data.length || charge.refunds?.has_more
     ? await readAdjustmentPages(cursor => stripe.refunds.list({ charge: charge.id, limit: 100, ...(cursor ? { starting_after: cursor } : {}) }))
     : [];
@@ -41,6 +41,7 @@ async function financialReceipt(stripe: Stripe, account: string, charge: Stripe.
     ? await readAdjustmentPages(cursor => stripe.disputes.list({ charge: charge.id, limit: 100, ...(cursor ? { starting_after: cursor } : {}) }))
     : [];
   for (const adjustment of [...refunds, ...disputes]) {
+    if (expectedMode !== undefined && 'livemode' in adjustment && adjustment.livemode !== expectedMode) throw new Error('Provider adjustment mode differs from the signed event.');
     if (objectId(adjustment.charge) !== charge.id) throw new Error('Provider adjustment belongs to a different charge.');
   }
   if (refunds.filter(refund => refund.status === 'succeeded').reduce((total, refund) => total + refund.amount, 0) !== charge.amount_refunded) {
@@ -52,7 +53,7 @@ async function financialReceipt(stripe: Stripe, account: string, charge: Stripe.
     id, type: 'rhyze.payment.reconciled', account, livemode: charge.livemode,
     created: charge.created, reconciledAt: new Date().toISOString(),
     data: { object: {
-      id: charge.id, object: 'charge', payment_intent: objectId(charge.payment_intent),
+      id: charge.id, object: 'charge', payment_intent: objectId(charge.payment_intent), source_transfer: objectId(charge.source_transfer),
       paid: charge.paid, captured: charge.captured ?? (charge.amount_captured > 0),
       status: charge.status, amount: charge.amount, amount_captured: charge.amount_captured,
       currency: charge.currency, amount_refunded: charge.amount_refunded,
@@ -158,6 +159,12 @@ export async function syncRecentStripePaymentRecords(
     ? { gte: Math.floor(options.from!.getTime() / 1000), lt: Math.ceil(options.to!.getTime() / 1000) }
     : { gte: createdGte };
   const account = await stripe.accounts.retrieve();
+  // Snapshot receipt versions BEFORE reading charges. A concurrent webhook or sync must
+  // not be overwritten by an older charge snapshot after slow adjustment pagination.
+  const receiptVersions = new Map((options.dryRun ? [] : await prisma.stripeEvent.findMany({
+    where: { type: { in: ['rhyze.payment.reconciled', 'rhyze.payment.reconciliation-pending'] }, payload: { path: ['account'], equals: account.id } },
+    select: { id: true, type: true, processedAt: true, error: true },
+  })).map(receipt => [receipt.id, receipt]));
   const charges: { data: Stripe.Charge[] } = { data: [] };
   let pagesRead = 0;
   let hasMore = false;
@@ -250,10 +257,24 @@ export async function syncRecentStripePaymentRecords(
   let fulfilledCheckoutSessions = 0;
   let skippedSombleBacked = 0;
   let receiptsStored = 0;
+  let supersededReceipts = 0;
   for (const charge of charges.data) {
     const receipt = providerReceipts.get(charge.id);
     if (receipt && !options.dryRun) {
-      await prisma.stripeEvent.upsert({ where: { id: receipt.id }, create: receipt, update: { payload: receipt.payload, processedAt: receipt.processedAt } });
+      const previous = receiptVersions.get(receipt.id);
+      let stored = false;
+      if (previous) {
+        const result = await prisma.stripeEvent.updateMany({ where: { id: previous.id, type: previous.type, processedAt: previous.processedAt, error: previous.error }, data: { ...receipt, error: null } });
+        stored = result.count === 1;
+      } else {
+        try {
+          await prisma.stripeEvent.create({ data: receipt });
+          stored = true;
+        } catch (error) {
+          if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'P2002') throw error;
+        }
+      }
+      if (!stored) { supersededReceipts += 1; continue; }
       receiptsStored += 1;
     }
     if (!isCollectedCharge(charge)) continue;
@@ -355,5 +376,5 @@ export async function syncRecentStripePaymentRecords(
     synced += 1;
   }
 
-  return { attempted: true, synced, wouldSync, unchanged, receiptsStored, receiptsRead: providerReceipts.size, providerTotals, ...(options.dryRun ? { providerReceipts: [...providerReceipts.values()].map(receipt => receipt.payload) } : {}), observedAt: new Date().toISOString(), totalsBasis: 'Captured amounts and all succeeded refunds for charges created in the requested window; currencies are never combined.', fulfilledCheckoutSessions, skippedSombleBacked, pagesRead, hasMore, nextCursor: nextCursor || null, financialOnly, dryRun: options.dryRun ?? false, ...diagnostics };
+  return { attempted: true, synced, wouldSync, unchanged, receiptsStored, supersededReceipts, receiptsRead: providerReceipts.size, providerTotals, ...(options.dryRun ? { providerReceipts: [...providerReceipts.values()].map(receipt => receipt.payload) } : {}), observedAt: new Date().toISOString(), totalsBasis: 'Captured amounts and all succeeded refunds for charges created in the requested window; currencies are never combined.', fulfilledCheckoutSessions, skippedSombleBacked, pagesRead, hasMore, nextCursor: nextCursor || null, financialOnly, dryRun: options.dryRun ?? false, ...diagnostics };
 }

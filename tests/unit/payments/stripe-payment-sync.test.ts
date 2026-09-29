@@ -70,10 +70,16 @@ function linkedRecord(overrides: Record<string, unknown> = {}) {
 function database(record: ReturnType<typeof linkedRecord> | null) {
   const writes: unknown[] = [];
   const receipts: any[] = [];
+  const receiptRows = new Map<string, any>();
   const db = {
     sombleTransaction: { findMany: vi.fn(async () => []) },
     user: { findFirst: vi.fn(async (_args: unknown) => ({ id: 'user_intro' })) },
-    stripeEvent: { upsert: vi.fn(async (args: unknown) => { receipts.push(args); return {}; }) },
+    stripeEvent: {
+      upsert: vi.fn(async (args: any) => { receipts.push(args); receiptRows.set(args.where.id, args.create); return {}; }),
+      findMany: vi.fn(async () => [...receiptRows.values()].map(row => ({ id: row.id, type: row.type, error: row.error, processedAt: row.processedAt }))),
+      create: vi.fn(async ({ data }: any) => { if (receiptRows.has(data.id)) throw { code: 'P2002' }; receiptRows.set(data.id, data); receipts.push({ create: data }); return data; }),
+      updateMany: vi.fn(async ({ where, data }: any) => { const row = receiptRows.get(where.id); if (!row || row.type !== where.type || row.error !== where.error || row.processedAt?.getTime() !== where.processedAt?.getTime()) return { count: 0 }; receiptRows.set(where.id, { ...row, ...data }); receipts.push({ create: data }); return { count: 1 }; }),
+    },
     paymentRecord: {
       findFirst: vi.fn(async () => record),
       findMany: vi.fn(async () => (record ? [record] : [])),
@@ -82,7 +88,7 @@ function database(record: ReturnType<typeof linkedRecord> | null) {
     },
     $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(db)),
   };
-  return { db, writes, receipts };
+  return { db, writes, receipts, receiptRows };
 }
 
 describe('scheduled Stripe reconciliation', () => {
@@ -308,4 +314,18 @@ describe('scheduled Stripe reconciliation', () => {
     expect(result).toMatchObject({ synced: 1, fulfilledCheckoutSessions: 1 });
     expect(stripeMocks.processEvent).toHaveBeenCalledOnce();
   });
+});
+
+it.each([['rhyze.payment.reconciled', false], ['rhyze.payment.reconciled', true], ['rhyze.payment.reconciliation-pending', false], ['rhyze.payment.reconciliation-pending', true]])('does not overwrite a newer webhook receipt or pending refresh after listing old charge data (%s, existing=%s)', async (type, existing) => {
+  const { db, receiptRows, writes } = database(null);
+  stripeMocks.sessionsList.mockResolvedValue({ data: [] });
+  const id = 'rhyze-payment-reconciled-acct_rhyze-ch_intro';
+  if (existing) receiptRows.set(id, { id, type: 'rhyze.payment.reconciled', error: null, processedAt: new Date(0) });
+  const newer = { id, type, processedAt: new Date(), error: String(type).endsWith('pending') ? 'webhook-token' : null, payload: { data: { object: { amount_refunded: 700 } } } };
+  stripeMocks.accountRetrieve.mockResolvedValue({ id: 'acct_rhyze' });
+  stripeMocks.chargesList.mockImplementationOnce(async () => { receiptRows.set(id, newer); return { data: [charge()], has_more: false }; });
+  const result = await syncRecentStripePaymentRecords(db as never, { financialOnly: true });
+  expect(receiptRows.get(id)).toEqual(newer);
+  expect(result).toMatchObject({ supersededReceipts: 1, receiptsStored: 0 });
+  expect(writes).toEqual([]);
 });

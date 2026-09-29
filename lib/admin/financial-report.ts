@@ -60,6 +60,7 @@ export type FinancialReportSources = {
       id: string;
       user?: Customer;
       supporterName?: string;
+      transferId?: string | null;
     }
   >;
   purchaseRefunds: RefundInput['purchaseRefunds'];
@@ -84,6 +85,7 @@ export type FinancialReportRow = {
   userId: string | null;
   reference: string;
   providerChargeId: string | null;
+  providerTransferId?: string | null;
   reviewNote: string | null;
   verification: string;
   purchaseId: string | null;
@@ -184,6 +186,7 @@ type ProviderBalance = {
 type ProviderReceipt = {
   id: string;
   payment_intent?: string | null;
+  source_transfer?: string | null;
   paid: boolean;
   captured: boolean;
   status: string;
@@ -218,19 +221,30 @@ function applyProviderReceipts(
   local: FinancialReportRow[],
   events: FinancialReportSources['providerEvents'],
 ) {
+  const staleProviderReceipts: Array<{
+    chargeId: string;
+    chargeCreatedAt: string | null;
+    lastCheckedAt: string;
+    newerEventAt: string;
+  }> = [];
   const receipts = new Map<
     string,
-    { charge: ProviderReceipt; account: string; readAt: string }
+    { charge: ProviderReceipt; account: string; readAt: string; acknowledgedEventIds: string[] }
   >();
   for (const event of events) {
-    if (event.type !== 'rhyze.payment.reconciled') continue;
+    if (!['rhyze.payment.reconciled', 'rhyze.payment.reconciliation-pending'].includes(event.type)) continue;
     const payload = event.payload as {
       account?: string;
       livemode?: boolean;
       reconciledAt?: string;
+      acknowledgedEventIds?: string[];
       data?: { object?: ProviderReceipt };
     } | null;
     const charge = payload?.data?.object;
+    if (event.type === 'rhyze.payment.reconciliation-pending' && payload?.livemode && payload.account && charge?.id) {
+      staleProviderReceipts.push({ chargeId: charge.id, chargeCreatedAt: Number.isFinite(charge.created) && charge.created > 0 ? new Date(charge.created * 1000).toISOString() : null, lastCheckedAt: payload.reconciledAt || '', newerEventAt: payload.reconciledAt || '' });
+      continue;
+    }
     if (
       !payload?.livemode ||
       !payload.account ||
@@ -247,14 +261,8 @@ function applyProviderReceipts(
     const key = `${payload.account}:${charge.id}`;
     const readAt = payload.reconciledAt || '';
     if (!receipts.has(key) || receipts.get(key)!.readAt <= readAt)
-      receipts.set(key, { charge, account: payload.account, readAt });
+      receipts.set(key, { charge, account: payload.account, readAt, acknowledgedEventIds: payload.acknowledgedEventIds || [] });
   }
-  const staleProviderReceipts: Array<{
-    chargeId: string;
-    chargeCreatedAt: string;
-    lastCheckedAt: string;
-    newerEventAt: string;
-  }> = [];
   const providerId = (value: unknown): string | null =>
     typeof value === 'string'
       ? value
@@ -267,6 +275,7 @@ function applyProviderReceipts(
   for (const [key, receipt] of receipts) {
     const checkedAt = Date.parse(receipt.readAt);
     const newerEvent = events.find((event) => {
+      if (receipt.acknowledgedEventIds.includes(event.id)) return false;
       if (!/^(charge|refund|dispute)\./.test(event.type)) return false;
       const payload = event.payload as {
         account?: string;
@@ -310,12 +319,17 @@ function applyProviderReceipts(
   for (const { charge, account } of receipts.values()) {
     coveredReferences.add(charge.id);
     if (charge.payment_intent) coveredReferences.add(charge.payment_intent);
-    const linked = local.find(
-      (row) =>
-        row.reference === charge.payment_intent ||
-        row.reference === charge.id ||
-        row.providerChargeId === charge.id,
-    );
+    if (charge.source_transfer) coveredReferences.add(charge.source_transfer);
+    const directMatch = (row: FinancialReportRow) =>
+      row.reference === charge.payment_intent ||
+      row.reference === charge.id ||
+      row.providerChargeId === charge.id;
+    // Somble's platform payment intent differs from its connected-account charge.
+    // The provider source transfer is an exact bridge between those identities.
+    const linked = local.find(row => directMatch(row) && Boolean(row.purchaseId || row.commerceOrderId)) ||
+      local.find(row => Boolean(charge.source_transfer) && row.source === 'SOMBLE' && row.providerTransferId === charge.source_transfer) ||
+      local.find(row => directMatch(row) && !row.allocationRequired) ||
+      local.find(directMatch);
     const balance = charge.balance_transaction;
     const feeAvailable = Boolean(
       balance &&
@@ -344,6 +358,7 @@ function applyProviderReceipts(
       userId: linked?.userId || null,
       reference: charge.id,
       providerChargeId: charge.id,
+      providerTransferId: charge.source_transfer || null,
       reviewNote: linked?.reviewNote || null,
       verification:
         !linked || linked.allocationRequired
@@ -440,7 +455,8 @@ function applyProviderReceipts(
       ...local.filter(
         (row) =>
           !coveredReferences.has(row.reference) &&
-          !coveredReferences.has(row.providerChargeId || ''),
+          !coveredReferences.has(row.providerChargeId || '') &&
+          !coveredReferences.has(row.providerTransferId || ''),
       ),
       ...providerRows,
     ],
@@ -588,6 +604,7 @@ export function buildFinancialReport(
         : somble && /^(ch_|py_)/.test(somble.paymentId)
           ? somble.paymentId
           : null,
+      providerTransferId: somble?.transferId || null,
       reference:
         payment?.stripePaymentIntentId ||
         (payment?.stripeEventId.startsWith('stripe-sync-charge-')

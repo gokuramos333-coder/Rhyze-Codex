@@ -1,9 +1,10 @@
 import Stripe from 'stripe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ findUnique: vi.fn() }));
+vi.mock('@/lib/payments/stripe-receipt-refresh', () => ({ eventNeedsReceipt: () => false }));
+const db = vi.hoisted(() => ({ findUnique: vi.fn(), upsert: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/db/prisma', () => ({ prisma: { stripeEvent: { findUnique: db.findUnique } } }));
+vi.mock('@/lib/db/prisma', () => ({ prisma: { stripeEvent: { findUnique: db.findUnique, upsert: db.upsert } } }));
 import { POST } from '@/app/api/stripe/webhook/route';
 
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });

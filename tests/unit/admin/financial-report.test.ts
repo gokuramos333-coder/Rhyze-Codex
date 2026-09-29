@@ -216,6 +216,22 @@ function receipt(id: string, extra: Record<string, unknown> = {}) {
   };
 }
 describe('provider verified financial tier', () => {
+  it.each([null, 'payer-email-member'])('allocates a connected charge by exact Somble transfer while preserving unrelated same-amount imports (native user=%s)', (nativeUser) => {
+    const data = sources();
+    data.sombleTransactions = [
+      { id: 'linked-transfer', paymentId: 'pi_platform', transferId: 'tr_exact', userId: 'member', user: { name: 'Ticket Member' }, amountCents: 2800, contentType: 'Seat Seduction w/ Vanessa', transferredAt: at },
+      { id: 'unrelated-transfer', paymentId: 'pi_other_platform', transferId: 'tr_unrelated', userId: 'other-member', amountCents: 2800, contentType: 'Other class', transferredAt: at },
+    ];
+    data.paymentRecords = [payment('connected', { userId: nativeUser, productName: null })];
+    data.providerEvents = [receipt('connected', { source_transfer: 'tr_exact' })];
+    const report = buildFinancialReport(data, range);
+    const collected = report.rows.filter(row => row.providerVerified && row.entryType === 'COLLECTION');
+    expect(collected).toHaveLength(1);
+    expect(collected[0]).toMatchObject({ amountCents: 3000, userId: 'member', customer: 'Ticket Member', offering: 'Seat Seduction w/ Vanessa', allocationRequired: false });
+    expect(report.rows.filter(row => row.source === 'SOMBLE')).toMatchObject([{ reference: 'pi_other_platform', amountCents: 2800 }]);
+    expect(report.rows.filter(row => row.entryType === 'UNMATCHED')).toHaveLength(0);
+    expect(report.totals.find(total => total.currency === 'USD')).toMatchObject({ verifiedGrossCents: 3000, unallocatedVerifiedCents: 0 });
+  });
   it('uses exact provider amounts, includes unallocated paid charges, and separates unverified database money', () => {
     const data = sources();
     data.paymentRecords = [
@@ -492,4 +508,25 @@ it('treats same-second live adjustment evidence conservatively but ignores unrel
   event.payload.livemode = true;
   event.payload.data.object.charge.id = 'ch_other';
   expect(buildFinancialReport(data, range).providerReceiptCount).toBe(1);
+});
+
+it('retains a visible stale warning when a receipt refresh failed even if the triggering event is older', () => {
+  const data = sources(); data.paymentRecords = [payment('pending')];
+  data.providerEvents = [{ ...receipt('pending'), type: 'rhyze.payment.reconciliation-pending' }];
+  const report = buildFinancialReport(data, range);
+  expect(report.staleProviderReceipts).toHaveLength(1);
+  expect(report.totals[0]).toMatchObject({ verifiedGrossCents: 0, unverifiedGrossCents: 3000 });
+});
+it('accepts a fresh receipt acknowledging its same-second signed event', () => {
+  const data = sources(); const fresh = receipt('ack');
+  data.providerEvents = [{ ...fresh, payload: { ...fresh.payload, acknowledgedEventIds: ['evt_ack'] } }, { id: 'evt_ack', type: 'charge.succeeded', payload: { livemode: true, created: Math.floor(Date.parse(fresh.payload.reconciledAt) / 1000), data: { object: { id: 'ch_ack' } } } }];
+  expect(buildFinancialReport(data, range).providerReceiptCount).toBe(1);
+});
+
+it('warns when the first provider receipt is pending and its amount and charge date are unknown', () => {
+  const data = sources();
+  data.providerEvents = [{ id: 'pending_new', type: 'rhyze.payment.reconciliation-pending', payload: { account: 'acct_live', livemode: true, data: { object: { id: 'ch_new', payment_intent: 'pi_new' } } } }];
+  const report = buildFinancialReport(data, range);
+  expect(report.staleProviderReceipts).toEqual([expect.objectContaining({ chargeId: 'ch_new', chargeCreatedAt: null })]);
+  expect(report.providerReceiptCount).toBe(0);
 });

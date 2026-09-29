@@ -24,3 +24,9 @@ Production build, publication and live read-back are separate guarded steps. Thi
 ## Production origin correction
 
 Live POST readback exposed an intermittent 403 when the hosting adapter's Request URL differed from the public Origin. All three new owner mutation routes now validate against the configured NEXT_PUBLIC_APP_URL, matching the existing contact route's public-origin convention. The shared helper fails closed for absent/invalid production configuration and does not trust forwarded host headers. Approved-owner authentication remains required. Independent origin_fix_review found no blockers; focused origin/route tests passed 8/8 including proxied requests and hostile/missing origins. Full guarded release checks run again before publication.
+
+## Future payment receipts and legacy transfer lineage
+
+Signed Stripe payment/refund/dispute deliveries now refresh exact-charge financial receipts without replaying completed fulfillment. Account/mode checks, pending evidence warnings, retry-safe duplicate handling, complete invoice payment pagination, and conditional receipt writes prevent failed/slow reads from silently restoring stale verified amounts. The hourly safety sync uses the same concurrent-write protection. Independent finance review identified and verified corrections for nested refund events, pending first receipts, account lookup failures, and sync/webhook races. Root reran 101 focused tests successfully; guarded PostgreSQL release checks remain the publication gate.
+
+Connected-account charges retain source_transfer. The report joins this only to an exact Somble transferId, preserving customer/offering labels and removing the duplicate imported entry. Unrelated same-amount transfers remain separate; explicit native order/purchase allocation retains precedence. Test-mode history and source records are retained for audit; no raw financial status edits, extra charges, or entitlement replay are part of reconciliation.
