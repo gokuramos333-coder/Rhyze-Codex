@@ -1,0 +1,11 @@
+# Historical event attribution from preserved Somble imports
+
+Problem: imported transactions labelled `Event` were displayed in a generic offering even when the migrated purchased-ticket booking identified the event. Tricia's yearly breakdown consequently omitted historical allocations.
+
+The shared financial report now reads preserved Somble event bookings. It associates an imported payment with an event only for a unique existing-user/purchased-booking/payment pairing, preserving the booking/source-file evidence in the ledger and CSV. Generic competing payments and multiple purchased event bookings prevent allocation. No Stripe charge is matched by amount, time, or customer name. No database/payment/booking mutation is performed. Cancelled tickets are not automatically treated as cash refunds, and complimentary or membership-credit bookings do not become sales. Collection date remains the transaction date, not the event date.
+
+The original July 24/27 downloads contain 34 distinct transfers. Their exact transfer IDs, payment IDs and amounts all match existing imported records. A read-only replay on the September 29 snapshot preserves every provider collection/refund/fee identity, amount and currency. It restores two exactly linked $30 receiving payments to Tricia and classifies 16 additional historical 30.00 records separately under unknown currency. The two generic payments associated with two purchased event rosters remain unresolved. The site does not add imported amounts to verified cash or certify original customer gross, platform fees, refunds or instructor payouts from incomplete archives.
+
+Validation: regression tests cover unique attribution, ambiguous generic/mixed-name payments, event filtering, complimentary and membership-credit exclusions, cancellations, transaction dates, late transactions and unlinked provider cash. Independent review found two edge cases; both received failing-then-passing regression tests. Typecheck and lint passed. Full tests/build/authenticated checks run through the guarded hosted release; release receipts are retained under `.releases/`.
+
+Private audit artifacts, including source hashes and replay, are retained in `/Users/gokuramos/Inbox/rhyze-yearly-finance-audit/`. No customer exports or credentials are committed.

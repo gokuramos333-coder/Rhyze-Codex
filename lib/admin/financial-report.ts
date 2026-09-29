@@ -32,7 +32,19 @@ type Details = {
   updatedAt?: Date;
   livemode?: boolean;
 };
+type ImportedBooking = {
+  id: string;
+  userId: string;
+  source: string;
+  policySnapshot: unknown;
+  occurrence: {
+    id: string;
+    startAt: Date;
+    template: { name: string; isEvent: boolean };
+  };
+};
 export type FinancialReportSources = {
+  importedBookings?: ImportedBooking[];
   purchases: Array<
     RevenueInput['purchases'][number] & Details & { id: string }
   >;
@@ -536,6 +548,59 @@ export function buildFinancialReport(
     dateVerified?: boolean;
     source: 'RHYZE' | 'SOMBLE';
   };
+  function archivedEvent(
+    somble: FinancialReportSources['sombleTransactions'][number],
+  ) {
+    // Classification from the preserved import, never a bridge to an unknown Stripe receipt.
+    const generic = somble.contentType.trim().toLowerCase() === 'event';
+    const candidates = (raw.importedBookings || []).filter((booking) => {
+      const policy = booking.policySnapshot as {
+        sourceFile?: string;
+        importedAccessType?: string;
+      } | null;
+      const access = typeof policy?.importedAccessType === 'string'
+        ? policy.importedAccessType.trim().toLowerCase() : '';
+      return (
+        booking.source === 'SOMBLE_IMPORT' &&
+        booking.userId === somble.userId &&
+        booking.occurrence.template.isEvent &&
+        typeof policy?.sourceFile === 'string' && policy.sourceFile.trim().length > 0 &&
+        (access === 'purchased' ||
+          access === 'event' ||
+          financialOfferingKey(access || '') ===
+            financialOfferingKey(booking.occurrence.template.name)) &&
+        (generic ||
+          financialOfferingKey(somble.contentType) ===
+            financialOfferingKey(booking.occurrence.template.name))
+      );
+    });
+    const payments = raw.sombleTransactions.filter(
+      (item) =>
+        item.userId === somble.userId &&
+        (generic
+          ? item.contentType.trim().toLowerCase() === 'event' ||
+            candidates.some(
+              (b) =>
+                financialOfferingKey(item.contentType) ===
+                financialOfferingKey(b.occurrence.template.name),
+            )
+          : item.contentType.trim().toLowerCase() === 'event' ||
+            financialOfferingKey(item.contentType) ===
+              financialOfferingKey(somble.contentType)),
+    );
+    if (
+      candidates.length !== 1 ||
+      new Set(payments.map((item) => item.paymentId)).size !== 1
+    )
+      return null;
+    const booking = candidates[0];
+    // A later sale cannot be silently attributed to an earlier event.
+    if (somble.transferredAt > booking.occurrence.startAt) return null;
+    return {
+      booking,
+      sourceFile: (booking.policySnapshot as { sourceFile: string }).sourceFile,
+    };
+  }
   function enrich(
     record: Identity,
     entryType: FinancialReportRow['entryType'],
@@ -550,6 +615,9 @@ export function buildFinancialReport(
       orders.get(record.commerceOrderId || payment?.commerceOrderId || '') ||
       orderByIntent.get(payment?.stripePaymentIntentId || '');
     const somble = imported.get(record.sombleTransactionId || '');
+    const archived = somble ? archivedEvent(somble) : null;
+    const unresolvedImportedEvent =
+      somble?.contentType.trim().toLowerCase() === 'event' && !archived;
     const ticket = classTicketBinding(purchase?.policyAcceptance);
     const ticketReview =
       classTicketFulfillment(purchase?.policyAcceptance)?.status === 'REVIEW';
@@ -559,6 +627,7 @@ export function buildFinancialReport(
       order?.items?.map((x) => x.name).join(', ') ||
       purchase?.product.name ||
       payment?.productName ||
+      archived?.booking.occurrence.template.name ||
       somble?.contentType ||
       record.type;
     const source = purchase || order || payment;
@@ -573,18 +642,24 @@ export function buildFinancialReport(
       source: record.source,
       entryType,
       providerVerified: false,
-      allocationRequired: entryType === 'UNMATCHED',
+      allocationRequired: entryType === 'UNMATCHED' || unresolvedImportedEvent,
       offering,
       offeringKey: financialOfferingKey(offering),
       occurrenceId:
         ticket?.occurrenceId ||
         order?.occurrenceId ||
         order?.occurrence?.id ||
+        archived?.booking.occurrence.id ||
         null,
       reviewNote: ticketReview
         ? 'Paid class ticket needs booking review'
-        : null,
+        : archived
+          ? `Historical event attribution from imported booking ${archived.booking.id}; ${archived.sourceFile}. This archive classification does not establish original customer gross, currency or refunds.`
+          : unresolvedImportedEvent
+            ? 'Historical event allocation unresolved: no unique imported payment / purchased-event pairing.'
+            : null,
       isEvent:
+        archived?.booking.occurrence.template.isEvent === true ||
         order?.kind === 'EVENT' ||
         payment?.kind === 'EVENT' ||
         /\bevent\b|seat seduction|hip.hop happy hour|hypnotic heels|mommy.*me/i.test(
@@ -824,6 +899,7 @@ export async function loadFinancialReport(
     purchaseRefunds,
     commerceRefunds,
     providerEvents,
+    importedBookings,
   ] = await Promise.all([
     prisma.purchase.findMany({ include: { product: true, user: true } }),
     prisma.commerceOrder.findMany({
@@ -840,6 +916,25 @@ export async function loadFinancialReport(
     prisma.stripeEvent.findMany({
       select: { id: true, type: true, payload: true },
     }),
+    prisma.booking.findMany({
+      where: {
+        source: 'SOMBLE_IMPORT',
+        occurrence: { template: { isEvent: true } },
+      },
+      select: {
+        id: true,
+        userId: true,
+        source: true,
+        policySnapshot: true,
+        occurrence: {
+          select: {
+            id: true,
+            startAt: true,
+            template: { select: { name: true, isEvent: true } },
+          },
+        },
+      },
+    }),
   ]);
   return buildFinancialReport(
     {
@@ -850,6 +945,7 @@ export async function loadFinancialReport(
       purchaseRefunds,
       commerceRefunds,
       providerEvents,
+      importedBookings,
     },
     params,
     now,

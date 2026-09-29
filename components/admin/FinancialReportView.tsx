@@ -220,7 +220,11 @@ export function FinancialReportView({
             <h3 className="font-display text-3xl">COLLECTIONS BY OFFERING</h3>
             <p className="mt-2 text-xs text-rhyze-black/55">
               Totals retain currency and source provenance. Imported amounts are
-              not verified processor collections.
+              not verified processor collections. Historical event labels use
+              the preserved purchased-ticket imports only where the payment and
+              event pairing is unique. Do not add imported amounts to verified
+              cash; the same money may already be included in unallocated Stripe
+              receipts.
             </p>
             <table className="mt-4 w-full min-w-[44rem] text-left text-sm">
               <thead>
