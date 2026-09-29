@@ -21,6 +21,12 @@ adapter is explicitly pinned to 5.16.0 with `.next` as the publish directory;
 its generated server routes are checked on the immutable deploy URL before
 publication. Review adapter upgrades separately from routine app changes.
 
+Read-only API checks wait for HTTP 429 reset headers and retry at most three times,
+with a maximum two-minute wait per retry (one minute when headers are absent).
+Both preflight and hosted polling use the same fixed-origin client. Network/auth
+failures and all deployment-changing requests still fail without automatic retries.
+An uncertain publication always requires provider inspection before another attempt.
+
 The hosted command checks the current source/site/configuration, PAT access OFF,
 and the repository/branch/lock settings. It then runs the full existing checks,
 pushes only an ancestor-preserving revision with an explicit remote lease, and

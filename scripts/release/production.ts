@@ -14,6 +14,8 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
+const { requestNetlify } = require('./hosted-api.cjs');
 import {
   ACCOUNT_ID,
   CLI_VERSION,
@@ -109,19 +111,26 @@ async function main() {
       );
     }
   };
+  let tokenPromise: Promise<string> | undefined;
   async function api<T>(
     operation: string,
     data: Record<string, unknown>,
   ): Promise<T> {
-    const output = await run(
-      process.execPath,
-      [cli, 'api', operation, '--data', JSON.stringify(data)],
-      root,
-      remoteEnv,
-      `Netlify read-only ${operation}`,
-      60000,
-    );
-    return JSON.parse(output) as T;
+    if (
+      !['getSite', 'getDeploy', 'getEnvVars', 'getSiteDatabase'].includes(
+        operation,
+      )
+    )
+      throw Error(
+        'Only read-only Netlify operations are allowed in this preflight.',
+      );
+    console.info(`Netlify read-only ${operation}`);
+    tokenPromise ??= import(
+      pathToFileURL(
+        join(dirname(dirname(cli)), 'dist/utils/command-helpers.js'),
+      ).href
+    ).then(async ({ getToken }) => (await getToken())[0]);
+    return requestNetlify(operation, data, await tokenPromise) as Promise<T>;
   }
   const production = async (expected: string) => {
     const site = await api<Site>('getSite', { site_id: SITE_ID });
