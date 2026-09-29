@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('admin and instructor operational surfaces', () => {
-  it('makes sales summary cards drill into named ledgers', () => {
+  it('makes financial summaries drill into offering and event ledgers', () => {
     const page = readFileSync('app/(studio)/admin/payments/page.tsx', 'utf8');
-    expect(page).toContain('href="#native-collected"');
-    expect(page).toContain('href="#native-refunds"');
-    expect(page).toContain('href="#native-payment-records"');
+    expect(page).toContain('<FinancialReportView report={report}');
+    const view = readFileSync('components/admin/FinancialReportView.tsx', 'utf8');
+    expect(view).toContain('offering: offering.key');
+    expect(view).toContain('occurrence: row.occurrenceId');
+    expect(view).toContain('financialReportQuery');
   });
 
   it('uses the requested roster controls and no duplicate attended control', () => {

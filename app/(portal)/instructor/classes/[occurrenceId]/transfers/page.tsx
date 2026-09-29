@@ -1,3 +1,4 @@
+import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
@@ -16,6 +17,7 @@ export default async function TransferPage(
     include: { user: true, occurrence: { include: { template: true } } },
   });
   if (!booking) notFound();
+  if (!classTicketCanTransfer(booking.policySnapshot)) return <p className="border-l-4 border-rhyze-gold bg-white p-5 font-bold">This ticket is valid only for its original class and date. Contact the studio if you need help with this booking.</p>;
   const destinations = await prisma.classOccurrence.findMany({
     where: { id: { not: booking.occurrenceId }, status: 'SCHEDULED', startAt: { gte: new Date(), lte: new Date(booking.occurrence.startAt.getTime() + 14 * 24 * 60 * 60_000) } },
     include: { template: true, instructor: true, _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } } },

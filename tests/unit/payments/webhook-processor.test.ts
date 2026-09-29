@@ -250,6 +250,8 @@ describe('Stripe webhook event interpretation', () => {
       tx as never,
       event('checkout.session.completed', {
         id: 'cs_intro',
+        amount_total: 700,
+        currency: 'usd',
         payment_status: 'paid',
         customer: 'cus_avery',
         payment_intent: 'pi_intro',
@@ -371,6 +373,8 @@ describe('Stripe webhook event interpretation', () => {
       tx as never,
       event('checkout.session.completed', {
         id: 'cs_intro',
+        amount_total: 700,
+        currency: 'usd',
         payment_status: 'paid',
         customer: 'cus_avery',
         payment_intent: 'pi_intro',

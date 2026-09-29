@@ -114,6 +114,7 @@ describe('bounded Somble recovery', () => {
         expiresAt: 1790017200,
       });
       expect(params.mode).toBe('subscription');
+      expect(params.wallet_options).toEqual({ link: { display: 'never' } });
       expect(
         params.line_items?.map((item) => item.price_data?.unit_amount),
       ).toEqual([amount, amount]);

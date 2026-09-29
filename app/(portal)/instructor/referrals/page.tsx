@@ -40,7 +40,7 @@ export default async function InstructorReferralsPage(
       <h1 className="mt-3 font-display text-6xl tracking-wider">MY REFERRALS</h1>
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
         {code ? <ReferralCodeCard code={code.code} origin={process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/> : <p className="bg-white p-6">Referral code is awaiting admin approval.</p>}
-        <section className="border-t-4 border-rhyze-gold bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Available for payout · {period}</p><p className="mt-3 font-display text-6xl">${(availableForPayout/100).toFixed(2)}</p><p className="mt-2 text-sm text-rhyze-black/55">Paid ${(paid/100).toFixed(2)} · Total generated ${(generated/100).toFixed(2)} · {attributedCount} referred customers</p></section>
+        <section className="border-t-4 border-rhyze-gold bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Available for payout · {period}</p><p className="mt-3 font-display text-6xl">${(availableForPayout/100).toFixed(2)}</p><p className="mt-2 text-sm text-rhyze-black/55">Marked paid ${(paid/100).toFixed(2)} (commissions earned in this period) · Total generated ${(generated/100).toFixed(2)} · {attributedCount} referred customers</p></section>
       </div>
       <div className="mt-6 flex flex-wrap gap-2">
         {[
@@ -55,7 +55,7 @@ export default async function InstructorReferralsPage(
         <label className="grid gap-1 text-xs font-black uppercase">To date<input type="date" name="to" defaultValue={searchParams.to} required className="min-h-11 border bg-white px-3 text-sm font-normal" /></label>
         <button className="min-h-11 bg-rhyze-black px-5 text-xs font-black uppercase text-white">Apply dates</button>
       </form>
-      <div className="mt-6 overflow-x-auto bg-white"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-4">Referred customer</th><th>Purchase</th><th>Commission</th><th>Status</th><th>Date</th></tr></thead><tbody>{commissions.map((item) => <tr key={item.id} className="border-b border-black/5"><td className="p-4">{item.referredUser.name || item.referredUser.email}</td><td>{item.purchase.product.name}</td><td>${(item.amountCents/100).toFixed(2)}</td><td>{item.status}</td><td>{item.earnedAt.toLocaleDateString()}</td></tr>)}</tbody></table>{commissions.length === 0 && <p className="p-8 text-rhyze-black/55">No qualifying referral earnings in this period.</p>}</div>
+      <div className="mt-6 overflow-x-auto bg-white"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-4">Referred customer</th><th>Purchase</th><th>Commission</th><th>Status</th><th>Date</th></tr></thead><tbody>{commissions.map((item) => <tr key={item.id} className="border-b border-black/5"><td className="p-4">{item.referredUser.name || item.referredUser.email}</td><td>{item.purchase.product.name}</td><td>${(item.amountCents/100).toFixed(2)}</td><td>{item.status}</td><td>{item.earnedAt.toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</td></tr>)}</tbody></table>{commissions.length === 0 && <p className="p-8 text-rhyze-black/55">No qualifying referral earnings in this period.</p>}</div>
     </>
   );
 }

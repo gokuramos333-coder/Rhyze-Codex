@@ -1,3 +1,4 @@
+import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 import type { BillingInterval, ProductKind } from '@prisma/client';
 import { attributionMetadata, type SourceAttribution } from '@/lib/attribution/first-touch';
 
@@ -69,6 +70,7 @@ export async function startAdminMembershipCheckout(
   try {
     const session = await dependencies.createCheckoutSession({
       mode: 'subscription',
+      ...buildCheckoutWalletParameters(),
       ...(client.stripeCustomerId
         ? { customer: client.stripeCustomerId }
         : { customer_email: client.email }),

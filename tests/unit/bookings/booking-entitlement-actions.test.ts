@@ -45,6 +45,48 @@ import { afterEach } from 'vitest';
 afterEach(() => vi.useRealTimers());
 
 describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]] as const)('%s booking entitlement', (_label, action) => {
+  it('uses a September-paid ticket only for its purchased October occurrence, preserving scope in the booking', async () => {
+    const f = fixture(false, 'MEMBER');
+    f.occurrence.startAt = new Date('2026-10-16T23:30:00Z');
+    f.occurrence.endAt = new Date('2026-10-17T00:20:00Z');
+    const classTicket = { occurrenceId: 'class', name: 'Soul Line', startAt: f.occurrence.startAt.toISOString(), endAt: f.occurrence.endAt.toISOString(), amountCents: 1500 };
+    f.accounts.splice(0, f.accounts.length, { id: 'ticket', label: 'Single-class ticket', isUnlimited: false, validUntil: f.occurrence.endAt, entries: [{ quantity: 1 }], sourcePurchase: { status: 'PAID', refundedAmountCents: 0, paidAt: now, policyAcceptance: { classTicket }, product: { kind: 'DROP_IN', includedCredits: 1 }, membership: null } });
+    await expect(action(f.form)).rejects.toThrow(/confirmed|member-added/);
+    const saved = _label === 'self' ? mocks.tx.booking.create.mock.calls[0][0].data : mocks.tx.booking.upsert.mock.calls[0][0].create;
+    expect(saved.policySnapshot.classTicket).toEqual(classTicket);
+    expect(mocks.tx.creditLedgerEntry.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ creditAccountId: 'ticket', quantity: -1 }) }));
+  });
+  it.each(['REFUNDED', 'PARTIALLY_REFUNDED', 'FAILED', 'REVIEW', 'RESCHEDULED'])('rejects a bound ticket with %s history before reserving credit', async (history) => {
+    const f = fixture(false, 'MEMBER');
+    const classTicket = { occurrenceId: 'class', name: 'Soul Line', startAt: f.occurrence.startAt.toISOString(), endAt: f.occurrence.endAt.toISOString(), amountCents: 1500 };
+    const policy: any = { classTicket };
+    if (history === 'REVIEW') policy.classTicketFulfillment = { status: 'REVIEW', reason: 'Class filled' };
+    if (history === 'RESCHEDULED') classTicket.startAt = new Date(f.occurrence.startAt.getTime() - 86400000).toISOString();
+    f.accounts.splice(0, f.accounts.length, { id: 'ticket', label: 'Single-class ticket', isUnlimited: false, validUntil: null, entries: [{ quantity: 1 }], sourcePurchase: { status: ['REVIEW', 'RESCHEDULED'].includes(history) ? 'PAID' : history, refundedAmountCents: history.includes('REFUNDED') ? 1500 : 0, paidAt: now, policyAcceptance: policy, product: { kind: 'DROP_IN', includedCredits: 1 }, membership: null } });
+    await expect(action(f.form)).rejects.toThrow(/access|member-no-credit/);
+    expect(mocks.tx.creditLedgerEntry.create).not.toHaveBeenCalled();
+    expect(mocks.tx.booking.create).not.toHaveBeenCalled();
+    expect(mocks.tx.booking.upsert).not.toHaveBeenCalled();
+  });
+  it('does not spend a discounted or cancellation-released ticket on another class', async () => {
+    const f = fixture(false, 'MEMBER');
+    f.accounts.splice(0, f.accounts.length, { id: 'ticket', label: 'Single-class ticket', isUnlimited: false, entries: [{ quantity: 1 }, { quantity: -1 }, { quantity: 1 }], sourcePurchase: { status: 'PAID', refundedAmountCents: 0, paidAt: now, policyAcceptance: { classTicket: { occurrenceId: 'another-class', name: 'Soul Line', startAt: f.occurrence.startAt.toISOString(), endAt: f.occurrence.endAt.toISOString(), amountCents: 1500 } }, product: { kind: 'DROP_IN', includedCredits: 1 }, membership: null } });
+    await expect(action(f.form)).rejects.toThrow(/access|member-no-credit/);
+    expect(mocks.tx.creditLedgerEntry.create).not.toHaveBeenCalled();
+    expect(mocks.tx.booking.create).not.toHaveBeenCalled();
+    expect(mocks.tx.booking.upsert).not.toHaveBeenCalled();
+  });
+  it.each([rescheduleMemberBookingAction, transferBookingAction])('rejects transferring an occurrence-bound ticket before any fee or booking mutation', async (transfer) => {
+    const f = fixture(false, 'MEMBER');
+    const booking = { id: 'booking', source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', userId: mocks.actor.id, user: f.user, policySnapshot: { classTicket: { occurrenceId: 'class' } }, occurrence: { ...f.occurrence, instructorId: mocks.actor.id } };
+    mocks.tx.booking.findUnique.mockResolvedValue(booking);
+    mocks.tx.booking.findFirst.mockResolvedValue(booking);
+    mocks.tx.creditLedgerEntry.findFirst.mockResolvedValue(null);
+    const form = new FormData(); form.set('bookingId', 'booking'); form.set('destinationId', 'expensive-class');
+    await expect(transfer(form)).rejects.toThrow(/class-ticket/);
+    expect(mocks.charge).not.toHaveBeenCalled();
+    expect(mocks.tx.booking.update).not.toHaveBeenCalled();
+  });
   it('records bounded gifted VIP provenance without turning the gift into paid VIP or event access', async () => {
     const f = fixture(false, 'MEMBER');
     Object.assign(f.membership, { id: 'rhyze-erika-gifted-vip-membership-2026', purchaseId: null,

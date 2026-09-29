@@ -1,3 +1,5 @@
+import { fulfillClassTicket } from '@/lib/payments/class-ticket-fulfillment';
+import { classTicketBinding, classTicketCreditTerms, classTicketFulfillment } from '@/lib/payments/class-ticket';
 import type Stripe from 'stripe';
 import type { MembershipStatus, Prisma } from '@prisma/client';
 import { queueEmail } from '@/lib/notifications/email-queue';
@@ -92,6 +94,8 @@ export function deriveStripeEventAction(event: Stripe.Event) {
       customerId: idOf(object.customer),
       paymentIntentId: idOf(object.payment_intent),
       subscriptionId: idOf(object.subscription),
+      amountCents: Number.isSafeInteger(object.amount_total) && object.amount_total >= 0 ? Number(object.amount_total) : null,
+      currency: typeof object.currency === 'string' && /^[a-z]{3}$/i.test(object.currency) ? object.currency.toLowerCase() : null,
       customerName:
         object.customer_details?.name || object.metadata?.customerName || null,
       customerEmail:
@@ -99,7 +103,7 @@ export function deriveStripeEventAction(event: Stripe.Event) {
         object.customer_email ||
         object.metadata?.customerEmail ||
         null,
-      occurredAt: eventDate(object.created, event.created),
+      occurredAt: eventDate(event.created, event.created),
     };
   }
   if (event.type === 'checkout.session.async_payment_failed') {
@@ -169,6 +173,13 @@ export function deriveStripeEventAction(event: Stripe.Event) {
     };
   }
   return { type: 'IGNORE' as const };
+}
+
+function checkoutFinancialData(action: { amountCents: number | null; currency: string | null; occurredAt: Date }) {
+  if (action.amountCents === null || !action.currency || !Number.isFinite(action.occurredAt.getTime())) {
+    throw new Error('Checkout financial data is missing or invalid. Retrieve the provider receipt before fulfillment.');
+  }
+  return { amountCents: action.amountCents, currency: action.currency };
 }
 
 async function notifyPaymentFailure(
@@ -402,6 +413,13 @@ async function fulfillProductPurchase(
     where: { id: action.purchaseId },
     include: { product: true, membership: true },
   });
+  const classTicket = classTicketBinding(prior?.policyAcceptance);
+  if (classTicket && (action.amountCents !== classTicket.amountCents || action.currency !== 'usd')) {
+    throw new Error('Class ticket payment amount or currency does not match its occurrence binding.');
+  }
+  // A replay cannot revive an occurrence ticket already refunded by the studio.
+  if (classTicket && prior && (prior.refundedAmountCents > 0 || prior.status === 'REFUNDED' || prior.status === 'PARTIALLY_REFUNDED' || (prior.paidAt && prior.status === 'FAILED'))) return;
+  if (classTicket && prior?.paidAt && classTicketFulfillment(prior.policyAcceptance)) return;
   // A paid receipt replay must never overwrite an admin-switched entitlement.
   if (prior?.paidAt && prior.membership?.planChangeState) return;
   if (prior?.product.kind === 'VIP') {
@@ -413,10 +431,14 @@ async function fulfillProductPurchase(
   }
   const settledNative =
     prior?.product.kind === 'VIP' && prior.paidAt ? prior : null;
+  const financials = settledNative
+    ? { amountCents: settledNative.amountCents, currency: settledNative.currency }
+    : checkoutFinancialData(action);
   const purchase = await tx.purchase.update({
     where: { id: action.purchaseId },
     data: {
       status: settledNative?.status ?? 'PAID',
+      ...financials,
       paidAt: settledNative?.paidAt ?? action.occurredAt,
       stripeCheckoutSessionId: action.sessionId,
       stripePaymentIntentId: settledNative
@@ -492,6 +514,7 @@ async function fulfillProductPurchase(
         userId: purchase.userId,
         sourcePurchaseId: purchase.id,
         label: purchase.product.name,
+        ...classTicketCreditTerms(purchase.policyAcceptance),
         isUnlimited: purchase.product.isUnlimited,
         entries: checkoutCredits
           ? {
@@ -505,6 +528,8 @@ async function fulfillProductPurchase(
       },
     });
   }
+  const ticketFulfillment = classTicket ? await fulfillClassTicket(tx, purchase.id, purchase.userId) : null;
+  const purchasedItemName = classTicket ? `${classTicket.name}${ticketFulfillment?.status === 'REVIEW' ? ' — booking needs studio review' : ' — class booked'}` : purchase.product.name;
   if (!action.subscriptionId) {
     let existingPaymentRecordLinked = false;
     if (action.paymentIntentId || action.sessionId) {
@@ -525,8 +550,7 @@ async function fulfillProductPurchase(
           membershipId,
           kind: 'PRODUCT_PURCHASE',
           status: 'SUCCEEDED',
-          amountCents: purchase.amountCents,
-          currency: purchase.currency,
+          ...financials,
           customerName: purchase.user.name,
           customerEmail: purchase.user.email,
           stripeCustomerId: action.customerId,
@@ -543,8 +567,7 @@ async function fulfillProductPurchase(
         membershipId,
         kind: 'PRODUCT_PURCHASE' as const,
         status: 'SUCCEEDED' as const,
-        amountCents: purchase.amountCents,
-        currency: purchase.currency,
+        ...financials,
         customerName: purchase.user.name,
         customerEmail: purchase.user.email,
         stripeEventId: event.id,
@@ -620,14 +643,14 @@ async function fulfillProductPurchase(
     payload: {
       name: purchase.user.name || 'Rhyzer',
       planName: purchase.product.name,
-      itemName: purchase.product.name,
+      itemName: purchasedItemName,
       amount: purchase.amountCents,
       billingSchedule:
         purchase.product.billingInterval === 'ONE_TIME'
           ? 'One-time purchase'
           : 'Recurring membership',
       billingUrl: '/member/billing',
-      receiptUrl: '/member/billing',
+      receiptUrl: classTicket ? `/member/class-checkout?occurrence=${encodeURIComponent(classTicket.occurrenceId)}` : '/member/billing',
     },
     dedupeKey: `purchase-confirmation:${purchase.id}`,
   });
@@ -638,11 +661,11 @@ async function fulfillProductPurchase(
     template: 'PAYMENT_RECEIPT',
     payload: {
       name: purchase.user.name || 'Rhyzer',
-      itemName: purchase.product.name,
+      itemName: purchasedItemName,
       amount: purchase.amountCents,
       paidAt: action.occurredAt.toLocaleDateString('en-US'),
       paymentMethod: 'Your Stripe payment method',
-      receiptUrl: '/member/billing',
+      receiptUrl: classTicket ? `/member/class-checkout?occurrence=${encodeURIComponent(classTicket.occurrenceId)}` : '/member/billing',
     },
     dedupeKey: `payment-receipt:purchase:${purchase.id}`,
   });
@@ -654,7 +677,7 @@ async function fulfillProductPurchase(
     payload: {
       memberName: purchase.user.name || 'Member',
       memberEmail: purchase.user.email,
-      itemName: purchase.product.name,
+      itemName: purchasedItemName,
       amount: purchase.amountCents,
       adminUrl: '/admin/payments',
     },
@@ -695,6 +718,7 @@ async function fulfillCommerceOrder(
     select: { id: true },
   });
   if (inFlightRefund) return;
+  const financials = checkoutFinancialData(action);
   if (
     existingOrder.kind === 'EVENT' &&
     existingOrder.userId &&
@@ -717,6 +741,7 @@ async function fulfillCommerceOrder(
     where: { id: action.commerceOrderId },
     data: {
       status: 'PAID',
+      ...financials,
       paidAt: action.occurredAt,
       stripeCheckoutSessionId: action.sessionId,
       stripePaymentIntentId: action.paymentIntentId,
@@ -778,8 +803,7 @@ async function fulfillCommerceOrder(
     commerceOrderId: order.id,
     kind: order.kind,
     status: 'SUCCEEDED' as const,
-    amountCents: order.amountCents,
-    currency: order.currency,
+    ...financials,
     customerName: order.user?.name || order.customerName || action.customerName,
     customerEmail:
       order.user?.email || order.customerEmail || action.customerEmail,

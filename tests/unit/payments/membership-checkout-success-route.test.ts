@@ -40,7 +40,7 @@ vi.mock('@/lib/payments/membership-checkout-return', () => ({
     gateway: { findPurchase: (purchaseId: string) => Promise<unknown>; fulfillSession: (session: unknown) => Promise<unknown> },
   ) => {
     await gateway.findPurchase('purchase_ritual');
-    await gateway.fulfillSession({ id: 'cs_ritual', livemode: true, created: 1 });
+    await gateway.fulfillSession({ id: 'cs_ritual', livemode: true, created: 1, status: 'complete', payment_status: 'no_payment_required', amount_total: 0 });
     return 'fulfilled';
   },
 }));

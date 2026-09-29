@@ -5,6 +5,7 @@ type CheckoutPurchase = {
   userId: string;
   stripeCheckoutSessionId: string | null;
   productKind: string;
+  classTicketOccurrenceId?: string | null;
 };
 
 export type MembershipCheckoutReturnGateway = {
@@ -37,7 +38,7 @@ export async function fulfillMembershipCheckoutReturn(
   const purchase = await gateway.findPurchase(purchaseId);
   if (
     !purchase ||
-    purchase.productKind !== 'INTRO_TRIAL' ||
+    (purchase.productKind !== 'INTRO_TRIAL' && !(purchase.productKind === 'DROP_IN' && purchase.classTicketOccurrenceId)) ||
     purchase.stripeCheckoutSessionId !== checkoutSession.id
   ) {
     return 'invalid';

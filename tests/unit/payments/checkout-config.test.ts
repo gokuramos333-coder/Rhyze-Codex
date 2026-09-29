@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCheckoutCustomerParameters,
+  buildCheckoutWalletParameters,
   buildPortalSessionParameters,
   buildSubscriptionData,
 } from '@/lib/payments/checkout-config';
 
 describe('Stripe checkout configuration', () => {
+  it('disables Link without overriding cards or other compatible wallets', () => {
+    expect(buildCheckoutWalletParameters()).toEqual({ wallet_options: { link: { display: 'never' } } });
+  });
   it('reuses an existing Stripe customer without also sending customer_email', () => {
     expect(buildCheckoutCustomerParameters({
       customerId: 'cus_existing',

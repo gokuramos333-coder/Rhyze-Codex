@@ -122,7 +122,7 @@ describe('native VIP ordered paid entitlement, independent from invoice accounti
     const f = fixture();
     await f.run('customer.subscription.deleted', oct + 40, { id: 'sub', status: 'canceled', current_period_start: oct, current_period_end: nov });
     await f.run('invoice.paid', oct + 50, f.invoice('late-old', sep, oct, sep + 10));
-    await f.run('checkout.session.completed', sep, { id: 'cs', subscription: 'sub', payment_status: 'paid', metadata: { purchaseId: 'purchase' } });
+    await f.run('checkout.session.completed', sep, { id: 'cs', amount_total: 22200, currency: 'usd', subscription: 'sub', payment_status: 'paid', metadata: { purchaseId: 'purchase' } });
     expect(f.membership.status).toBe('CANCELLED');
     expect(f.records.get('late-old').status).toBe('SUCCEEDED');
     expect(vipMembershipPaidThrough(f.membership, new Date((oct + 60) * 1000))).toBeNull();
@@ -161,7 +161,7 @@ describe('native VIP ordered paid entitlement, independent from invoice accounti
     const f = fixture();
     await f.run('invoice.paid', oct + 10, { ...f.invoice('new', oct, nov), payment_intent: 'pi_new' });
     await f.run('invoice.paid', oct + 20, { ...f.invoice('old', sep, oct), payment_intent: 'pi_old' });
-    await f.run('checkout.session.completed', sep, { id: 'cs', subscription: 'sub', payment_status: 'paid', metadata: { purchaseId: 'purchase' } });
+    await f.run('checkout.session.completed', sep, { id: 'cs', amount_total: 22200, currency: 'usd', subscription: 'sub', payment_status: 'paid', metadata: { purchaseId: 'purchase' } });
     expect(f.purchase.stripePaymentIntentId).toBe('pi_new');
     expect(f.purchase.paidAt).toEqual(new Date(sep * 1000));
     expect(f.records.get('new').stripePaymentIntentId).toBe('pi_new');
@@ -178,7 +178,7 @@ describe('native VIP ordered paid entitlement, independent from invoice accounti
       Object.assign(f.account, f.purchase.creditAccount ? update : create);
       f.purchase.creditAccount = f.account; return f.account;
     });
-    const checkout = () => f.run('checkout.session.completed', sep, { id: 'cs', subscription: 'sub', payment_status: 'paid', metadata: { purchaseId: 'purchase' } });
+    const checkout = () => f.run('checkout.session.completed', sep, { id: 'cs', amount_total: 22200, currency: 'usd', subscription: 'sub', payment_status: 'paid', metadata: { purchaseId: 'purchase' } });
     const invoice = () => f.run('invoice.paid', sep + 1, { ...f.invoice('first', sep, oct, sep + 1), metadata: { purchaseId: 'purchase' } });
     if (order === 'checkout-first') {
       await checkout();

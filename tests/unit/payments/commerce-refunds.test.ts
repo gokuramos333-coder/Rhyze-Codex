@@ -163,6 +163,13 @@ const input = {
 };
 
 describe('safe commerce refunds', () => {
+  it('stores the provider refund date when an older succeeded refund is reconciled', async () => {
+    const f = db();
+    const providerRefund = { id: 're_historical', amount: 3000, status: 'succeeded', created: 1786795200, charge: 'ch_event_refund', payment_intent: 'pi_event_refund', currency: 'usd' };
+    const s = stripe('succeeded', [providerRefund]);
+    await refundCommerceOrderFullRemainder(f.client, s as never, input);
+    expect(f.tx.commerceRefund.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ stripeRefundId: 're_historical', createdAt: new Date('2026-08-15T12:00:00Z') }) }));
+  });
   it('does not mark the order refunded, cleanup bookings, or email success when provider readback is pending', async () => {
     const f = db();
     const s = stripe('pending');

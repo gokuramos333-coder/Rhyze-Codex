@@ -4,6 +4,9 @@ export type RevenueRecord = {
   customerId: string;
   type: string;
   source: 'SOMBLE' | 'RHYZE';
+  currency?: string;
+  /** False means occurredAt is an audit timestamp, not a verified financial date. */
+  dateVerified?: boolean;
 };
 
 export type DailyRevenuePoint = {
@@ -45,7 +48,7 @@ function newYorkBoundary(year: number, month: number, day: number) {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hourCycle: 'h23',
   }).formatToParts(utcGuess);
   const hour = Number(parts.find((part) => part.type === 'hour')?.value);
   const minute = Number(parts.find((part) => part.type === 'minute')?.value);
@@ -100,11 +103,12 @@ export function buildDailyRevenueSeries(
 ): DailyRevenuePoint[] {
   const totals = new Map<string, number>();
   for (const record of records) {
+    if (record.dateVerified === false) continue;
     const key = dayKey(record.occurredAt);
     totals.set(key, (totals.get(key) ?? 0) + record.amountCents);
   }
 
-  const cursor = new Date(start);
+  let cursor = new Date(start);
   const last = new Date(end);
   const points: DailyRevenuePoint[] = [];
 
@@ -118,7 +122,8 @@ export function buildDailyRevenueSeries(
       }),
       amountCents: totals.get(dayKey(cursor)) ?? 0,
     });
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const parts = newYorkDateParts(cursor);
+    cursor = newYorkBoundary(parts.year, parts.month, parts.day + 1);
   }
 
   return points;
@@ -138,6 +143,7 @@ export function buildDailyFinancialSeries(
   );
   const refunds = new Map<string, number>();
   for (const record of refundRecords) {
+    if (record.dateVerified === false) continue;
     const key = dayKey(record.occurredAt);
     refunds.set(key, (refunds.get(key) ?? 0) + record.amountCents);
   }
@@ -163,7 +169,7 @@ export function calculatePeriodTotals(records: RevenueRecord[], now = new Date()
   const totalSince = (start: Date | null) =>
     records.reduce(
       (total, record) =>
-        !start || record.occurredAt >= start ? total + record.amountCents : total,
+        !start || (record.dateVerified !== false && record.occurredAt >= start && record.occurredAt <= now) ? total + record.amountCents : total,
       0,
     );
 
@@ -181,6 +187,6 @@ export function recordsInRange(
   end: Date,
 ) {
   return records.filter(
-    (record) => record.occurredAt >= start && record.occurredAt <= end,
+    (record) => record.dateVerified !== false && record.occurredAt >= start && record.occurredAt <= end,
   );
 }

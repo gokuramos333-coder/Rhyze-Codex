@@ -90,7 +90,6 @@ export default async function InstructorReviewPage(
             },
           },
           orderBy: { startAt: 'asc' },
-          take: 250,
         },
       },
     });
@@ -179,8 +178,8 @@ export default async function InstructorReviewPage(
 
       <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Classes taught this month" value={`${classStats.taughtThisMonth}`} detail={`${classStats.pastTaught} total taught classes · ${classStats.upcoming} upcoming`} href="#assigned-classes" />
-        <Metric label="Referral commission" value={money(commissionTotal)} detail={`${money(availableCommissionTotal)} available for payout · ${money(paidCommissionTotal)} paid`} href="#referrals" />
-        <Metric label="Standard class pay" value={money(standardRateCents)} detail="Admin-set rate per standard class" href="#pay-rates" />
+        <Metric label="Referral commission" value={money(commissionTotal)} detail={`${money(availableCommissionTotal)} available · ${money(paidCommissionTotal)} marked paid; earned in selected period`} href="#referrals" />
+        <Metric label="Standard class pay" value={money(standardRateCents)} detail="Planning rate per class; actual wage payouts are not recorded here" href="#pay-rates" />
         <Metric label="Specialty event pay rate" value={instructor.instructorProfile?.specialtyEventRateText || (instructor.instructorProfile?.specialtyEventRateCents == null ? 'Not set' : money(instructor.instructorProfile.specialtyEventRateCents))} detail="Admin-set event agreement" href="#pay-rates" compact />
       </div>
 
@@ -251,7 +250,7 @@ export default async function InstructorReviewPage(
               <button className="min-h-10 bg-rhyze-black px-4 text-[10px] font-black uppercase text-white">Apply dates</button>
             </form>
             <p className="mt-4 text-sm font-black">Available for payout: {money(availableCommissionTotal)}</p>
-            <p className="mt-1 text-xs font-bold text-rhyze-black/50">Paid: {money(paidCommissionTotal)} · Total generated: {money(commissionTotal)}</p>
+            <p className="mt-1 text-xs font-bold text-rhyze-black/50">Marked paid (commissions earned in this period): {money(paidCommissionTotal)} · Total generated: {money(commissionTotal)}</p>
             <div className="mt-2 divide-y divide-black/10">
               {filteredCommissions.map((item) => (
                 <div key={item.id} className="grid gap-1 py-3 md:grid-cols-[1fr_auto]">

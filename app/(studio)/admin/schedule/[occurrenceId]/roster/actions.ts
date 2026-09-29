@@ -1,4 +1,5 @@
 'use server';
+import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 
@@ -126,6 +127,10 @@ export async function addMemberToClassAction(formData: FormData) {
       const validSingleClassCredit = productKind !== 'DROP_IN' || standardSingleClassCreditCanBook({
         productKind,
         paidAt: account.sourcePurchase?.paidAt,
+        purchasePolicy: account.sourcePurchase?.policyAcceptance,
+        purchaseStatus: account.sourcePurchase?.status,
+        refundedAmountCents: account.sourcePurchase?.refundedAmountCents,
+        occurrenceId: occurrence.id,
         occurrenceStartsAt: occurrence.startAt,
         isEvent: occurrence.template.isEvent,
         validUntil: account.validUntil,
@@ -146,7 +151,7 @@ export async function addMemberToClassAction(formData: FormData) {
 
     const accessProductKind = instructorAccess ? null : creditAccount && vipCreditBenefit(creditAccount) ? 'VIP' : currentCreditProduct(creditAccount)?.kind ?? null;
     const policySnapshot = bookingPolicySnapshotWithAccess({
-      currentSnapshot: { creditAccountId: instructorAccess ? null : creditAccount?.id ?? null },
+      currentSnapshot: { creditAccountId: instructorAccess ? null : creditAccount?.id ?? null, ...(!instructorAccess ? classTicketPolicySnapshot(creditAccount?.sourcePurchase?.policyAcceptance) : {}) },
       accessType: instructorAccess ? 'COMPLIMENTARY' : accessTypeForProductKind(accessProductKind),
       accessProductKind,
     });

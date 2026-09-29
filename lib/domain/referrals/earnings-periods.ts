@@ -1,15 +1,31 @@
-export type EarningsPeriod = 'week' | 'biweek' | 'month' | 'year' | 'lifetime' | 'custom';
+import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
 
-export function earningsPeriodStart(period: EarningsPeriod, now = new Date()) {
-  if (period === 'custom') return null;
-  if (period === 'lifetime') return null;
-  if (period === 'year') return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-  if (period === 'month') return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const day = now.getUTCDay() || 7;
-  const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day + 1));
-  return period === 'biweek'
-    ? new Date(weekStart.getTime() - 7 * 24 * 60 * 60 * 1_000)
-    : weekStart;
+export type EarningsPeriod =
+  | 'week'
+  | 'biweek'
+  | 'month'
+  | 'year'
+  | 'lifetime'
+  | 'custom';
+
+function newYorkCalendarDate(value: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const valueOf = (type: string) =>
+    parts.find((part) => part.type === type)!.value;
+  return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`;
+}
+
+export function earningsPeriodStart(
+  period: EarningsPeriod,
+  now = new Date(),
+): Date | null {
+  if (period === 'custom' || period === 'lifetime') return null;
+  return earningsDateRange(period, now).start;
 }
 
 export function earningsDateRange(
@@ -17,14 +33,22 @@ export function earningsDateRange(
   now = new Date(),
   from?: string,
   to?: string,
-) {
-  if (period !== 'custom') {
-    return { start: earningsPeriodStart(period, now), end: null };
+): { start: Date | null; end: Date | null } {
+  if (period === 'lifetime') return { start: null, end: null };
+  if (period === 'biweek') {
+    const week = resolveAnalyticsRange({ range: 'week' }, now);
+    const [year, month, day] = newYorkCalendarDate(week.start)
+      .split('-')
+      .map(Number);
+    const priorMonday = new Date(Date.UTC(year, month - 1, day - 7))
+      .toISOString()
+      .slice(0, 10);
+    const range = resolveAnalyticsRange(
+      { range: 'custom', from: priorMonday, to: newYorkCalendarDate(week.end) },
+      now,
+    );
+    return { start: range.start, end: range.end };
   }
-  const start = from ? new Date(`${from}T00:00:00.000Z`) : null;
-  const end = to ? new Date(`${to}T23:59:59.999Z`) : null;
-  return {
-    start: start && !Number.isNaN(start.getTime()) ? start : null,
-    end: end && !Number.isNaN(end.getTime()) ? end : null,
-  };
+  const range = resolveAnalyticsRange({ range: period, from, to }, now);
+  return { start: range.start, end: range.end };
 }

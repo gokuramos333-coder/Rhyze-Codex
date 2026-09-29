@@ -1,3 +1,5 @@
+import { FinancialReportView } from '@/components/admin/FinancialReportView';
+import { loadFinancialReport, financialReportQuery } from '@/lib/admin/financial-report';
 import Link from 'next/link';
 import Image from 'next/image';
 import { prisma } from '@/lib/db/prisma';
@@ -5,36 +7,25 @@ import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { createClassTemplateAction, deleteClassTemplateAction } from '../classes/actions';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
-import {
-  DistributionBars,
-  RevenueAreaChart,
-} from '@/components/admin/AnalyticsCharts';
-import {
-  buildDailyRevenueSeries,
-  recordsInRange,
-  summarizeRevenue,
-} from '@/lib/admin/dashboard-analytics';
 import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
-import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControls';
 import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
-import { resolveScheduleOccurrenceRange } from '@/lib/admin/schedule-occurrence-range';
 import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import {
   activeEventBookingValueCents,
 } from '@/lib/admin/event-revenue';
-import { netCollectedAmountCents } from '@/lib/admin/net-revenue';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AdminEventsPage(
-  props: { searchParams: Promise<{ saved?: string; error?: string; range?: string; from?: string; to?: string }> }
+  props: { searchParams: Promise<{ saved?: string; error?: string; range?: string; from?: string; to?: string; page?: string; offering?: string; occurrence?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const range = resolveAnalyticsRange(searchParams);
-  const occurrenceRange = resolveScheduleOccurrenceRange(searchParams);
+  const occurrenceRange = range;
+  const report = await loadFinancialReport({ ...searchParams, kind: 'event' });
   const now = new Date();
-  const [eventRows, categories, sombleRevenue, nativeEventOrders, nativeBookers, scheduledOccurrences] = await Promise.all([
+  const [eventRows, categories, scheduledOccurrences] = await Promise.all([
     prisma.classTemplate.findMany({
       where: { isEvent: true },
       include: {
@@ -51,44 +42,6 @@ export default async function AdminEventsPage(
       orderBy: { name: 'asc' },
     }),
     prisma.classCategory.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
-    prisma.sombleTransaction.findMany({
-      where: { contentType: 'Event' },
-      select: {
-        amountCents: true,
-        transferredAt: true,
-        userId: true,
-        contentType: true,
-      },
-    }),
-    prisma.commerceOrder.findMany({
-      where: {
-        kind: 'EVENT',
-        status: {
-          in: [
-            'PAID',
-            'FULFILLMENT_REVIEW',
-            'PARTIALLY_REFUNDED',
-            'REFUNDED',
-          ],
-        },
-      },
-      select: {
-        amountCents: true,
-        refundedAmountCents: true,
-        paidAt: true,
-        updatedAt: true,
-        userId: true,
-        customerEmail: true,
-      },
-    }),
-    prisma.booking.findMany({
-      where: {
-        status: { in: ['CONFIRMED', 'ATTENDED'] },
-        occurrence: { template: { isEvent: true } },
-      },
-      select: { userId: true },
-      distinct: ['userId'],
-    }),
     prisma.classOccurrence.findMany({
       where: {
         status: 'SCHEDULED',
@@ -131,29 +84,6 @@ export default async function AdminEventsPage(
     }),
   ]);
   const events = sortCatalogByNextOccurrence(eventRows);
-  const allRevenueRecords = [
-    ...sombleRevenue.map((item) => ({
-      amountCents: item.amountCents,
-      occurredAt: item.transferredAt,
-      customerId: item.userId,
-      type: item.contentType,
-      source: 'SOMBLE' as const,
-    })),
-    ...nativeEventOrders.map((item) => ({
-      amountCents: netCollectedAmountCents(item),
-      occurredAt: item.paidAt ?? item.updatedAt,
-      customerId: item.userId ?? item.customerEmail ?? 'guest',
-      type: 'Event',
-      source: 'RHYZE' as const,
-    })),
-  ];
-  const revenueRecords = recordsInRange(allRevenueRecords, range.start, range.end);
-  const summary = summarizeRevenue(revenueRecords);
-  const eventClients = new Set([
-    ...sombleRevenue.map((item) => item.userId),
-    ...nativeBookers.map((item) => item.userId),
-  ]).size;
-  const series = buildDailyRevenueSeries(revenueRecords, range.start, range.end);
   const upcomingOccurrences = scheduledOccurrences.filter((occurrence) => occurrence.startAt >= now);
   const pastOccurrences = scheduledOccurrences.filter((occurrence) => occurrence.startAt < now);
   return (
@@ -161,29 +91,7 @@ export default async function AdminEventsPage(
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Special experiences</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">EVENTS</h1>
       <p className="mt-3 max-w-2xl text-rhyze-black/55">Events remain part of the public schedule but are managed separately from recurring studio classes.</p>
-      <div className="mt-7 grid gap-3 sm:grid-cols-3">
-        <Metric label={`Event revenue · ${range.label}`} value={`$${(summary.totalCents / 100).toFixed(0)}`} href="/admin/payments" />
-        <Metric label="Event clients" value={`${eventClients}`} href="/admin/members" />
-        <Metric label="Event offerings" value={`${events.length}`} href="/admin/events" />
-      </div>
-      <AnalyticsRangeControls basePath="/admin/events" active={range.key} from={searchParams.from} to={searchParams.to} />
-      <div className="mt-6 grid gap-5 xl:grid-cols-[1.5fr_.9fr]">
-        <RevenueAreaChart
-          title={`Event revenue · ${range.label}`}
-          points={series.map((point) => ({
-            label: point.label,
-            value: point.amountCents,
-          }))}
-        />
-        <DistributionBars
-          title="Event revenue sources"
-          href="/admin/events"
-          items={Object.entries(summary.byType).map(([label, value]) => ({
-            label,
-            value,
-          }))}
-        />
-      </div>
+      <FinancialReportView report={report} basePath="/admin/events" preservedParams={{ kind: 'event' }} />
       {searchParams.saved && <p className="mt-5 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">Event added. Schedule its date and instructor next.</p>}
       <section className="mt-8 border-t-4 border-rhyze-black bg-white p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -195,8 +103,8 @@ export default async function AdminEventsPage(
           <EventScheduleRangeControls active={occurrenceRange.key} />
         </div>
         <div className="mt-5 grid gap-6">
-          <EventOccurrenceSection title="UPCOMING" occurrences={upcomingOccurrences} />
-          <EventOccurrenceSection title="PAST" occurrences={pastOccurrences} past />
+          <EventOccurrenceSection title="UPCOMING" occurrences={upcomingOccurrences} reportQuery={financialReportQuery(searchParams)} />
+          <EventOccurrenceSection title="PAST" occurrences={pastOccurrences} past reportQuery={financialReportQuery(searchParams)} />
           {!scheduledOccurrences.length && <p className="border border-black/10 p-5 text-sm font-bold text-rhyze-black/50">No scheduled events in this range.</p>}
         </div>
       </section>
@@ -247,7 +155,6 @@ export default async function AdminEventsPage(
     </>
   );
 }
-function Metric({ label, value, href }: { label: string; value: string; href: string }) { return <Link href={href} className="border-t-4 border-rhyze-orange bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-lg"><p className="text-xs font-black uppercase text-rhyze-black/45">{label}</p><p className="mt-2 font-display text-5xl">{value}</p></Link>; }
 function EventScheduleRangeControls({ active }: { active: string }) {
   const periods = [
     { key: 'day', label: 'Daily' },
@@ -264,7 +171,7 @@ function EventScheduleRangeControls({ active }: { active: string }) {
     </div>
   );
 }
-function EventOccurrenceSection({ title, occurrences, past = false }: { title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; commerceOrders: Array<{ userId: string | null; customerEmail: string | null; amountCents: number; refundedAmountCents: number; paidAt: Date | null }>; bookings: Array<{ userId: string; user: { email: string } }>; _count: { bookings: number } }>; past?: boolean }) {
+function EventOccurrenceSection({ title, occurrences, past = false, reportQuery }: { reportQuery: string; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; commerceOrders: Array<{ userId: string | null; customerEmail: string | null; amountCents: number; refundedAmountCents: number; paidAt: Date | null }>; bookings: Array<{ userId: string; user: { email: string } }>; _count: { bookings: number } }>; past?: boolean }) {
   if (!occurrences.length) return null;
   return (
     <section>
@@ -286,6 +193,7 @@ function EventOccurrenceSection({ title, occurrences, past = false }: { title: s
                 <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups · Active booking value: ${(activeBookingValue / 100).toFixed(0)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <Link href={`/admin/payments?${reportQuery}&occurrence=${occurrence.id}`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest">Financial entries</Link>
                 <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Manage</Link>
                 <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Duplicate / choose date</Link>
                 <Link href={`/admin/schedule/${occurrence.id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>

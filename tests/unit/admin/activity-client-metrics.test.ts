@@ -210,41 +210,19 @@ describe('admin activity feed and client metrics', () => {
     expect(instructorPayLabel('CUSTOM_RATE')).toBe('Custom class rate');
   });
 
-  it('keeps Overview activity/sales/refund panels wired to live native records', () => {
+  it('keeps Overview activity and canonical sales reporting wired to live records', () => {
     const source = readFileSync('app/(studio)/admin/page.tsx', 'utf8');
-
-    expect(source).toContain('activityBookings');
-    expect(source).toContain('activityWaitlistEntries');
-    expect(source).toContain('activityAttendanceRecords');
-    expect(source).toContain('activityPaymentRecords');
+    for (const name of ['activityBookings', 'activityWaitlistEntries', 'activityAttendanceRecords', 'activityPaymentRecords', 'visiblePaymentRecords', 'loadFinancialReport', '<FinancialReportView']) expect(source).toContain(name);
     expect(source).not.toContain('syncRecentStripePaymentRecords');
-    expect(source).toContain('excludeSombleBackedStripePaymentRecords');
-    expect(source).toContain('visiblePaymentRecords');
-    expect(source).toContain('buildReconciledRefundRecords');
-    expect(source).toContain('Verified direct Stripe');
-    expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("schedule: '7 * * * *'");
-    expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("runProtectedJob('/api/jobs/stripe-sync', undefined, { retryConnectFailures: true })");
     expect(source).toContain('paymentRecords: visiblePaymentRecords');
     expect(source).toContain('bookings: activityBookings');
     expect(source).toContain('waitlistEntries: activityWaitlistEntries');
     expect(source).toContain('attendanceRecords: activityAttendanceRecords');
-    expect(source).toContain('SYNCED SALES LEDGER');
-    expect(source).toContain('Total revenue');
-    expect(source).toContain('Somble transferred revenue + verified Rhyze memberships, class packs, events, merchandise, and direct Stripe charges - refunds / disputes');
-    expect(source).toContain("status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] }");
-    expect(source).toContain('directStripeGrossRevenueCents');
-    expect(source).toContain('totalRevenueCents = totalGrossRevenueCents - refundTotalCents');
-    const paymentsSource = readFileSync('app/(studio)/admin/payments/page.tsx', 'utf8');
-    expect(paymentsSource).toContain('excludeSombleBackedStripePaymentRecords(paymentRecords, historical)');
-    expect(paymentsSource).toContain('verifiedPaymentRecords');
-    expect(paymentsSource).toContain('unmatchedPaymentRecords');
-    expect(paymentsSource).toContain('Unmatched Stripe review');
-    expect(readFileSync('lib/payments/stripe-payment-sync.ts', 'utf8')).toContain('skippedSombleBacked');
-    expect(readFileSync('lib/payments/stripe-payment-sync.ts', 'utf8')).toContain('sombleTransaction.findMany');
-    expect(source).toContain('user: { select: { name: true, email: true } }');
-    expect(source).toContain('{item.user.name || item.user.email}');
-    expect(source).toContain('id="refunds"');
-    expect(source).toContain('Refund and dispute records');
+    expect(readFileSync('netlify/functions/stripe-sync.ts', 'utf8')).toContain("schedule: '7 * * * *'");
+    const report = readFileSync('lib/admin/financial-report.ts', 'utf8');
+    expect(report).toContain('buildReconciledRevenueRecords');
+    expect(report).toContain('buildReconciledRefundRecords');
+    expect(report).toContain('excludeSombleBackedStripePaymentRecords');
   });
 
   it('uses the regular site font for attendee names instead of the condensed heading font', () => {

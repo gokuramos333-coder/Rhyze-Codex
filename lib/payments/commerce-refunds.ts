@@ -728,10 +728,14 @@ async function upsertSucceededRefund(
   },
 ) {
   const refund = params.refund;
+  const providerDate = Number.isFinite(refund.created) && refund.created > 0
+    ? { createdAt: new Date(refund.created * 1000) }
+    : {};
   const existing = await tx.commerceRefund.findUnique({
     where: { stripeRefundId: refund.id },
   });
   const createData = {
+    ...providerDate,
     commerceOrderId: input.orderId,
     bookingId: params.bookingId,
     amountCents: refundAmount(refund),
@@ -751,6 +755,7 @@ async function upsertSucceededRefund(
     failureReason: null,
   };
   const updateData = {
+    ...providerDate,
     commerceOrderId: input.orderId,
     amountCents: refundAmount(refund),
     stripeRefundId: refund.id,

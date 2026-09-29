@@ -1,4 +1,5 @@
 'use server';
+import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 
@@ -240,6 +241,10 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         const validSingleClassCredit = !isSingleClassCredit || standardSingleClassCreditCanBook({
           productKind,
           paidAt: item.sourcePurchase?.paidAt,
+          purchasePolicy: item.sourcePurchase?.policyAcceptance,
+          purchaseStatus: item.sourcePurchase?.status,
+          refundedAmountCents: item.sourcePurchase?.refundedAmountCents,
+          occurrenceId: occurrence.id,
           occurrenceStartsAt: occurrence.startAt,
           isEvent: occurrence.template.isEvent,
           validUntil: item.validUntil,
@@ -275,7 +280,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         occurrenceId,
         userId: user.id,
         policySnapshot: bookingPolicySnapshotWithAccess({
-          currentSnapshot: { creditAccountId: instructorAccess ? null : account?.id ?? null },
+          currentSnapshot: { creditAccountId: instructorAccess ? null : account?.id ?? null, ...(!instructorAccess ? classTicketPolicySnapshot(account?.sourcePurchase?.policyAcceptance) : {}) },
           accessType,
           accessProductKind,
         }),

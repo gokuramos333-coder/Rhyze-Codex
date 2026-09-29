@@ -1,3 +1,4 @@
+import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 import { NextResponse } from 'next/server';
 import { attributionMetadata } from '@/lib/attribution/first-touch';
 import { z } from 'zod';
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin;
     const checkout = await getStripe().checkout.sessions.create({
       mode: 'payment',
+      ...buildCheckoutWalletParameters(),
       ...(user.stripeCustomerId
         ? { customer: user.stripeCustomerId }
         : { customer_creation: 'always' as const, customer_email: user.email }),

@@ -1,3 +1,5 @@
+import { FinancialReportView } from '@/components/admin/FinancialReportView';
+import { loadFinancialReport, financialReportQuery, formatReportMoney } from '@/lib/admin/financial-report';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -11,29 +13,11 @@ import {
 import { prisma } from '@/lib/db/prisma';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { calculateSombleMetrics } from '@/lib/admin/somble-metrics';
-import {
-  buildDailyFinancialSeries,
-  recordsInRange,
-  summarizeFinancials,
-  summarizeRevenue,
-} from '@/lib/admin/dashboard-analytics';
-import {
-  CountBars,
-  DistributionBars,
-  RevenueAreaChart,
-} from '@/components/admin/AnalyticsCharts';
-import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControls';
-import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
+import { CountBars } from '@/components/admin/AnalyticsCharts';
 import { buildAdminActivityItems } from '@/lib/admin/activity-client-metrics';
 import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { activeMembershipUserWhere } from '@/lib/domain/memberships/active-membership';
-import {
-  buildReconciledRefundRecords,
-  buildReconciledRevenueRecords,
-} from '@/lib/admin/reconciled-financials';
-import { RefundedBadge } from '@/components/admin/RefundedBadge';
-import { netCollectedAmountCents } from '@/lib/admin/net-revenue';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -57,7 +41,7 @@ function dateTime(date: Date) {
 
 export default async function AdminHomePage(
   props: {
-    searchParams: Promise<{ panel?: string; analytics?: string; range?: string; from?: string; to?: string }>;
+    searchParams: Promise<{ panel?: string; analytics?: string; range?: string; from?: string; to?: string; page?: string; offering?: string; occurrence?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -72,9 +56,7 @@ export default async function AdminHomePage(
     transactions,
     upcoming,
     activeMembershipCount,
-    productCount,
     classCount,
-    nativePurchases,
     totalAccounts,
     bookedUsers,
     upcomingCount,
@@ -86,7 +68,6 @@ export default async function AdminHomePage(
     activityWaitlistEntries,
     activityAttendanceRecords,
     activityPaymentRecords,
-    refunds,
   ] = await Promise.all([
     prisma.sombleClientProfile.findMany({
       include: {
@@ -113,23 +94,7 @@ export default async function AdminHomePage(
       take: 8,
     }),
     prisma.user.count({ where: activeMembershipUserWhere }),
-    prisma.product.count({ where: { isActive: true } }),
     prisma.classTemplate.count({ where: { isActive: true } }),
-    prisma.purchase.findMany({
-      where: { status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
-      select: {
-        id: true,
-        amountCents: true,
-        refundedAmountCents: true,
-        paidAt: true,
-        createdAt: true,
-        updatedAt: true,
-        stripePaymentIntentId: true,
-        userId: true,
-        user: { select: { name: true, email: true } },
-        product: { select: { name: true } },
-      },
-    }),
     prisma.user.count({
       where: {
         role: { in: ['MEMBER', 'INSTRUCTOR', 'MANAGER', 'ADMIN', 'OWNER'] },
@@ -196,128 +161,15 @@ export default async function AdminHomePage(
       include: { user: true },
       orderBy: { occurredAt: 'desc' },
     }),
-    prisma.refund.findMany({
-      include: { purchase: { include: { user: true, product: true } } },
-      orderBy: { createdAt: 'desc' },
-    }),
   ]);
-  const commerceRefunds = await prisma.commerceRefund.findMany({
-    where: { status: 'SUCCEEDED' },
-    include: {
-      commerceOrder: { include: { user: true, items: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  }).catch(() => null);
   const metrics = calculateSombleMetrics(transactions);
   const visiblePaymentRecords = excludeSombleBackedStripePaymentRecords(activityPaymentRecords, transactions);
-  const unlinkedPaymentRecords = visiblePaymentRecords.filter(
-    (record) => !record.purchaseId && !record.commerceOrderId,
-  );
-  const range = resolveAnalyticsRange(searchParams);
-  const allRevenueRecords = buildReconciledRevenueRecords({
-    sombleTransactions: transactions,
-    purchases: nativePurchases,
-    commerceOrders: activityCommerceOrders,
-    paymentRecords: activityPaymentRecords,
-  });
-  const allRefundRecords = buildReconciledRefundRecords({
-    purchases: nativePurchases,
-    commerceOrders: activityCommerceOrders,
-    purchaseRefunds: refunds,
-    commerceRefunds: commerceRefunds ?? [],
-    paymentRecords: visiblePaymentRecords,
-  });
-  const revenueRecords = recordsInRange(allRevenueRecords, range.start, range.end);
-  const refundRecords = recordsInRange(allRefundRecords, range.start, range.end);
-  const revenueSummary = summarizeRevenue(revenueRecords);
-  const financialSummary = summarizeFinancials(revenueRecords, refundRecords);
-  const financialSeries = buildDailyFinancialSeries(
-    revenueRecords,
-    refundRecords,
-    range.start,
-    range.end,
-  );
-  const monthRange = resolveAnalyticsRange({ range: 'month' }, now);
-  const monthFinancialSummary = summarizeFinancials(
-    recordsInRange(allRevenueRecords, monthRange.start, monthRange.end),
-    recordsInRange(allRefundRecords, monthRange.start, monthRange.end),
-  );
-  const explicitPurchaseRefundDetails = new Map(
-    refunds.map((item) => [
-      `purchase-refund-${item.id}`,
-      {
-        id: `purchase-refund-${item.id}`,
-        amountCents: item.amountCents,
-        occurredAt: item.createdAt,
-        name: item.purchase.user.name || item.purchase.user.email,
-        itemName: item.purchase.product.name,
-        reason: item.reason || 'Purchase refund',
-        href: `/admin/members/${item.purchase.userId}`,
-        adjustmentType: 'REFUND' as const,
-      },
-    ]),
-  );
-  const explicitCommerceRefundDetails = new Map(
-    (commerceRefunds ?? []).map((item) => [
-      `commerce-refund-${item.id}`,
-      {
-        id: `commerce-${item.id}`,
-        amountCents: item.amountCents,
-        occurredAt: item.createdAt,
-        name: item.commerceOrder.user?.name || item.commerceOrder.customerName || item.commerceOrder.customerEmail || 'Guest customer',
-        itemName: item.commerceOrder.items.map((orderItem) => orderItem.name).join(', ') || item.commerceOrder.kind,
-        reason: item.reason || 'Commerce refund',
-        href: item.commerceOrder.userId ? `/admin/members/${item.commerceOrder.userId}` : '/admin/payments',
-        adjustmentType: 'REFUND' as const,
-      },
-    ]),
-  );
-  const purchasesById = new Map(nativePurchases.map((item) => [item.id, item]));
-  const commerceOrdersById = new Map(activityCommerceOrders.map((item) => [item.id, item]));
-  const paymentRecordsById = new Map(visiblePaymentRecords.map((item) => [item.id, item]));
-  const allRefundDetails = allRefundRecords.map((refund) => {
-    const explicit = explicitPurchaseRefundDetails.get(refund.id) ||
-      explicitCommerceRefundDetails.get(refund.id);
-    if (explicit) return explicit;
-    const purchase = refund.purchaseId ? purchasesById.get(refund.purchaseId) : null;
-    const order = refund.commerceOrderId ? commerceOrdersById.get(refund.commerceOrderId) : null;
-    const payment = refund.paymentRecordId ? paymentRecordsById.get(refund.paymentRecordId) : null;
-    const userId = purchase?.userId || order?.userId || payment?.userId || null;
-    return {
-      id: refund.id,
-      amountCents: refund.amountCents,
-      occurredAt: refund.occurredAt,
-      name: purchase?.user.name || purchase?.user.email || order?.user?.name ||
-        order?.customerName || order?.customerEmail || payment?.user?.name ||
-        payment?.customerName || payment?.customerEmail || 'Stripe customer',
-      itemName: purchase?.product.name ||
-        order?.items.map((orderItem) => orderItem.name).join(', ') || refund.type,
-      reason: refund.adjustmentType === 'DISPUTE'
-        ? 'Stripe payment dispute'
-        : 'Stripe refund sync',
-      href: userId ? `/admin/members/${userId}` : '/admin/payments',
-      adjustmentType: refund.adjustmentType,
-    };
-  }).sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
-  const rangeRefundDetails = allRefundDetails.filter(
-    (item) => item.occurredAt >= range.start && item.occurredAt <= range.end,
-  );
-  const analytics =
-    searchParams.analytics === 'traffic' ? 'traffic' : 'earnings';
+  const report = await loadFinancialReport(searchParams, now);
+  const analytics = searchParams.analytics === 'traffic' ? 'traffic' : 'earnings';
   const downloadedCount = profiles.filter((item) => item.appDownloaded).length;
-  const refundTotalCents = allRefundRecords.reduce((total, item) => total + item.amountCents, 0);
-  const sombleTransferRevenueCents = transactions.reduce((total, item) => total + item.amountCents, 0);
-  const nativeGrossRevenueCents = nativePurchases.reduce((total, item) => total + item.amountCents, 0);
-  const nativeCommerceGrossRevenueCents = activityCommerceOrders.reduce((total, item) => total + item.amountCents, 0);
-  const totalGrossRevenueCents = allRevenueRecords.reduce((total, item) => total + item.amountCents, 0);
-  const directStripeGrossRevenueCents = Math.max(
-    0,
-    totalGrossRevenueCents - sombleTransferRevenueCents - nativeGrossRevenueCents - nativeCommerceGrossRevenueCents,
-  );
-  const totalRevenueCents = totalGrossRevenueCents - refundTotalCents;
-  const nativeStripeNetRevenueCents = allRevenueRecords
-    .filter((item) => item.source === 'RHYZE')
-    .reduce((total, item) => total + item.amountCents, 0) - refundTotalCents;
+  const revenueSummary = { uniqueCustomers: new Set(report.rows.map(row => row.userId).filter(Boolean)).size };
+  const selectedNet = !report.providerReceiptCount ? 'Unavailable' : report.totals.filter(item => item.currency !== 'UNKNOWN').map(item => formatReportMoney(item.verifiedNetCents, item.currency)).join(' / ') || '$0.00';
+  const selectedRefunds = !report.providerReceiptCount ? 'Unavailable' : report.totals.filter(item => item.currency !== 'UNKNOWN').map(item => formatReportMoney(item.verifiedRefundCents, item.currency)).join(' / ') || '$0.00';
   const activity = buildAdminActivityItems({
     users: activityUsers,
     purchases: activityPurchases,
@@ -343,8 +195,8 @@ export default async function AdminHomePage(
             RHYZE OVERVIEW
           </h1>
           <p className="mt-3 max-w-2xl text-sm font-bold text-rhyze-black/55">
-            Live Rhyze data plus reconciled Somble history. Historical amounts
-            are transferred revenue and may be net of processing fees.
+            Native collection records plus imported Somble history. Imported amounts
+            remain provider unverified and may be net of processing fees.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -355,7 +207,7 @@ export default async function AdminHomePage(
             Add Offering
           </Link>
           <Link
-            href="/api/admin/somble-export?type=transactions"
+            href={`/api/reports/revenue?${financialReportQuery(searchParams)}`}
             className="inline-flex items-center gap-2 border border-rhyze-black/20 bg-white px-5 py-3 text-xs font-black uppercase tracking-widest"
           >
             <Download className="h-4 w-4" /> Export Sales
@@ -365,17 +217,17 @@ export default async function AdminHomePage(
 
       <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric
-          label="Revenue this month"
-          value={money(monthFinancialSummary.netCents)}
-          detail={`${money(monthFinancialSummary.grossCents)} gross - ${money(monthFinancialSummary.refundCents)} refunded`}
-          href="/admin?analytics=earnings&panel=sales&range=month#earnings"
+          label={`Verified Stripe net · ${report.range.label}`}
+          value={selectedNet}
+          detail="Retained live provider receipts; includes paid charges awaiting allocation"
+          href={`/admin?${financialReportQuery(searchParams)}&analytics=earnings&panel=sales#earnings`}
           icon={<CircleDollarSign />}
         />
         <Metric
-          label="Refunds / disputes this month"
-          value={money(monthFinancialSummary.refundCents)}
-          detail="Financial outflows recorded during the current New York calendar month"
-          href="/admin?analytics=earnings&panel=sales&range=month#refunds-analytics"
+          label={`Verified refunds / disputes · ${report.range.label}`}
+          value={selectedRefunds}
+          detail="Verified financial outflows in the selected New York date range"
+          href={`/admin?${financialReportQuery(searchParams)}&analytics=earnings&panel=sales#refunds-analytics`}
           icon={<CircleDollarSign />}
         />
         <Metric
@@ -408,22 +260,22 @@ export default async function AdminHomePage(
               Live business analytics
             </p>
             <h2 className="mt-2 font-display text-5xl tracking-wider">
-              {analytics === 'earnings' ? 'EARNINGS' : 'TRAFFIC + CONVERSION'}
+              {analytics === 'earnings' ? 'COLLECTIONS' : 'TRAFFIC + CONVERSION'}
             </h2>
           </div>
           <div className="flex">
             <Link
-              href={`/admin?analytics=earnings&panel=${panel}`}
+              href={`/admin?${financialReportQuery(searchParams)}&analytics=earnings&panel=${panel}`}
               className={`px-5 py-3 text-xs font-black uppercase tracking-widest ${
                 analytics === 'earnings'
                   ? 'bg-rhyze-orange text-rhyze-black'
                   : 'bg-white text-rhyze-black/50'
               }`}
             >
-              Earnings
+              Collections
             </Link>
             <Link
-              href={`/admin?analytics=traffic&panel=${panel}`}
+              href={`/admin?${financialReportQuery(searchParams)}&analytics=traffic&panel=${panel}`}
               className={`px-5 py-3 text-xs font-black uppercase tracking-widest ${
                 analytics === 'traffic'
                   ? 'bg-rhyze-orange text-rhyze-black'
@@ -436,70 +288,7 @@ export default async function AdminHomePage(
         </div>
         {analytics === 'earnings' ? (
           <>
-            <AnalyticsRangeControls
-              basePath="/admin"
-              active={range.key}
-              from={searchParams.from}
-              to={searchParams.to}
-              preservedParams={{ analytics: 'earnings', panel: 'sales' }}
-            />
-            <dl className="mt-5 grid gap-3 md:grid-cols-3">
-              <Stat label="Gross revenue" value={money(financialSummary.grossCents)} />
-              <Stat label="Refunds / disputes" value={money(financialSummary.refundCents)} />
-              <Stat label="Net revenue" value={money(financialSummary.netCents)} />
-            </dl>
-            <div className="mt-5 grid gap-5 xl:grid-cols-[1.6fr_.8fr]">
-              <RevenueAreaChart
-                title={`Net revenue · ${range.label}`}
-                points={financialSeries.map((point) => ({
-                  label: point.label,
-                  value: point.netCents,
-                }))}
-              />
-              <DistributionBars
-                title={`Revenue by type · ${range.label}`}
-                href="/admin/payments"
-                items={Object.entries(revenueSummary.byType).map(
-                  ([label, value]) => ({ label, value }),
-                )}
-              />
-            </div>
-            <div id="refunds-analytics" className="mt-5 scroll-mt-24">
-              <RevenueAreaChart
-                title={`Refunds / disputes · ${range.label}`}
-                emptyLabel="No refunds or disputes were recorded during this period."
-                href="/admin?panel=sales#refunds"
-                points={financialSeries.map((point) => ({
-                  label: point.label,
-                  value: point.refundCents,
-                }))}
-              />
-              <section className="border-t border-black/10 bg-white p-5">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <h3 className="font-display text-3xl tracking-wider">FINANCIAL ADJUSTMENTS · {range.label}</h3>
-                  <strong>{rangeRefundDetails.length} records</strong>
-                </div>
-                <div className="mt-4 grid gap-2">
-                  {rangeRefundDetails.map((refund) => (
-                    <Link key={refund.id} href={refund.href} className="grid gap-1 border-b border-black/10 py-3 hover:text-rhyze-coral md:grid-cols-[1fr_auto]">
-                      <span>
-                        <span className="flex flex-wrap items-center gap-2">
-                          {refund.adjustmentType === 'DISPUTE' ? (
-                            <span className="bg-red-900 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">Disputed</span>
-                          ) : (
-                            <RefundedBadge />
-                          )}
-                          <strong>{refund.itemName}</strong>
-                        </span>
-                        <small className="mt-1 block">{refund.name} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
-                      </span>
-                      <strong>{money(refund.amountCents)}</strong>
-                    </Link>
-                  ))}
-                  {!rangeRefundDetails.length && <p className="py-3 text-sm font-bold text-rhyze-black/45">No refunds or disputes were recorded during this period.</p>}
-                </div>
-              </section>
-            </div>
+            <FinancialReportView report={report} basePath="/admin" preservedParams={{ analytics: 'earnings', panel: 'sales' }} ledger={false} />
           </>
         ) : (
           <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_.8fr]">
@@ -548,7 +337,7 @@ export default async function AdminHomePage(
           ].map(([id, label]) => (
             <Link
               key={id}
-              href={`/admin?panel=${id}`}
+              href={`/admin?${financialReportQuery(searchParams)}&panel=${id}`}
               className={`px-5 py-4 text-xs font-black uppercase tracking-widest ${
                 panel === id
                   ? 'bg-rhyze-black text-rhyze-gold'
@@ -574,8 +363,8 @@ export default async function AdminHomePage(
                   value={money(metrics.averagePerCustomerCents)}
                 />
                 <Stat
-                  label="Native Stripe net revenue"
-                  value={money(nativeStripeNetRevenueCents)}
+                  label="Selected verified Stripe net"
+                  value={report.totals.filter(item => item.currency !== 'UNKNOWN').map(item => formatReportMoney(item.verifiedNetCents, item.currency)).join(' / ') || '$0.00'}
                 />
               </dl>
               <Link
@@ -701,125 +490,10 @@ export default async function AdminHomePage(
           </div>
         )}
 
-        {panel === 'sales' && (
-          <div className="overflow-x-auto p-5">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <h2 className="font-display text-4xl tracking-wider">
-                SYNCED SALES LEDGER
-              </h2>
-              <Link
-                href="/admin/payments"
-                className="text-xs font-black uppercase text-rhyze-coral"
-              >
-                Full ledger
-              </Link>
-            </div>
-            <section className="mb-5 border-t-4 border-rhyze-orange bg-rhyze-black p-5 text-rhyze-cream">
-              <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-gold">Total revenue</p>
-              <strong className="mt-2 block font-display text-6xl tracking-wider">{money(totalRevenueCents)}</strong>
-              <p className="mt-2 text-sm font-bold text-rhyze-cream/60">Somble transferred revenue + verified Rhyze memberships, class packs, events, merchandise, and direct Stripe charges - refunds / disputes. Charges already represented elsewhere are excluded so money is counted once.</p>
-              <div className="mt-4 grid gap-3 md:grid-cols-6">
-                <Stat label="Somble transfers" value={money(sombleTransferRevenueCents)} />
-                <Stat label="Memberships + class packs" value={money(nativeGrossRevenueCents)} />
-                <Stat label="Events + merchandise" value={money(nativeCommerceGrossRevenueCents)} />
-                <Stat label="Verified direct Stripe" value={money(directStripeGrossRevenueCents)} />
-                <Stat label="Refunds / disputes deducted" value={money(refundTotalCents)} />
-                <Stat label="Synced rows" value={`${transactions.length + nativePurchases.length + activityCommerceOrders.length + unlinkedPaymentRecords.length}`} />
-              </div>
-            </section>
-            <div className="mb-5 grid gap-3 md:grid-cols-3">
-              <Stat label="Gross synced revenue" value={money(totalGrossRevenueCents)} />
-              <Stat label="Net synced revenue" value={money(totalRevenueCents)} />
-              <Stat label="Refunds / disputes" value={money(refundTotalCents)} />
-            </div>
-            <table className="w-full min-w-[48rem] text-left text-sm">
-              <thead>
-                <tr className="border-b border-black/10 text-xs uppercase text-rhyze-black/45">
-                  <th className="p-3">Transfer date</th>
-                  <th>Customer</th>
-                  <th>Type</th>
-                  <th>Transferred amount</th>
-                  <th>Payment ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nativePurchases.slice(0, 12).map((item) => (
-                  <tr key={`native-${item.userId}-${item.createdAt.toISOString()}`} className="border-b border-black/5">
-                    <td className="p-3">{dateTime(item.paidAt || item.createdAt)}</td>
-                    <td><Link className="font-bold text-rhyze-coral" href={`/admin/members/${item.userId}`}>{item.user.name || item.user.email}</Link></td>
-                    <td>{item.product.name}</td>
-                    <td className="font-black">{money(netCollectedAmountCents(item))}</td>
-                    <td className="font-mono text-xs">Rhyze native</td>
-                  </tr>
-                ))}
-                {transactions.slice(0, 12).map((item) => (
-                  <tr key={item.id} className="border-b border-black/5">
-                    <td className="p-3">{dateTime(item.transferredAt)}</td>
-                    <td>{item.user.name || item.supporterName}</td>
-                    <td>{item.contentType}</td>
-                    <td className="font-black">
-                      {money(item.amountCents)}
-                    </td>
-                    <td className="font-mono text-xs">{item.paymentId}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <section id="refunds" className="mt-8 scroll-mt-24 border-t-4 border-rhyze-coral bg-[#f5f0e6] p-5">
-              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Refund and dispute records</p>
-                  <h3 className="font-display text-4xl tracking-wider">FINANCIAL ADJUSTMENTS</h3>
-                </div>
-                <strong>{money(refundTotalCents)} total deducted</strong>
-              </div>
-              <div className="grid gap-3">
-                {allRefundDetails.map((refund) => (
-                  <Link key={refund.id} href={refund.href} className="grid gap-2 bg-white p-4 hover:bg-rhyze-gold/10 md:grid-cols-[1fr_auto]">
-                    <span>
-                      <span className="flex flex-wrap items-center gap-2">
-                        {refund.adjustmentType === 'DISPUTE' ? (
-                          <span className="bg-red-900 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white">Disputed</span>
-                        ) : (
-                          <RefundedBadge />
-                        )}
-                        <strong>{refund.itemName}</strong>
-                      </span>
-                      <small className="mt-1 block text-rhyze-black/55">{refund.name} · {refund.reason} · {dateTime(refund.occurredAt)}</small>
-                    </span>
-                    <strong>{money(refund.amountCents)}</strong>
-                  </Link>
-                ))}
-                {!allRefundDetails.length && <p className="bg-white p-4 text-sm font-bold text-rhyze-black/45">No refunds or disputes recorded yet.</p>}
-              </div>
-            </section>
-          </div>
-        )}
+        {panel === 'sales' && <div className="p-5"><FinancialReportView report={report} basePath="/admin" preservedParams={{ panel: 'sales', analytics: 'earnings' }} summary={analytics !== 'earnings'} /></div>}
       </section>
 
       <div className="mt-8 grid gap-5 xl:grid-cols-2">
-        <section className="border-t-4 border-rhyze-coral bg-white p-5">
-          <h2 className="font-display text-4xl tracking-wider">
-            REVENUE BY OFFERING
-          </h2>
-          <div className="mt-5 grid gap-3">
-            {Object.entries(metrics.revenueByType)
-              .sort((a, b) => b[1] - a[1])
-              .map(([type, amount]) => (
-                <Link
-                  href="/admin/products"
-                  key={type}
-                  className="flex items-center justify-between border-b border-black/10 py-3"
-                >
-                  <span className="font-bold">{type}</span>
-                  <strong>{money(amount)}</strong>
-                </Link>
-              ))}
-          </div>
-          <p className="mt-5 text-xs font-bold text-rhyze-black/40">
-            {productCount} active native products are managed separately.
-          </p>
-        </section>
         <section className="border-t-4 border-rhyze-gold bg-rhyze-black p-5 text-rhyze-cream">
           <MessageCircle className="h-7 w-7 text-rhyze-gold" />
           <h2 className="mt-4 font-display text-4xl tracking-wider">

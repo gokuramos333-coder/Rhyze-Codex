@@ -1,24 +1,21 @@
+import { HistoricalReconciliationControl } from '@/components/admin/HistoricalReconciliationControl';
+import { FinancialReportView } from '@/components/admin/FinancialReportView';
+import { loadFinancialReport, financialReportQuery, formatReportMoney, type FinancialReportParams } from '@/lib/admin/financial-report';
 import Link from 'next/link';
 import { Download } from 'lucide-react';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { stripeIsConfigured } from '@/lib/payments/stripe';
-import { calculateSombleMetrics } from '@/lib/admin/somble-metrics';
 import { linkPaymentRecordToMemberAction, refreshStripePaymentsAction, refundCommerceOrderAction, refundPurchaseAction } from './actions';
 import { splitCommerceOrders } from '@/lib/admin/payment-sections';
 import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { formatPaymentDateTime } from '@/lib/admin/payment-date-time';
 import { isVisiblePaymentHistoryPurchase } from '@/lib/payments/payment-history-visibility';
-import { RefundedBadge } from '@/components/admin/RefundedBadge';
 import {
-  COMMERCE_REVENUE_STATUSES,
   netCollectedAmountCents,
-  paymentRecordFinancialTotals,
-  sumNetCollectedAmounts,
 } from '@/lib/admin/net-revenue';
 
-const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 type CommerceOrderRow = Prisma.CommerceOrderGetPayload<{
@@ -43,20 +40,26 @@ function paymentRecordSource(record: PaymentRecordRow) {
 
 export default async function PaymentsPage({
   searchParams,
-}: { searchParams: Promise<{ result?: string }> }) {
-  const result = (await searchParams).result;
+}: { searchParams: Promise<FinancialReportParams & { result?: string }> }) {
+  const params = await searchParams;
+  const result = params.result;
+  const report = await loadFinancialReport(params);
+  const dateRange = { gte: report.range.start, lte: report.range.end };
   const [purchases, commerceOrders, paymentRecords, historical] = await Promise.all([
     prisma.purchase.findMany({
+      where: { OR: [{ paidAt: dateRange }, { paidAt: null, createdAt: dateRange }] },
       include: { user: true, product: true, invoice: true },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+
     }),
     prisma.commerceOrder.findMany({
+      where: { OR: [{ paidAt: dateRange }, { paidAt: null, createdAt: dateRange }] },
       include: { user: true, items: true, refunds: true, occurrence: { include: { template: true } } },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+
     }),
     prisma.paymentRecord.findMany({
+      where: { occurredAt: dateRange },
       include: {
         user: true,
         purchase: { include: { product: true } },
@@ -66,25 +69,21 @@ export default async function PaymentsPage({
         },
       },
       orderBy: { occurredAt: 'desc' },
-      take: 250,
+
     }),
     prisma.sombleTransaction.findMany({
+      where: { transferredAt: dateRange },
       include: { user: true },
       orderBy: { transferredAt: 'desc' },
     }),
   ]);
-  const metrics = calculateSombleMetrics(historical);
-  const visiblePaymentRecords = excludeSombleBackedStripePaymentRecords(paymentRecords, historical);
-  const verifiedPaymentRecords = visiblePaymentRecords.filter(
-    (record) => record.userId || record.purchaseId || record.membershipId || record.commerceOrderId,
-  );
-  const unmatchedPaymentRecords = visiblePaymentRecords.filter(
-    (record) => !record.userId && !record.purchaseId && !record.membershipId && !record.commerceOrderId,
-  );
-  const sombleBackedStripeRecordCount = paymentRecords.length - visiblePaymentRecords.length;
-  const visiblePurchases = purchases.filter(isVisiblePaymentHistoryPurchase);
-  const nativeFinancials = paymentRecordFinancialTotals(verifiedPaymentRecords);
-  const { events, merchandise } = splitCommerceOrders(commerceOrders);
+  const paymentIds = new Set(report.rows.map(row => row.paymentRecordId));
+  const purchaseIds = new Set(report.rows.map(row => row.purchaseId));
+  const orderIds = new Set(report.rows.map(row => row.commerceOrderId));
+  const references = new Set(report.rows.map(row => row.reference));
+  const visiblePaymentRecords = excludeSombleBackedStripePaymentRecords(paymentRecords, historical).filter(record => paymentIds.has(record.id));
+  const visiblePurchases = purchases.filter(isVisiblePaymentHistoryPurchase).filter(item => purchaseIds.has(item.id));
+  const { events, merchandise } = splitCommerceOrders(commerceOrders.filter(order => orderIds.has(order.id)));
 
   return (
     <>
@@ -107,10 +106,10 @@ export default async function PaymentsPage({
             </button>
           </form>
           <Link
-            href="/api/admin/somble-export?type=transactions"
+            href={`/api/reports/revenue?${financialReportQuery(params)}`}
             className="inline-flex items-center gap-2 bg-rhyze-black px-5 py-3 text-xs font-black uppercase text-white"
           >
-            <Download className="h-4 w-4" /> Export Somble Data
+            <Download className="h-4 w-4" /> Export filtered entries
           </Link>
         </div>
       </div>
@@ -140,21 +139,9 @@ export default async function PaymentsPage({
         <p className="mt-4 border-l-4 border-rhyze-coral bg-white p-4 text-sm font-bold text-red-900">Refund needs manual review because booking, transfer, or returned-credit history prevents automatic cleanup.</p>
       )}
 
-      <div className="mt-7 grid gap-3 md:grid-cols-3">
-        <Card label="Native Rhyze gross" value={money(nativeFinancials.grossCents)} href="#native-collected" />
-        <Card label="Native refunds / disputes" value={money(nativeFinancials.adjustmentCents)} href="#native-refunds" />
-        <Card label="Native Rhyze net" value={money(nativeFinancials.netCents)} href="#native-collected" />
-        <Card label="Native payment records" value={`${verifiedPaymentRecords.length}`} href="#native-payment-records" />
-        <Card label="Unmatched Stripe review" value={`${unmatchedPaymentRecords.length}`} href="#native-payment-records" />
-        <Card label="Somble transferred revenue" value={money(metrics.transferredRevenueCents)} href="#somble-history" />
-        <Card label="Historical transfers" value={`${historical.length}`} href="#somble-history" />
-        <Card label="Customers with transfers" value={`${metrics.uniqueCustomerCount}`} href="#somble-history" />
-      </div>
-
-      <p className="mt-6 border-l-4 border-rhyze-gold bg-white p-4 text-sm font-bold">
-        Somble history is read-only and cannot be refunded through the new Stripe account.
-        Amounts may be net of Somble or payment-processing fees. Unmatched Stripe charges stay visible for review but are excluded from collected totals until linked to a Rhyze user/order. {sombleBackedStripeRecordCount > 0 ? `${sombleBackedStripeRecordCount} live Stripe charge${sombleBackedStripeRecordCount === 1 ? '' : 's'} already matched Somble payment IDs and excluded from native totals.` : ''}
-      </p>
+      <FinancialReportView report={report} basePath="/admin/payments" />
+      <HistoricalReconciliationControl key={`${report.range.start.toISOString()}-${report.range.end.toISOString()}`} from={report.range.start.toISOString()} to={new Date(report.range.end.getTime()+1).toISOString()} configured={stripeIsConfigured()} />
+      <p className="mt-6 border-l-4 border-rhyze-gold bg-white p-4 text-sm font-bold">Payment management below shows original payments collected in the selected period. These operational records can represent the same payment in multiple systems; use the unified financial entries above for totals. Imported history is read-only.</p>
       {!stripeIsConfigured() && (
         <p className="mt-3 border-l-4 border-rhyze-coral bg-white p-4 text-sm font-bold">
           Live Stripe keys are not set. New Rhyze purchase and refund controls remain unavailable.
@@ -179,8 +166,8 @@ export default async function PaymentsPage({
                   <td>{formatPaymentDateTime(record.occurredAt)}</td>
                   <td>{source}</td>
                   <td>{record.status.replaceAll('_', ' ')}</td>
-                  <td className="font-black">{money(record.amountCents)}</td>
-                  <td>{money(record.refundedAmountCents)}</td>
+                  <td className="font-black">{formatReportMoney(record.amountCents, record.currency.toUpperCase())}</td>
+                  <td>{formatReportMoney(record.refundedAmountCents, record.currency.toUpperCase())}</td>
                   <td className="p-4">
                     {!record.userId && !record.purchaseId && !record.membershipId && !record.commerceOrderId ? (
                       <form action={linkPaymentRecordToMemberAction} className="flex min-w-72 flex-col gap-2 rounded-lg border border-black/10 bg-rhyze-cream/40 p-3">
@@ -217,28 +204,6 @@ export default async function PaymentsPage({
         {!visiblePaymentRecords.length && <p className="p-8 text-rhyze-black/55">No unmatched native Stripe payment records yet.</p>}
       </section>
 
-      <section id="native-refunds" className="mt-8 scroll-mt-24 overflow-x-auto bg-white">
-        <div className="border-b border-black/10 p-5">
-          <h2 className="font-display text-4xl tracking-wider">NATIVE REFUNDS</h2>
-          <p className="mt-1 text-sm text-rhyze-black/55">Every refunded amount, linked to the customer and original payment.</p>
-        </div>
-        <table className="w-full min-w-[48rem] text-left text-sm">
-          <thead><tr className="border-b"><th className="p-4">Customer</th><th>Original payment date</th><th>What was refunded</th><th>Status</th><th>Refunded amount</th></tr></thead>
-          <tbody>
-            {visiblePaymentRecords.filter((record) => record.refundedAmountCents > 0).map((record) => (
-              <tr key={record.id} className="border-b border-black/5">
-                <td className="p-4">{record.user ? <Link href={`/admin/members/${record.user.id}#payment-history`} className="font-black hover:text-rhyze-coral">{record.user.name || record.customerName || record.customerEmail || record.user.email}</Link> : record.customerName || record.customerEmail || 'Guest checkout'}</td>
-                <td>{formatPaymentDateTime(record.occurredAt)}</td>
-                <td className="font-bold">{paymentRecordSource(record)}</td>
-                <td><RefundedBadge /></td>
-                <td className="font-black text-red-800">{money(record.refundedAmountCents)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!visiblePaymentRecords.some((record) => record.refundedAmountCents > 0) && <p className="p-8 text-rhyze-black/55">No native refunds recorded.</p>}
-      </section>
-
       <section className="mt-8 overflow-x-auto bg-white">
         <h2 className="border-b border-black/10 p-5 font-display text-4xl tracking-wider">
           NATIVE RHYZE PAYMENTS
@@ -264,7 +229,7 @@ export default async function PaymentsPage({
                 <td>{formatPaymentDateTime(item.paidAt || item.createdAt)}</td>
                 <td>{item.product.name}</td>
                 <td>{item.status}</td>
-                <td>{money(item.amountCents)}</td>
+                <td>{formatReportMoney(item.amountCents, 'currency' in item ? String(item.currency).toUpperCase() : 'UNKNOWN')}</td>
                 <td>
                   {item.status === 'PAID' && (
                     <form action={refundPurchaseAction}>
@@ -300,12 +265,12 @@ export default async function PaymentsPage({
             </tr>
           </thead>
           <tbody>
-            {historical.map((item) => (
+            {historical.filter(item => references.has(item.paymentId)).map((item) => (
               <tr key={item.id} className="border-b border-black/5">
                 <td className="p-4">{formatPaymentDateTime(item.transferredAt)}</td>
                 <td>{item.user.name || item.supporterName}</td>
                 <td>{item.contentType}</td>
-                <td className="font-black">{money(item.amountCents)}</td>
+                <td className="font-black">{formatReportMoney(item.amountCents, 'currency' in item ? String(item.currency).toUpperCase() : 'UNKNOWN')}</td>
                 <td className="font-mono text-xs">{item.transferId}</td>
                 <td className="font-mono text-xs">{item.paymentId}</td>
                 <td className="text-xs font-black uppercase text-rhyze-black/35">Historical</td>
@@ -327,16 +292,11 @@ function CommerceOrderSection({
   orders: CommerceOrderRow[];
   emptyLabel: string;
 }) {
-  const totalCents = orders
-    .filter((order) =>
-      COMMERCE_REVENUE_STATUSES.some((status) => status === order.status) &&
-      order.status !== 'DISPUTED',
-    );
   return (
     <section className="mt-8 overflow-x-auto bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 p-5">
         <h2 className="font-display text-4xl tracking-wider">{title}</h2>
-        <strong className="font-display text-3xl tracking-wider">{money(sumNetCollectedAmounts(totalCents))}</strong>
+
       </div>
       <p className="border-b border-black/10 px-5 py-3 text-sm text-rhyze-black/55">
         Stripe Checkout orders appear after signed webhook confirmation.
@@ -350,9 +310,9 @@ function CommerceOrderSection({
               <td>{formatPaymentDateTime(order.paidAt || order.createdAt)}</td>
               <td>{order.occurrence?.template.name || order.items.map((item) => `${item.name} × ${item.quantity}`).join(', ')}</td>
               <td>{order.status.replaceAll('_', ' ')}</td>
-              <td>{money(order.status === 'DISPUTED' ? 0 : netCollectedAmountCents(order))}</td>
+              <td>{formatReportMoney(order.status === 'DISPUTED' ? 0 : netCollectedAmountCents(order), order.currency.toUpperCase())}</td>
               <td>
-                <span className="block">{money(order.refundedAmountCents)}</span>
+                <span className="block">{formatReportMoney(order.refundedAmountCents, order.currency.toUpperCase())}</span>
                 {order.refunds.length > 0 && (
                   <small className="block text-rhyze-black/45">
                     {order.refunds.map((refund) => `${refund.status}${refund.providerStatus ? `/${refund.providerStatus}` : ''}`).join(', ')}
@@ -364,7 +324,7 @@ function CommerceOrderSection({
                   <form action={refundCommerceOrderAction} className="grid min-w-60 gap-2">
                     <input type="hidden" name="orderId" value={order.id} />
                     <p className="text-[10px] font-bold uppercase text-rhyze-black/55">
-                      DB remaining, provider-verified on submit: {money(Math.max(0, order.amountCents - order.refundedAmountCents))}
+                      DB remaining, provider-verified on submit: {formatReportMoney(Math.max(0, order.amountCents - order.refundedAmountCents), order.currency.toUpperCase())}
                     </p>
                     <input name="reason" required minLength={5} maxLength={240} defaultValue={order.status === 'REFUNDED' ? 'Provider refund reconciliation' : undefined} placeholder="Refund reason" className="min-h-9 border border-black/15 px-2 text-xs" />
                     <input name="confirmation" required pattern="REFUND" placeholder="Type REFUND to confirm" className="min-h-9 border border-black/15 px-2 text-xs" />
@@ -378,15 +338,5 @@ function CommerceOrderSection({
       </table>
       {!orders.length && <p className="p-8 text-rhyze-black/55">{emptyLabel}</p>}
     </section>
-  );
-}
-
-function Card({ label, value, href }: { label: string; value: string; href: string }) {
-  return (
-    <Link href={href} className="border-t-4 border-rhyze-orange bg-white p-5 transition hover:-translate-y-0.5 hover:bg-orange-50 hover:shadow-lg">
-      <p className="text-xs font-black uppercase text-rhyze-black/45">{label}</p>
-      <p className="mt-2 font-display text-5xl tracking-wider">{value}</p>
-      <span className="mt-3 block text-[10px] font-black uppercase tracking-widest text-rhyze-coral">View details →</span>
-    </Link>
   );
 }

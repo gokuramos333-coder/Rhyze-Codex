@@ -44,6 +44,13 @@ describe('membership checkout fulfillment', () => {
     expect(testGateway.fulfilled).toEqual(['cs_intro']);
   });
 
+  it('fulfills a paid occurrence-bound drop-in but rejects an unbound drop-in on this return route', async () => {
+    const g = gateway(paidSession());
+    g.value.findPurchase = async () => ({ id: 'purchase_intro', userId: 'user_intro', stripeCheckoutSessionId: 'cs_intro', productKind: 'DROP_IN', classTicketOccurrenceId: 'class' });
+    expect(await fulfillMembershipCheckoutReturn({ sessionId: 'cs_intro', userId: 'user_intro' }, g.value)).toBe('fulfilled');
+    g.value.findPurchase = async () => ({ id: 'purchase_intro', userId: 'user_intro', stripeCheckoutSessionId: 'cs_intro', productKind: 'DROP_IN' });
+    expect(await fulfillMembershipCheckoutReturn({ sessionId: 'cs_intro', userId: 'user_intro' }, g.value)).toBe('invalid');
+  });
   it('does not grant access for an unpaid Checkout session', async () => {
     const testGateway = gateway(paidSession({ payment_status: 'unpaid' }));
 

@@ -1,3 +1,4 @@
+import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 import type Stripe from 'stripe';
 
 export const RECOVERY_VERSION = 'somble-september-2026-v1';
@@ -179,6 +180,7 @@ export function recoveryCheckoutParams(
   const plan = r.kind === 'VIP' ? '&plan=vip_access' : '';
   return {
     mode: 'subscription',
+    ...buildCheckoutWalletParameters(),
     customer: input.customerId,
     client_reference_id: input.purchaseId,
     payment_method_types: ['card'],

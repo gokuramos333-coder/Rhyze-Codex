@@ -1,4 +1,5 @@
 'use server';
+import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 
 import { attributionMetadata, sourceAttributionSelect } from '@/lib/attribution/first-touch';
 
@@ -290,6 +291,7 @@ export async function startCheckoutAction(formData: FormData) {
         : null;
     checkout = await stripe.checkout.sessions.create({
       mode: product.billingInterval === 'ONE_TIME' ? 'payment' : 'subscription',
+      ...buildCheckoutWalletParameters(),
       ...buildCheckoutCustomerParameters({
         customerId: customer?.stripeCustomerId || null,
         email: user.email,

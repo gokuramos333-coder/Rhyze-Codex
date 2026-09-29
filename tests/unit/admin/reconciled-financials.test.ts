@@ -25,7 +25,7 @@ describe('reconciled ADMIN revenue', () => {
         paidAt: septemberCharge,
         createdAt: septemberCharge,
         userId: 'member-1',
-        stripePaymentIntentId: 'pi_purchase_row',
+        stripePaymentIntentId: 'pi_purchase',
         product: { name: 'Memberships and classes' },
       }, {
         id: 'original-membership-purchase',

@@ -218,7 +218,7 @@ describe('instructor operations', () => {
       expect(source).toContain("item.status === 'EARNED'");
       expect(source).toContain("item.status === 'PAID'");
       expect(source).toContain('Available for payout');
-      expect(source).toContain('Paid');
+      expect(source).toContain('Marked paid');
     }
   });
 });

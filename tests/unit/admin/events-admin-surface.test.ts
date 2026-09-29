@@ -6,7 +6,7 @@ describe('admin events surface', () => {
 
   it('adds daily weekly and monthly scheduled event controls like classes', () => {
     expect(source).toContain('scheduledOccurrences');
-    expect(source).toContain('resolveScheduleOccurrenceRange');
+    expect(source).toContain('const occurrenceRange = range;');
     expect(source).toContain('Daily');
     expect(source).toContain('Weekly');
     expect(source).toContain('Monthly');

@@ -1,3 +1,4 @@
+import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
@@ -18,6 +19,7 @@ export default async function MemberReschedulePage(
     include: { occurrence: { include: { template: true, instructor: true } } },
   });
   if (!booking) redirect('/member/bookings?result=reschedule-select-booking');
+  if (!classTicketCanTransfer(booking.policySnapshot)) return <p className="border-l-4 border-rhyze-gold bg-white p-5 font-bold">This ticket is valid only for its original class and date. Contact the studio if you need help with this booking.</p>;
 
   const [reservation, activeMemberships] = await Promise.all([
     prisma.creditLedgerEntry.findFirst({

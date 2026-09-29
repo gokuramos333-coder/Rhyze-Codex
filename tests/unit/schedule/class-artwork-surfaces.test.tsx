@@ -5,6 +5,7 @@ const db = vi.hoisted(() => ({
   classOccurrence: { findFirst: vi.fn(), findMany: vi.fn() },
   product: { findMany: vi.fn() }, user: { findMany: vi.fn() },
   classCategory: { findMany: vi.fn() }, sombleTransaction: { findMany: vi.fn() },
+  paymentRecord: { findMany: vi.fn() }, refund: { findMany: vi.fn() }, commerceRefund: { findMany: vi.fn() }, stripeEvent: { findMany: vi.fn() },
   purchase: { findMany: vi.fn() }, booking: { findMany: vi.fn() }, commerceOrder: { findMany: vi.fn() },
 }));
 vi.mock('@/lib/db/prisma', () => ({ prisma: db }));
@@ -30,7 +31,7 @@ describe('artwork across schedule, public and portal surfaces', () => {
   beforeEach(() => {
     vi.stubGlobal('React', React);
     vi.clearAllMocks();
-    for (const model of [db.product, db.user, db.classCategory, db.sombleTransaction, db.purchase, db.booking, db.commerceOrder]) model.findMany.mockResolvedValue([]);
+    for (const model of [db.paymentRecord, db.refund, db.commerceRefund, db.stripeEvent, db.product, db.user, db.classCategory, db.sombleTransaction, db.purchase, db.booking, db.commerceOrder]) model.findMany.mockResolvedValue([]);
   });
   afterEach(() => vi.unstubAllGlobals());
 

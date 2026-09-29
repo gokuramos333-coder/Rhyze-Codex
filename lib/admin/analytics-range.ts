@@ -26,7 +26,7 @@ function newYorkBoundary(year: number, month: number, day: number) {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hourCycle: 'h23',
   }).formatToParts(utcGuess);
   const hour = Number(parts.find((part) => part.type === 'hour')?.value);
   const minute = Number(parts.find((part) => part.type === 'minute')?.value);
@@ -42,6 +42,8 @@ function newYorkDay(value: string, end = false) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
   const [, year, month, day] = match.map(Number);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  if (year < 100 || calendarDate.getUTCFullYear() !== year || calendarDate.getUTCMonth() !== month - 1 || calendarDate.getUTCDate() !== day) return null;
   const boundary = newYorkBoundary(year, month, day + (end ? 1 : 0));
   return end ? inclusiveEndFromExclusiveBoundary(boundary) : boundary;
 }

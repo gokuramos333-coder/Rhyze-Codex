@@ -138,6 +138,10 @@ export default async function BookingPage(
           (productKind !== 'INTRO_TRIAL' || trialAccess) && (productKind !== 'DROP_IN' || standardSingleClassCreditCanBook({
           productKind,
           paidAt: account.sourcePurchase?.paidAt,
+          purchasePolicy: account.sourcePurchase?.policyAcceptance,
+          purchaseStatus: account.sourcePurchase?.status,
+          refundedAmountCents: account.sourcePurchase?.refundedAmountCents,
+          occurrenceId: occurrence.id,
           occurrenceStartsAt: occurrence.startAt,
           isEvent: occurrence.template.isEvent,
           validUntil: account.validUntil,
@@ -228,6 +232,9 @@ export default async function BookingPage(
   const singleClassProduct = bookingProducts.find(
     (product) => product.kind === 'DROP_IN',
   );
+  const occurrenceTicketDestination = occurrence && typeof occurrence.priceCents === 'number' && occurrence.priceCents !== singleClassProduct?.priceCents
+    ? `/member/class-checkout?occurrence=${encodeURIComponent(occurrence.id)}`
+    : null;
   const introPrice = introProduct?.priceCents ?? 700;
   const singleClassPrice =
     occurrence?.priceCents ?? singleClassProduct?.priceCents ?? 2500;
@@ -479,7 +486,9 @@ export default async function BookingPage(
             </Link>}
 
             {!activeMembership && <Link
-              href={purchaseHref(singleClassProduct?.id)}
+              href={occurrenceTicketDestination
+                ? session?.user ? occurrenceTicketDestination : `/sign-in?callbackUrl=${encodeURIComponent(occurrenceTicketDestination)}`
+                : purchaseHref(singleClassProduct?.id)}
               className="focus-ring block rounded-2xl border border-white/15 bg-rhyze-black/50 p-4 transition hover:border-rhyze-orange hover:bg-rhyze-orange/10"
             >
               <p className="text-[0.65rem] font-black uppercase tracking-[0.25em] text-rhyze-orange">
@@ -491,7 +500,9 @@ export default async function BookingPage(
                     Single Class
                   </h3>
                   <p className="mt-1 text-sm text-rhyze-cream/60">
-                    Purchase one credit for this class, valid for 1 month.
+                    {occurrenceTicketDestination
+                      ? 'One ticket for this class and date only.'
+                      : 'Purchase one credit for this class, valid for 1 month.'}
                   </p>
                 </div>
                 <span className="font-display text-3xl text-rhyze-gold">

@@ -67,3 +67,8 @@ export function buildSubscriptionData(metadata: {
   // signup calendar day (for example, Aug 11 → Sep 11).
   return { metadata };
 }
+
+/** Keep normal card entry available without a separate Link login. */
+export function buildCheckoutWalletParameters(): Pick<Stripe.Checkout.SessionCreateParams, 'wallet_options'> {
+  return { wallet_options: { link: { display: 'never' } } };
+}

@@ -1,4 +1,5 @@
 'use server';
+import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -36,11 +37,12 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     include: {
       creditAccount: {
         include: {
-          sourcePurchase: { select: { product: { select: { kind: true } } } },
+          sourcePurchase: { select: { policyAcceptance: true, product: { select: { kind: true } } } },
         },
       },
     },
   });
+  if (!classTicketCanTransfer(booking.policySnapshot) || !classTicketCanTransfer(reservation?.creditAccount.sourcePurchase?.policyAcceptance)) redirect('/member/bookings?result=class-ticket-transfer');
   const reservedProductKind = reservation?.creditAccount.sourcePurchase?.product.kind ?? null;
   const accessType = transferBookingAccessType({
     policySnapshot: booking.policySnapshot,

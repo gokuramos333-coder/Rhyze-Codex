@@ -11,6 +11,7 @@ import { cancellationPolicyDecision } from '@/lib/domain/bookings/cancellation-p
 const messages: Record<string, string> = {
   confirmed: 'Your class is confirmed.',
   rescheduled: 'Your class was rescheduled and that credit is now applied to the new class.',
+  'class-ticket-transfer': 'This ticket is for its original class and date only. Contact the studio if you need help.',
   'reschedule-blocked': 'This class is inside the two-hour window. The credit cannot be transferred.',
   'reschedule-payment': 'The transfer fee could not be charged. Your original class was not moved. Please update your saved payment method and try again.',
   'reschedule-destination': 'Choose an eligible class within two weeks that still has room.',

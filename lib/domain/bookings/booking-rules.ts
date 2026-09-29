@@ -1,3 +1,4 @@
+import { classTicketBinding, classTicketCanBook } from '@/lib/payments/class-ticket';
 import type { BookingAccessType } from '@/lib/domain/bookings/cancellation-policy';
 
 export type AttendanceValue =
@@ -147,12 +148,18 @@ export function standardSingleClassCreditCanBook(input: {
   occurrenceStartsAt: Date;
   isEvent: boolean;
   validUntil?: Date | null;
+  purchasePolicy?: unknown;
+  purchaseStatus?: string | null;
+  refundedAmountCents?: number;
+  occurrenceId?: string;
 }) {
   return (
     input.productKind === 'DROP_IN' &&
     !!input.paidAt &&
     !input.isEvent &&
-    monthKeyInNewYork(input.paidAt) === monthKeyInNewYork(input.occurrenceStartsAt) &&
+    classTicketCanBook(input.purchasePolicy, input.occurrenceId, input.occurrenceStartsAt) &&
+    (!classTicketBinding(input.purchasePolicy) || (input.purchaseStatus === 'PAID' && !input.refundedAmountCents)) &&
+    (classTicketBinding(input.purchasePolicy) || monthKeyInNewYork(input.paidAt) === monthKeyInNewYork(input.occurrenceStartsAt)) &&
     (!input.validUntil || input.occurrenceStartsAt <= input.validUntil)
   );
 }

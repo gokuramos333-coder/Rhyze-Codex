@@ -32,6 +32,7 @@ describe('admin membership Stripe checkout', () => {
     });
     expect(deps.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({
       mode: 'subscription',
+      wallet_options: { link: { display: 'never' } },
       customer: 'cus_123',
       client_reference_id: 'purchase-1',
       success_url: 'https://www.rhyzefitness.com/admin/members/member-1?membership=success',

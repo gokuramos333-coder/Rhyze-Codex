@@ -1,7 +1,8 @@
+import { classTicketBinding, classTicketFulfillment } from '@/lib/payments/class-ticket';
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
-import type Stripe from 'stripe';
+import { checkoutReturnEvent } from '@/lib/payments/checkout-return-event';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db/prisma';
 import { fulfillMembershipCheckoutReturn } from '@/lib/payments/membership-checkout-return';
@@ -27,16 +28,6 @@ function membershipPage(
   return destination;
 }
 
-function checkoutReturnEvent(checkoutSession: Stripe.Checkout.Session) {
-  return {
-    id: `checkout-return-${checkoutSession.id}`,
-    type: 'checkout.session.completed',
-    livemode: checkoutSession.livemode,
-    created: checkoutSession.created,
-    data: { object: checkoutSession },
-  } as Stripe.Event;
-}
-
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -56,6 +47,8 @@ export async function GET(request: Request) {
 
   try {
     let verifiedPlan: string | null = null;
+    let verifiedOccurrenceId: string | null = null;
+    let verifiedPurchaseId: string | null = null;
     const result = await fulfillMembershipCheckoutReturn(
       { sessionId, userId: session.user.id },
       {
@@ -67,9 +60,12 @@ export async function GET(request: Request) {
               id: true,
               userId: true,
               stripeCheckoutSessionId: true,
+              policyAcceptance: true,
               product: { select: { kind: true, slug: true } },
             },
           });
+          verifiedPurchaseId = purchase?.id ?? null;
+          verifiedOccurrenceId = classTicketBinding(purchase?.policyAcceptance)?.occurrenceId ?? null;
           verifiedPlan = purchase ? checkoutPlanValue(purchase.product.slug) : null;
           return purchase
             ? {
@@ -77,16 +73,19 @@ export async function GET(request: Request) {
                 userId: purchase.userId,
                 stripeCheckoutSessionId: purchase.stripeCheckoutSessionId,
                 productKind: purchase.product.kind,
+                classTicketOccurrenceId: verifiedOccurrenceId,
               }
             : null;
         },
-        fulfillSession: (checkoutSession) =>
-          retrySerializableTransaction(() =>
+        fulfillSession: async (checkoutSession) => {
+          const event = await checkoutReturnEvent(getStripe(), checkoutSession);
+          await retrySerializableTransaction(() =>
             prisma.$transaction(
-              (tx) => processStripeEvent(tx, checkoutReturnEvent(checkoutSession)),
+              (tx) => processStripeEvent(tx, event),
               { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
             ),
-          ),
+          );
+        },
       },
     );
 
@@ -98,6 +97,14 @@ export async function GET(request: Request) {
     }
     if (result === 'pending') {
       return NextResponse.redirect(membershipPage(request, 'processing'));
+    }
+    if (verifiedOccurrenceId) {
+      revalidatePath('/member');
+      revalidatePath('/member/bookings');
+      const fulfilledPurchase = verifiedPurchaseId ? await prisma.purchase.findUnique({ where: { id: verifiedPurchaseId }, select: { policyAcceptance: true } }) : null;
+      const outcome = classTicketFulfillment(fulfilledPurchase?.policyAcceptance);
+      const booking = outcome?.status === 'BOOKED' ? await prisma.booking.findUnique({ where: { id: outcome.bookingId }, select: { status: true } }) : null;
+      return NextResponse.redirect(new URL(outcome?.status === 'BOOKED' ? (booking?.status === 'CONFIRMED' ? '/member/bookings?result=confirmed' : '/member/bookings') : `/member/class-checkout?occurrence=${encodeURIComponent(verifiedOccurrenceId)}&result=review`, request.url));
     }
     if (!verifiedPlan) {
       return NextResponse.redirect(membershipPage(request, 'checkout-error'));

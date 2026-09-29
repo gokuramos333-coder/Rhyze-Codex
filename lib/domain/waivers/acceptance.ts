@@ -48,6 +48,7 @@ export function waiverCompletionDestination(value: unknown): string {
   if (/^\/member\/bookings\/new\?occurrence=[^&]+$/.test(returnTo)) {
     return returnTo;
   }
+  if (/^\/member\/class-checkout\?occurrence=[A-Za-z0-9_-]+$/.test(returnTo)) return returnTo;
   if (/^\/book\/event\/[a-z0-9-]+$/.test(returnTo)) {
     return returnTo;
   }
