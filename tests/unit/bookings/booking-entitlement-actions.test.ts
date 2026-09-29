@@ -45,6 +45,20 @@ import { afterEach } from 'vitest';
 afterEach(() => vi.useRealTimers());
 
 describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]] as const)('%s booking entitlement', (_label, action) => {
+  it.each(['within', 'end', 'before-start'])('enforces the selected class date for a corrected manual assignment: %s', async position => {
+    const f = fixture(false, 'MEMBER');
+    const giftEnd = new Date('2027-02-02T04:59:59.999Z');
+    const giftStart = position === 'before-start' ? new Date('2026-09-23T16:00Z') : now;
+    f.occurrence.startAt = position === 'end' ? giftEnd : position === 'within' ? new Date('2027-02-01T17:00Z') : new Date('2026-09-22T16:00Z');
+    f.occurrence.endAt = new Date(f.occurrence.startAt.getTime() + 50 * 60_000);
+    f.accounts.splice(0, f.accounts.length, { id: 'gift', label: 'Complimentary regular classes', isUnlimited: true, validFrom: giftStart, validUntil: giftEnd,
+      sourcePurchase: { policyAcceptance: { source: 'ADMIN_ASSIGNMENT', accessEndsAt: giftEnd.toISOString() }, product: { kind: 'VIP' },
+        membership: { id: 'manual', status: 'ACTIVE', product: { kind: 'MONTHLY_UNLIMITED', customPlanType: 'COMPLIMENTARY_STANDARD' } } } });
+    await expect(action(f.form)).rejects.toThrow(position === 'within' ? /confirmed|member-added/ : /access|member-no-credit/);
+    if (position !== 'within') {
+      expect(mocks.tx.booking.create).not.toHaveBeenCalled(); expect(mocks.tx.booking.upsert).not.toHaveBeenCalled();
+    }
+  });
   it('uses a September-paid ticket only for its purchased October occurrence, preserving scope in the booking', async () => {
     const f = fixture(false, 'MEMBER');
     f.occurrence.startAt = new Date('2026-10-16T23:30:00Z');
@@ -160,6 +174,16 @@ describe.each([['member', rescheduleMemberBookingAction], ['instructor', transfe
     const form = new FormData(); form.set('bookingId', 'booking'); form.set('destinationId', 'destination'); form.set('occurrenceId', 'class');
     return { ...f, booking, transferForm: form };
   }
+  it('rejects a manual-assignment transfer at expiry before fees or booking mutation', async () => {
+    const f = transferFixture({ accessType: 'STANDARD', accessProductKind: 'MONTHLY_UNLIMITED', creditAccountId: 'gift-credit' });
+    const giftEnd = new Date('2026-09-30T16:00Z');
+    Object.assign(f.membership, { currentPeriodEnd: giftEnd, product: { kind: 'MONTHLY_UNLIMITED', customPlanType: 'COMPLIMENTARY_STANDARD' },
+      purchase: { status: 'PAID', paidAt: now, policyAcceptance: { source: 'ADMIN_ASSIGNMENT', accessEndsAt: giftEnd.toISOString() },
+        creditAccount: { id: 'gift-credit', isUnlimited: true, validFrom: now, validUntil: giftEnd } } });
+    mocks.tx.classOccurrence.findFirst.mockResolvedValue({ ...f.occurrence, id: 'destination', startAt: giftEnd, endAt: new Date(giftEnd.getTime() + 50 * 60_000) });
+    await expect(transfer(f.transferForm)).rejects.toThrow(/reschedule-destination|error=destination/);
+    expect(mocks.charge).not.toHaveBeenCalled(); expect(mocks.tx.booking.update).not.toHaveBeenCalled();
+  });
   it.each([null, { accessType: 'STANDARD', accessProductKind: null }])('rejects expired historic VIP without trustworthy provenance', async snapshot => {
     const f = transferFixture(snapshot); f.membership.status = 'EXPIRED';
     await expect(transfer(f.transferForm)).rejects.toThrow(/reschedule-destination|error=destination/);

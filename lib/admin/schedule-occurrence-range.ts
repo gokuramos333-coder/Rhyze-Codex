@@ -1,8 +1,17 @@
-export type ScheduleOccurrenceRangeKey = 'day' | 'week' | 'month';
+import { resolveAnalyticsRange } from './analytics-range';
+
+export type ScheduleOccurrenceRangeKey =
+  | 'day'
+  | 'week'
+  | 'month'
+  | 'year'
+  | 'custom';
 
 type ScheduleOccurrenceSearchParams = {
   range?: string;
   date?: string;
+  from?: string;
+  to?: string;
 };
 
 const NEW_YORK_TIME_ZONE = 'America/New_York';
@@ -14,7 +23,8 @@ function newYorkDateParts(value: Date) {
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(value);
-  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  const get = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value);
   return { year: get('year'), month: get('month'), day: get('day') };
 }
 
@@ -30,7 +40,9 @@ function newYorkBoundary(year: number, month: number, day: number) {
   const hour = Number(parts.find((part) => part.type === 'hour')?.value);
   const minute = Number(parts.find((part) => part.type === 'minute')?.value);
   const second = Number(parts.find((part) => part.type === 'second')?.value);
-  return new Date(utcGuess.getTime() - ((hour * 60 + minute) * 60 + second) * 1_000);
+  return new Date(
+    utcGuess.getTime() - ((hour * 60 + minute) * 60 + second) * 1_000,
+  );
 }
 
 function validDateKey(value?: string) {
@@ -55,10 +67,7 @@ function dateKeyFromParts(parts: { year: number; month: number; day: number }) {
   ].join('-');
 }
 
-function formatDateKey(
-  dateKey: string,
-  options: Intl.DateTimeFormatOptions,
-) {
+function formatDateKey(dateKey: string, options: Intl.DateTimeFormatOptions) {
   return new Date(`${dateKey}T12:00:00.000Z`).toLocaleDateString('en-US', {
     timeZone: 'UTC',
     ...options,
@@ -71,7 +80,13 @@ export function resolveScheduleOccurrenceRange(
   defaultKey: ScheduleOccurrenceRangeKey = 'month',
 ) {
   const requested = params.range as ScheduleOccurrenceRangeKey;
-  const key: ScheduleOccurrenceRangeKey = ['day', 'week', 'month'].includes(requested)
+  const key: ScheduleOccurrenceRangeKey = [
+    'day',
+    'week',
+    'month',
+    'year',
+    'custom',
+  ].includes(requested)
     ? requested
     : defaultKey;
   let start: Date;
@@ -84,6 +99,19 @@ export function resolveScheduleOccurrenceRange(
   };
   const parts = selected;
 
+  if (key === 'year' || key === 'custom') {
+    const range = resolveAnalyticsRange(
+      params,
+      new Date(`${selected.dateKey}T12:00:00Z`),
+    );
+    return {
+      ...range,
+      end: new Date(range.end.getTime() + 1),
+      label: key === 'year' ? String(parts.year) : range.label,
+      dateKey: selected.dateKey,
+    };
+  }
+
   if (key === 'day') {
     start = newYorkBoundary(parts.year, parts.month, parts.day);
     endExclusive = newYorkBoundary(parts.year, parts.month, parts.day + 1);
@@ -95,16 +123,24 @@ export function resolveScheduleOccurrenceRange(
         })
       : 'Today';
   } else if (key === 'week') {
-    const weekday = new Date(`${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T12:00:00.000Z`).getUTCDay();
+    const weekday = new Date(
+      `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T12:00:00.000Z`,
+    ).getUTCDay();
     const mondayOffset = (weekday + 6) % 7;
     start = newYorkBoundary(parts.year, parts.month, parts.day - mondayOffset);
-    endExclusive = newYorkBoundary(parts.year, parts.month, parts.day - mondayOffset + 7);
+    endExclusive = newYorkBoundary(
+      parts.year,
+      parts.month,
+      parts.day - mondayOffset + 7,
+    );
     label = params.date
-      ? `${formatDateKey(
-          dateKeyFromParts(newYorkDateParts(start)),
-          { month: 'short', day: 'numeric' },
-        )} – ${formatDateKey(
-          dateKeyFromParts(newYorkDateParts(new Date(endExclusive.getTime() - 1))),
+      ? `${formatDateKey(dateKeyFromParts(newYorkDateParts(start)), {
+          month: 'short',
+          day: 'numeric',
+        })} – ${formatDateKey(
+          dateKeyFromParts(
+            newYorkDateParts(new Date(endExclusive.getTime() - 1)),
+          ),
           { month: 'short', day: 'numeric' },
         )}`
       : 'This week';

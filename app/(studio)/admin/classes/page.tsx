@@ -253,7 +253,7 @@ export default async function AdminClassesPage(
               SCHEDULED CLASSES
             </h2>
             <p className="mt-1 text-sm font-bold text-rhyze-cream/50">
-              Browse every saved class by day, week, or month—including past dates.
+              Browse every saved class by day, week, month, year, or date range—including past dates.
             </p>
             <p className="mt-3 rounded-xl border border-rhyze-coral/40 bg-rhyze-coral/10 p-3 text-sm font-bold text-rhyze-cream/70">
               low attendance cancellation rule: if a class has 0 signups 2 hours before class start, use Cancel class to review the reason, approve the email, and close the occurrence so no one can sign up.
@@ -264,6 +264,8 @@ export default async function AdminClassesPage(
           occurrences={adminCalendarOccurrences}
           view={occurrenceRange.key}
           selectedDateKey={occurrenceRange.dateKey}
+          from={searchParams.from}
+          to={searchParams.to}
         />
       </section>
 

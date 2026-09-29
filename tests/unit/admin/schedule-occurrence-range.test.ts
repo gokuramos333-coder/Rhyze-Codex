@@ -18,9 +18,9 @@ describe('admin schedule occurrence ranges', () => {
   });
 
   it('honors an explicit range over the page default', () => {
-    expect(resolveScheduleOccurrenceRange({ range: 'week' }, now, 'day').key).toBe(
-      'week',
-    );
+    expect(
+      resolveScheduleOccurrenceRange({ range: 'week' }, now, 'day').key,
+    ).toBe('week');
   });
 
   it('opens an explicitly selected past day without discarding its records', () => {
@@ -58,4 +58,22 @@ describe('admin schedule occurrence ranges', () => {
 
     expect(range.dateKey).toBe('2026-08-11');
   });
+});
+
+it('supports a selected year and inclusive custom end dates through exclusive query boundaries', () => {
+  const now = new Date('2026-09-29T16:00:00Z');
+  const year = resolveScheduleOccurrenceRange(
+    { range: 'year', date: '2025-08-03' },
+    now,
+  );
+  expect(year.key).toBe('year');
+  expect(year.start.toISOString()).toBe('2025-01-01T05:00:00.000Z');
+  expect(year.end.toISOString()).toBe('2026-01-01T05:00:00.000Z');
+  const custom = resolveScheduleOccurrenceRange(
+    { range: 'custom', from: '2026-03-07', to: '2026-03-09' },
+    now,
+  );
+  expect(custom.key).toBe('custom');
+  expect(custom.start.toISOString()).toBe('2026-03-07T05:00:00.000Z');
+  expect(custom.end.toISOString()).toBe('2026-03-10T04:00:00.000Z');
 });

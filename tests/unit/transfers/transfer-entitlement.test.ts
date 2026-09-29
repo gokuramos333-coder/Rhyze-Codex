@@ -4,6 +4,23 @@ import { transferBookingAccessType, transferEntitlementAllowed } from '@/lib/dom
 const now = new Date('2026-09-21T16:00Z');
 const user = { role: 'INSTRUCTOR', status: 'ACTIVE', instructorProfile: { isActive: true }, memberships: [] };
 describe('transfers cannot bypass the original entitlement', () => {
+  it('keeps a standard-class manual assignment inside its original window during transfer', () => {
+    const start = new Date('2026-09-29T17:00Z');
+    const end = new Date('2027-02-02T04:59:59.999Z');
+    const membership = { id: 'manual', userId: 'member', purchaseId: 'gift', status: 'ACTIVE', currentPeriodEnd: end,
+      product: { kind: 'MONTHLY_UNLIMITED', customPlanType: 'COMPLIMENTARY_STANDARD' },
+      purchase: { status: 'PAID', paidAt: start, policyAcceptance: { source: 'ADMIN_ASSIGNMENT', accessEndsAt: end.toISOString() },
+        creditAccount: { id: 'gift-credit', isUnlimited: true, validFrom: start, validUntil: end } } };
+    const input = { accessType: 'STANDARD', creditAccountId: 'gift-credit', user: { ...user, role: 'MEMBER', memberships: [membership] },
+      sourceIsEvent: false, destinationIsEvent: false, destinationStartsAt: new Date('2027-02-01T17:00Z'), now: start };
+    expect(transferEntitlementAllowed(input)).toBe(true);
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt: end })).toBe(false);
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt: new Date(start.getTime() - 1) })).toBe(false);
+    expect(transferEntitlementAllowed({ ...input, now: end })).toBe(false);
+    expect(transferEntitlementAllowed({ ...input, user: { ...input.user, memberships: [{ ...membership, status: 'PAUSED' }] } })).toBe(false);
+    // An independent purchased credit keeps its existing transfer policy.
+    expect(transferEntitlementAllowed({ ...input, creditAccountId: 'paid-credit', destinationStartsAt: end })).toBe(true);
+  });
   it('treats unproven legacy STANDARD snapshots with historic VIP benefits as VIP, but preserves actual finite/manual credits', () => {
     const input = { policySnapshot: { accessType: 'STANDARD', accessProductKind: null }, bookingSource: 'MEMBER',
       reservation: null, memberships: [{ product: { kind: 'VIP' }, status: 'EXPIRED' }] };

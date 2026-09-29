@@ -49,7 +49,8 @@ describe('shared financial report', () => {
     const report = buildFinancialReport(data, { ...range, page: '2' });
     expect(report.totals[0].grossCents).toBe(903000);
     expect(report.rows).toHaveLength(301);
-    expect(report.pageRows).toHaveLength(50);
+    expect(report.pageRows).toHaveLength(15);
+    expect(report.pageCount).toBe(21);
     const csv = financialReportCsvRows(report);
     expect(csv).toHaveLength(302);
     const amountIndex = csv[0].indexOf('Amount minor units');

@@ -1,10 +1,11 @@
 import Image from 'next/image';
+import { AnalyticsDateRangeForm } from './AnalyticsRangeControls';
 import { CalendarDayStrip } from '@/components/sections/CalendarDayStrip';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-export type AdminCalendarView = 'day' | 'week' | 'month';
+export type AdminCalendarView = 'day' | 'week' | 'month' | 'year' | 'custom';
 
 export type AdminCalendarOccurrence = {
   id: string;
@@ -32,12 +33,15 @@ type Props = {
   occurrences: AdminCalendarOccurrence[];
   view: AdminCalendarView;
   selectedDateKey: string;
+  from?: string;
+  to?: string;
 };
 
 const viewOptions: Array<{ id: AdminCalendarView; label: string }> = [
   { id: 'day', label: 'Daily' },
   { id: 'week', label: 'Weekly' },
   { id: 'month', label: 'Monthly' },
+  { id: 'year', label: 'Yearly' },
 ];
 
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -60,10 +64,7 @@ function startOfWeek(dateKey: string) {
   return shiftDate(dateKey, -daysSinceMonday);
 }
 
-function formatDateKey(
-  dateKey: string,
-  options: Intl.DateTimeFormatOptions,
-) {
+function formatDateKey(dateKey: string, options: Intl.DateTimeFormatOptions) {
   return new Date(`${dateKey}T12:00:00.000Z`).toLocaleDateString('en-US', {
     timeZone: 'UTC',
     ...options,
@@ -116,6 +117,8 @@ export function AdminClassesCalendar({
   occurrences,
   view,
   selectedDateKey,
+  from,
+  to,
 }: Props) {
   const weekStart = startOfWeek(selectedDateKey);
   const weekDays = Array.from({ length: 7 }, (_, index) => {
@@ -139,35 +142,42 @@ export function AdminClassesCalendar({
     year: 'numeric',
   });
   const previousDate =
-    view === 'month'
-      ? shiftMonth(selectedDateKey, -1)
-      : shiftDate(selectedDateKey, -7);
+    view === 'year'
+      ? shiftMonth(selectedDateKey, -12)
+      : view === 'month'
+        ? shiftMonth(selectedDateKey, -1)
+        : shiftDate(selectedDateKey, -7);
   const nextDate =
-    view === 'month'
-      ? shiftMonth(selectedDateKey, 1)
-      : shiftDate(selectedDateKey, 7);
-  const periodLabel = view === 'month' ? 'month' : 'week';
+    view === 'year'
+      ? shiftMonth(selectedDateKey, 12)
+      : view === 'month'
+        ? shiftMonth(selectedDateKey, 1)
+        : shiftDate(selectedDateKey, 7);
+  const periodLabel =
+    view === 'year' ? 'year' : view === 'month' ? 'month' : 'week';
 
   return (
     <div className="rounded-[1.75rem] border border-white/10 bg-rhyze-black p-4 text-rhyze-cream shadow-2xl shadow-black/30 md:p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link
-            href={calendarHref(view, previousDate)}
-            aria-label={`Previous ${periodLabel}`}
-            className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-rhyze-gold/45 text-rhyze-gold transition hover:bg-rhyze-coral/15"
-          >
-            <ChevronLeft className="h-5 w-5" aria-hidden />
-          </Link>
-          <Link
-            href={calendarHref(view, nextDate)}
-            aria-label={`Next ${periodLabel}`}
-            className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-rhyze-gold/45 text-rhyze-gold transition hover:bg-rhyze-coral/15"
-          >
-            <ChevronRight className="h-5 w-5" aria-hidden />
-          </Link>
-        </div>
-        <div className="grid grid-cols-3 rounded-full border border-white/10 bg-rhyze-charcoal/80 p-1">
+        {view !== 'custom' && (
+          <div className="flex items-center gap-2">
+            <Link
+              href={calendarHref(view, previousDate)}
+              aria-label={`Previous ${periodLabel}`}
+              className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-rhyze-gold/45 text-rhyze-gold transition hover:bg-rhyze-coral/15"
+            >
+              <ChevronLeft className="h-5 w-5" aria-hidden />
+            </Link>
+            <Link
+              href={calendarHref(view, nextDate)}
+              aria-label={`Next ${periodLabel}`}
+              className="focus-ring grid h-11 w-11 place-items-center rounded-full border border-rhyze-gold/45 text-rhyze-gold transition hover:bg-rhyze-coral/15"
+            >
+              <ChevronRight className="h-5 w-5" aria-hidden />
+            </Link>
+          </div>
+        )}
+        <div className="grid grid-cols-4 rounded-full border border-white/10 bg-rhyze-charcoal/80 p-1">
           {viewOptions.map((option) => (
             <Link
               key={option.id}
@@ -186,10 +196,39 @@ export function AdminClassesCalendar({
         </div>
       </div>
 
+      <div className="mb-6 rounded-xl bg-orange-50 p-3">
+        <AnalyticsDateRangeForm
+          basePath="/admin/classes"
+          from={from}
+          to={to}
+          anchor="scheduled-classes"
+          preservedParams={{ date: selectedDateKey }}
+        />
+      </div>
+      {(view === 'year' || view === 'custom') && (
+        <div className="grid gap-4">
+          <h3 className="font-display text-3xl">
+            {view === 'year' ? selectedDateKey.slice(0, 4) : `${from} – ${to}`}
+          </h3>
+          {occurrences.map((occurrence) => (
+            <section key={occurrence.id}>
+              <p className="mb-2 text-sm font-bold text-rhyze-gold">
+                {formatDateKey(occurrence.dateKey, {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </p>
+              <AdminClassCard occurrence={occurrence} />
+            </section>
+          ))}
+          {!occurrences.length && <p>No classes scheduled in this range.</p>}
+        </div>
+      )}
       {view === 'day' && (
         <>
           <CalendarDayStrip
-            className="no-scrollbar mb-6 grid auto-cols-[minmax(7.5rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-2 xl:grid-cols-7 xl:grid-flow-row xl:overflow-visible"
+            className="no-scrollbar mb-6 grid auto-cols-[minmax(7.5rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-2 xl:grid-flow-row xl:grid-cols-7 xl:overflow-visible"
             selectedDateKey={selectedDateKey}
           >
             {weekDays.map((day) => (
@@ -339,11 +378,7 @@ export function AdminClassesCalendar({
                 {monthDays.map((day) => {
                   if (!day.dayNumber || !day.dateKey) {
                     return (
-                      <span
-                        key={day.key}
-                        aria-hidden
-                        className="min-h-28"
-                      />
+                      <span key={day.key} aria-hidden className="min-h-28" />
                     );
                   }
                   return (

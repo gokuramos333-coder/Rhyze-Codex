@@ -89,7 +89,9 @@ describe('Admin Classes calendar', () => {
       'href',
       '/admin/schedule/past-class',
     );
-    expect(screen.queryByRole('link', { name: 'Cancel class' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Cancel class' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Attendees' })).toHaveAttribute(
       'href',
       '/admin/schedule/past-class/roster',
@@ -107,7 +109,9 @@ describe('Admin Classes calendar', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Monday' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Tuesday' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Tuesday' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Power Yoga with Kenzie')).toBeInTheDocument();
     expect(screen.getByText('Rhyze Ritmo with Melissa')).toBeInTheDocument();
   });
@@ -121,8 +125,12 @@ describe('Admin Classes calendar', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'August 2026' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Previous month' })).toHaveAttribute(
+    expect(
+      screen.getByRole('heading', { name: 'August 2026' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Previous month' }),
+    ).toHaveAttribute(
       'href',
       '/admin/classes?range=month&date=2026-07-01#scheduled-classes',
     );
@@ -130,9 +138,37 @@ describe('Admin Classes calendar', () => {
       'href',
       '/admin/classes?range=month&date=2026-09-01#scheduled-classes',
     );
-    expect(screen.getByRole('link', { name: 'Open August 24' })).toHaveAttribute(
+    expect(
+      screen.getByRole('link', { name: 'Open August 24' }),
+    ).toHaveAttribute(
       'href',
       '/admin/classes?range=day&date=2026-08-24#scheduled-classes',
     );
   });
+});
+
+it('offers Yearly and From/To dates and displays all classes across the selected period', () => {
+  render(
+    <AdminClassesCalendar
+      occurrences={occurrences}
+      view="custom"
+      selectedDateKey="2026-08-24"
+      from="2026-08-01"
+      to="2026-08-31"
+    />,
+  );
+  expect(screen.getByRole('link', { name: 'Yearly' })).toHaveAttribute(
+    'href',
+    '/admin/classes?range=year&date=2026-08-24#scheduled-classes',
+  );
+  expect(screen.getByLabelText('From')).toHaveValue('2026-08-01');
+  expect(screen.getByLabelText('To')).toHaveValue('2026-08-31');
+  expect(
+    screen.getByRole('button', { name: 'View dates' }).closest('form'),
+  ).toHaveAttribute('action', '/admin/classes#scheduled-classes');
+  expect(screen.getByText('Power Yoga with Kenzie')).toBeInTheDocument();
+  expect(screen.getByText('Rhyze Ritmo with Melissa')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('link', { name: 'Next week' }),
+  ).not.toBeInTheDocument();
 });

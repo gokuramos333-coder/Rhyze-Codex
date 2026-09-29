@@ -4,12 +4,12 @@ import { describe, expect, it } from 'vitest';
 describe('admin events surface', () => {
   const source = readFileSync('app/(studio)/admin/events/page.tsx', 'utf8');
 
-  it('adds daily weekly and monthly scheduled event controls like classes', () => {
+  it('reuses date range controls for scheduled events', () => {
     expect(source).toContain('scheduledOccurrences');
     expect(source).toContain('const occurrenceRange = range;');
-    expect(source).toContain('Daily');
-    expect(source).toContain('Weekly');
-    expect(source).toContain('Monthly');
+    expect(source).toContain('<AnalyticsRangeControls');
+    expect(source).toContain('frequencyLabels');
+    expect(source).toContain('from={searchParams.from} to={searchParams.to}');
     expect(source).toContain('ALL EVENTS');
     expect(source).toContain('template: { isEvent: true }');
   });

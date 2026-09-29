@@ -1,3 +1,5 @@
+import { financialOfferingKey } from './financial-offering';
+export { financialOfferingKey } from './financial-offering';
 import {
   classTicketBinding,
   classTicketFulfillment,
@@ -9,7 +11,11 @@ import {
 } from '@/lib/admin/reconciled-financials';
 import { excludeSombleBackedStripePaymentRecords } from '@/lib/admin/payment-record-dedupe';
 import { confirmHistoricalEventRow } from './confirmed-historical-events';
-import { summarizeEventReceipts } from './event-receipts';
+import {
+  summarizeEventReceipts,
+  summarizeEventOccurrenceReceipts,
+  type EventOccurrence,
+} from './event-receipts';
 
 export type FinancialReportParams = {
   range?: string;
@@ -46,6 +52,7 @@ type ImportedBooking = {
   };
 };
 export type FinancialReportSources = {
+  eventOccurrences?: EventOccurrence[];
   importedBookings?: ImportedBooking[];
   purchases: Array<
     RevenueInput['purchases'][number] & Details & { id: string }
@@ -132,14 +139,6 @@ const paidStatuses = new Set([
   'REFUNDED',
   'DISPUTED',
 ]);
-// Only spelling normalization, never customer/amount/time guesses, associates offering labels.
-export function financialOfferingKey(name: string) {
-  return name
-    .toLowerCase()
-    .replace(/\bw\//g, 'with ')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
 function totalRows(rows: FinancialReportRow[]): FinancialTotals[] {
   const totals = new Map<string, FinancialTotals>();
   for (const row of rows) {
@@ -782,7 +781,7 @@ export function buildFinancialReport(
       totals: totalRows(entries),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const pageSize = 50;
+  const pageSize = 15;
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const page = Math.min(
     pageCount,
@@ -798,6 +797,12 @@ export function buildFinancialReport(
     pageSize,
     totals: totalRows(rows),
     eventSummaries: summarizeEventReceipts(providerLedger.rows),
+    eventOccurrenceGroups: summarizeEventOccurrenceReceipts(
+      summarizeEventReceipts(providerLedger.rows.filter(matches)),
+      raw.eventOccurrences || [],
+      range,
+      now,
+    ),
     offerings,
     unknownDateAdjustments,
     staleProviderReceipts: providerLedger.staleProviderReceipts,
@@ -905,6 +910,7 @@ export async function loadFinancialReport(
     commerceRefunds,
     providerEvents,
     importedBookings,
+    eventOccurrences,
   ] = await Promise.all([
     prisma.purchase.findMany({ include: { product: true, user: true } }),
     prisma.commerceOrder.findMany({
@@ -940,6 +946,16 @@ export async function loadFinancialReport(
         },
       },
     }),
+    prisma.classOccurrence.findMany({
+      where: { template: { isEvent: true } },
+      select: {
+        id: true,
+        startAt: true,
+        endAt: true,
+        status: true,
+        template: { select: { name: true } },
+      },
+    }),
   ]);
   return buildFinancialReport(
     {
@@ -951,6 +967,7 @@ export async function loadFinancialReport(
       commerceRefunds,
       providerEvents,
       importedBookings,
+      eventOccurrences,
     },
     params,
     now,

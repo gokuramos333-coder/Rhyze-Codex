@@ -274,45 +274,42 @@ export function WeeklyCalendar({
           <div className="mb-5 px-1">
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-rhyze-gold">Monthly calendar</p>
             <h3 className="mt-2 font-display text-3xl tracking-wider md:text-5xl">{monthLabel}</h3>
-            <p className="mt-2 text-sm text-rhyze-cream/55">Every scheduled class in the month appears on its actual date.</p>
+            <p className="mt-2 text-sm text-rhyze-cream/55">Every scheduled class and event appears on its actual date.</p>
           </div>
-          <div aria-label="Monthly calendar" className="rounded-xl border border-rhyze-gold/30 bg-rhyze-charcoal/75 p-3 shadow-[0_0_0_1px_rgba(255,199,44,0.35)] md:p-4">
-            <div className="mb-2 grid grid-cols-7 gap-2 text-center text-[0.65rem] font-black uppercase tracking-widest text-rhyze-gold">
-              {weekdayLabels.map((weekday) => <span key={weekday}>{weekday}</span>)}
-            </div>
-            <div className="grid grid-cols-7 gap-1 md:gap-2">
-              {monthlyCalendarDays.map((day) => {
-                if (!day.dayNumber || !day.dateKey) return <span key={day.key} aria-hidden className="min-h-16 md:min-h-28" />;
-                return (
-                  <button
-                    type="button"
-                    key={day.key}
-                    onClick={() => {
-                      setSelectedDate(day.dateKey!);
-                      setView('daily');
-                    }}
-                    className={cn(
-                      'focus-ring min-h-16 rounded-lg border p-1.5 text-left transition md:min-h-28 md:p-3',
-                      day.slots.length
-                        ? 'border-rhyze-gold/35 bg-rhyze-black hover:border-rhyze-orange hover:bg-rhyze-coral/15'
-                        : 'border-white/5 bg-rhyze-black/30 text-rhyze-cream/25',
-                    )}
-                  >
-                    <span className={cn('font-black', day.slots.length && 'text-rhyze-cream')}>{day.dayNumber}</span>
-                    {calendarNotice(day.dateKey) && (
-                      <span className="mt-1 block rounded-sm bg-rhyze-gold px-1 py-0.5 text-[0.45rem] font-black uppercase tracking-wide text-rhyze-black md:text-[0.65rem]">
-                        {calendarNotice(day.dateKey)}
-                      </span>
-                    )}
-                    {!!day.slots.length && (
-                      <div className="mt-2 text-[0.55rem] font-black uppercase tracking-wider text-rhyze-gold md:text-xs">
-                        <p>{formatClassCount(day.slots.length)}</p>
-                        <p className="mt-1 hidden truncate text-rhyze-cream/55 md:block">{day.slots[0].className}</p>
+          <div aria-label="Monthly calendar" className="overflow-x-auto rounded-xl border border-rhyze-gold/30 bg-rhyze-charcoal/75 p-3 shadow-[0_0_0_1px_rgba(255,199,44,0.35)] md:p-4">
+            <div className="min-w-[48rem]">
+              <div className="mb-2 grid grid-cols-7 gap-2 text-center text-[0.65rem] font-black uppercase tracking-widest text-rhyze-gold">
+                {weekdayLabels.map((weekday) => <span key={weekday}>{weekday}</span>)}
+              </div>
+              <div className="grid grid-cols-7 gap-2">
+                {monthlyCalendarDays.map((day) => {
+                  if (!day.dayNumber || !day.dateKey) return <span key={day.key} aria-hidden className="min-h-28" />;
+                  return (
+                    <div key={day.key} className={cn('min-h-28 rounded-lg border p-2', day.slots.length ? 'border-rhyze-gold/35 bg-rhyze-black' : 'border-white/5 bg-rhyze-black/30 text-rhyze-cream/25')}>
+                      <button
+                        type="button"
+                        aria-label={`Show ${formatDateKey(day.dateKey, { month: 'long', day: 'numeric' })} schedule`}
+                        onClick={() => { setSelectedDate(day.dateKey!); setView('daily'); }}
+                        className="focus-ring w-full rounded-sm text-left font-black hover:text-rhyze-orange"
+                      >
+                        {day.dayNumber}
+                        {calendarNotice(day.dateKey) && <span className="ml-1 rounded-sm bg-rhyze-gold px-1 text-[0.6rem] text-rhyze-black">{calendarNotice(day.dateKey)}</span>}
+                      </button>
+                      <div className="mt-2 space-y-2">
+                        {day.slots.map((slot) => (
+                          <Link key={slot.id} href={slot.bookingHref} data-schedule-slot={slot.id} className={cn('focus-ring block rounded-lg border p-2 text-rhyze-cream transition hover:border-rhyze-orange', slot.isEvent ? 'border-rhyze-coral/70 bg-rhyze-coral/20' : 'border-white/15 bg-rhyze-charcoal/75')}>
+                            <span className="flex flex-wrap items-center gap-1 text-[0.6rem] font-black uppercase text-rhyze-orange">
+                              <span>{slot.category}</span>{slot.isEvent && <ScheduleEventBadge />}
+                            </span>
+                            <span className="mt-1 block text-xs font-black">{slot.timeLabel}</span>
+                            <span className="mt-1 block break-words text-sm font-bold leading-tight">{slot.className}</span>
+                          </Link>
+                        ))}
                       </div>
-                    )}
-                  </button>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -332,8 +329,9 @@ function CustomerScheduleCard({
   const bookingLabel = publicBookingCountLabel(slot.booked, slot.capacity);
 
   return (
-    <article className={cn(
-      'grid gap-4 rounded-xl border border-rhyze-gold/40 bg-rhyze-black p-4 shadow-[0_0_0_1px_rgba(255,199,44,0.35)] transition hover:border-rhyze-orange hover:bg-rhyze-coral/15 md:items-center',
+    <article data-schedule-slot={slot.id} className={cn(
+      'grid gap-4 rounded-xl border p-4 shadow-[0_0_0_1px_rgba(255,199,44,0.35)] transition hover:border-rhyze-orange hover:bg-rhyze-coral/15 md:items-center',
+      slot.isEvent ? 'border-rhyze-coral/70 bg-rhyze-coral/20' : 'border-rhyze-gold/40 bg-rhyze-black',
       compact ? 'grid-cols-1 p-3 md:grid-cols-[3.5rem_minmax(0,1fr)_auto]' : 'md:grid-cols-[4.5rem_1fr_auto] md:p-5',
     )}>
       <div className="text-rhyze-cream">
@@ -345,8 +343,9 @@ function CustomerScheduleCard({
           <Image src={slot.photo} alt={slot.instructor} fill sizes="48px" className="object-cover object-[center_18%]" />
         </div>
         <div className="min-w-0">
-          <p className="mb-1 text-xs font-black uppercase tracking-[0.2em] text-rhyze-orange">
-            {slot.category}
+          <p className="mb-1 flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-rhyze-orange">
+            <span>{slot.category}</span>
+            {slot.isEvent && <ScheduleEventBadge />}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <h4
@@ -357,11 +356,6 @@ function CustomerScheduleCard({
             >
               {slot.className}
             </h4>
-            {slot.isEvent && (
-              <span className="rounded-full border border-rhyze-gold/60 bg-rhyze-gold/15 px-2 py-1 text-[0.55rem] font-black uppercase tracking-widest text-rhyze-gold">
-                SPECIAL EVENT
-              </span>
-            )}
             {calendarNotice(slot.dateKey) && (
               <span className="rounded-md bg-rhyze-gold px-2 py-1 text-[0.6rem] font-black uppercase tracking-widest text-rhyze-black shadow-glow">
                 {calendarNotice(slot.dateKey)}
@@ -400,4 +394,8 @@ function CustomerScheduleCard({
       )}
     </article>
   );
+}
+
+function ScheduleEventBadge() {
+  return <span className="inline-flex rounded-sm border border-rhyze-gold bg-rhyze-gold px-1.5 py-0.5 text-[0.6rem] font-black uppercase tracking-wider text-rhyze-black">Event</span>;
 }

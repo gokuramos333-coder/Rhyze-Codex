@@ -67,7 +67,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     include: { template: true },
   });
   if (!requestedDestination) redirect('/member/bookings?result=reschedule-destination');
-  if (!transferEntitlementAllowed({ accessType, user: booking.user, sourceIsEvent: booking.occurrence.template.isEvent,
+  if (!transferEntitlementAllowed({ accessType, creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id, user: booking.user, sourceIsEvent: booking.occurrence.template.isEvent,
     destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date() })) {
     redirect('/member/bookings?result=reschedule-destination');
   }
@@ -95,6 +95,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
 
   const preflightUser = await prisma.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
   if (!preflightUser || !transferEntitlementAllowed({
+    creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
     accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: preflightUser.memberships }),
     user: preflightUser, sourceIsEvent: booking.occurrence.template.isEvent,
     destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date(),
@@ -132,6 +133,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     if (!destination) return false;
     const currentUser = await tx.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
     if (!currentUser || !transferEntitlementAllowed({
+      creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
       accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: currentUser.memberships }),
       user: currentUser, sourceIsEvent: booking.occurrence.template.isEvent,
       destinationIsEvent: destination.template.isEvent, destinationStartsAt: destination.startAt, now: new Date() })) return false;

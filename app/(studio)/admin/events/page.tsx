@@ -1,3 +1,4 @@
+import { AnalyticsRangeControls } from '@/components/admin/AnalyticsRangeControls';
 import { FinancialReportView } from '@/components/admin/FinancialReportView';
 import { loadFinancialReport, financialReportQuery } from '@/lib/admin/financial-report';
 import Link from 'next/link';
@@ -70,9 +71,9 @@ export default async function AdminEventsPage(
           <div>
             <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Scheduled events</p>
             <h2 className="mt-2 font-display text-4xl tracking-wider">ALL EVENTS · {occurrenceRange.label}</h2>
-            <p className="mt-1 text-sm font-bold text-rhyze-black/50">Every scheduled event occurrence for the selected day, week, or month.</p>
+            <p className="mt-1 text-sm font-bold text-rhyze-black/50">Every scheduled event occurrence for the selected day, week, month, year, or date range.</p>
           </div>
-          <EventScheduleRangeControls active={occurrenceRange.key} />
+          <AnalyticsRangeControls basePath="/admin/events" active={occurrenceRange.key} from={searchParams.from} to={searchParams.to} frequencyLabels preservedParams={{kind:'event', ...(searchParams.offering ? {offering:searchParams.offering} : {}), ...(searchParams.occurrence ? {occurrence:searchParams.occurrence} : {})}} />
         </div>
         <div className="mt-5 grid gap-6">
           <EventOccurrenceSection title="UPCOMING" occurrences={upcomingOccurrences} eventSummaries={report.eventSummaries} />
@@ -125,22 +126,6 @@ export default async function AdminEventsPage(
         )})}
       </div>
     </>
-  );
-}
-function EventScheduleRangeControls({ active }: { active: string }) {
-  const periods = [
-    { key: 'day', label: 'Daily' },
-    { key: 'week', label: 'Weekly' },
-    { key: 'month', label: 'Monthly' },
-  ];
-  return (
-    <div className="flex flex-wrap gap-2">
-      {periods.map((period) => (
-        <Link key={period.key} href={`/admin/events?range=${period.key}`} className={`px-4 py-2 text-xs font-black uppercase tracking-widest ${active === period.key ? 'bg-rhyze-black text-white' : 'border border-rhyze-black bg-white'}`}>
-          {period.label}
-        </Link>
-      ))}
-    </div>
   );
 }
 function EventOccurrenceSection({ title, occurrences, past = false, eventSummaries }: { eventSummaries: ReceiptSummary[]; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; _count: { bookings: number } }>; past?: boolean }) {

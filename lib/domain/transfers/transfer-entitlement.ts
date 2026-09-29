@@ -1,6 +1,7 @@
 import { instructorStandardClassAccess } from '@/lib/domain/bookings/booking-rules';
 import { giftedVipThrough, vipCreditBenefit, vipMembershipPaidThrough, type VipEntitlementMembership } from '@/lib/domain/credits/vip-access';
 import { bookingAccessType } from '@/lib/domain/bookings/booking-access';
+import { isAdminAssignment, manualAssignmentWindowAllows } from '@/lib/domain/credits/manual-assignment-access';
 
 export function transferBookingAccessType(input: {
   policySnapshot: unknown;
@@ -24,6 +25,7 @@ export function transferBookingAccessType(input: {
 
 export function transferEntitlementAllowed(input: {
   accessType: string;
+  creditAccountId?: string | null;
   user: { role: string; status: string; instructorProfile: { isActive: boolean } | null; memberships: VipEntitlementMembership[] };
   sourceIsEvent: boolean;
   destinationIsEvent: boolean;
@@ -31,6 +33,19 @@ export function transferEntitlementAllowed(input: {
   now: Date;
 }) {
   if (input.user.status !== 'ACTIVE' || input.sourceIsEvent !== input.destinationIsEvent) return false;
+  const assigned = input.creditAccountId && input.user.memberships.find(m =>
+    m.purchase?.creditAccount?.id === input.creditAccountId && isAdminAssignment(m.purchase?.policyAcceptance));
+  if (assigned) {
+    return assigned.status === 'ACTIVE' && assigned.purchase?.status === 'PAID' &&
+      !(assigned.product.customPlanType === 'COMPLIMENTARY_STANDARD' && input.destinationIsEvent) &&
+      manualAssignmentWindowAllows({
+        policyAcceptance: assigned.purchase.policyAcceptance,
+        validFrom: assigned.purchase.creditAccount?.validFrom,
+        validUntil: assigned.purchase.creditAccount?.validUntil,
+        membershipEnd: assigned.currentPeriodEnd,
+        now: input.now, occurrenceStartsAt: input.destinationStartsAt,
+      });
+  }
   if (input.accessType === 'VIP') return input.user.memberships.some(m => {
     const end = vipMembershipPaidThrough(m, input.now) ?? (!input.destinationIsEvent ? giftedVipThrough(m, input.now) : null);
     return end && input.destinationStartsAt < end;

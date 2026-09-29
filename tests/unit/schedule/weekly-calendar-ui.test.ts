@@ -40,7 +40,7 @@ describe('public weekly calendar controls', () => {
 
   it('labels specialty events and omits redundant room and in-person copy', () => {
     expect(source).toContain('slot.isEvent');
-    expect(source).toContain('SPECIAL EVENT');
+    expect(source).toContain('<ScheduleEventBadge />');
     expect(source).not.toContain('In-Person');
     expect(source).not.toContain('slot.room');
   });

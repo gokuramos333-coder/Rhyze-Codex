@@ -13,6 +13,18 @@ function membership() {
 }
 const monthly = { id: 'monthly', label: 'VIP membership — unlimited standard class credits — September 2026', isUnlimited: true };
 describe('paid VIP entitlement, independent of background jobs', () => {
+  it('bounds a corrected class-only manual assignment by the selected class date', () => {
+    const start = new Date('2026-09-29T17:09:05Z');
+    const giftEnd = new Date('2027-02-02T04:59:59.999Z');
+    const account = { label: 'Complimentary regular classes', validFrom: start, validUntil: giftEnd,
+      sourcePurchase: { policyAcceptance: { source: 'ADMIN_ASSIGNMENT', accessEndsAt: giftEnd.toISOString() },
+        product: { kind: 'VIP' }, membership: { id: 'manual', product: { kind: 'MONTHLY_UNLIMITED' } } } };
+    const input = { account, memberships: [], now: start };
+    expect(vipCreditAccountCanBook({ ...input, occurrenceStartsAt: new Date('2027-02-01T17:00Z') })).toBe(true);
+    expect(vipCreditAccountCanBook({ ...input, occurrenceStartsAt: giftEnd })).toBe(false);
+    expect(vipCreditAccountCanBook({ ...input, occurrenceStartsAt: new Date(start.getTime() - 1) })).toBe(false);
+    expect(vipCreditAccountCanBook({ ...input, now: giftEnd })).toBe(false);
+  });
   it('allows an actually paid current VIP window', () => {
     expect(vipMembershipPaidThrough(membership(), now)).toEqual(end);
     expect(vipCreditAccountCanBook({ account: monthly, memberships: [membership()], now })).toBe(true);

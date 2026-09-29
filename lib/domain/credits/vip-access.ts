@@ -1,5 +1,6 @@
 import { recoveryForUser } from '@/lib/domain/memberships/somble-billing-recovery';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
+import { manualAssignmentWindowAllows } from './manual-assignment-access';
 
 export const vipEntitlementInclude = {
   product: true,
@@ -17,7 +18,8 @@ export type VipEntitlementMembership = {
   purchase?: {
     status: string;
     paidAt: Date | null;
-    creditAccount: { isUnlimited: boolean; validFrom: Date; validUntil: Date | null } | null;
+    policyAcceptance?: unknown;
+    creditAccount: { id?: string; isUnlimited: boolean; validFrom: Date; validUntil: Date | null } | null;
   } | null;
 };
 
@@ -62,13 +64,21 @@ export function vipCreditAccountCanBook(input: {
   account: {
     id?: string;
     label: string;
-    sourcePurchase?: { product: { kind: string }; membership?: { id: string; product?: { kind: string } } | null } | null;
+    validFrom?: Date;
+    validUntil?: Date | null;
+    sourcePurchase?: { policyAcceptance?: unknown; product: { kind: string }; membership?: { id: string; product?: { kind: string } } | null } | null;
   };
   memberships: VipEntitlementMembership[];
   now: Date;
   occurrenceStartsAt?: Date;
 }) {
   const source = input.account.sourcePurchase;
+  if (!manualAssignmentWindowAllows({
+    policyAcceptance: source?.policyAcceptance,
+    validFrom: input.account.validFrom, validUntil: input.account.validUntil,
+    membershipEnd: input.memberships.find(m => m.id === source?.membership?.id)?.currentPeriodEnd,
+    now: input.now, occurrenceStartsAt: input.occurrenceStartsAt,
+  })) return false;
   const linkedVip = currentCreditProduct(input.account)?.kind === 'VIP';
   const legacyVipBenefit = vipCreditBenefit(input.account);
   if (!linkedVip && !legacyVipBenefit) return true;

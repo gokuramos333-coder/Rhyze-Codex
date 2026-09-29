@@ -76,7 +76,7 @@ export async function transferBookingAction(formData: FormData) {
   if (!requestedDestination) {
     redirect(`/instructor/classes/${booking.occurrenceId}/transfers?booking=${booking.id}&error=destination`);
   }
-  if (!transferEntitlementAllowed({ accessType, user: booking.user, sourceIsEvent: booking.occurrence.template.isEvent,
+  if (!transferEntitlementAllowed({ accessType, creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id, user: booking.user, sourceIsEvent: booking.occurrence.template.isEvent,
     destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date() })) {
     redirect(`/instructor/classes/${booking.occurrenceId}/transfers?booking=${booking.id}&error=destination`);
   }
@@ -103,6 +103,7 @@ export async function transferBookingAction(formData: FormData) {
   }
   const preflightUser = await prisma.user.findUnique({ where: { id: booking.userId }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
   if (!preflightUser || !transferEntitlementAllowed({
+    creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
     accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: preflightUser.memberships }),
     user: preflightUser, sourceIsEvent: booking.occurrence.template.isEvent,
     destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date(),
@@ -144,6 +145,7 @@ export async function transferBookingAction(formData: FormData) {
     if (!destination || destination.startAt > new Date(booking.occurrence.startAt.getTime() + 14 * 24 * 60 * 60_000) || destination.startAt < new Date()) return false;
     const currentUser = await tx.user.findUnique({ where: { id: booking.userId }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
     if (!currentUser || !transferEntitlementAllowed({
+      creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
       accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: currentUser.memberships }),
       user: currentUser, sourceIsEvent: booking.occurrence.template.isEvent,
       destinationIsEvent: destination.template.isEvent, destinationStartsAt: destination.startAt, now: new Date() })) return false;

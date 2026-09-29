@@ -9,7 +9,7 @@ import {
 } from '@/lib/admin/financial-report';
 
 describe('report page and download parity', () => {
-  it('renders the full total with 50 visible rows and exports all 301 including the final page', () => {
+  it('renders the full total with 15 visible rows and exports all 301 including the final page', () => {
     const at = new Date('2026-08-05T16:00:00Z');
     const sources: FinancialReportSources = {
       purchases: [],
@@ -47,7 +47,14 @@ describe('report page and download parity', () => {
     const csv = financialReportCsvRows(report);
     expect(html).toContain('$301.00');
     expect(html).toContain('Download all 301 filtered entries');
-    expect(html).toContain('Page 1 of 7');
+    expect(html).toContain('Page 1 of 21');
+    expect(report.pageRows).toHaveLength(15);
+    const lastPage = buildFinancialReport(sources, {
+      ...report.params,
+      page: '21',
+    });
+    expect(lastPage.pageRows).toHaveLength(1);
+    expect(financialReportCsvRows(lastPage)).toEqual(csv);
     expect(csv).toHaveLength(302);
     expect(csv.slice(1).reduce((sum, row) => sum + Number(row[7]), 0)).toBe(
       30100,

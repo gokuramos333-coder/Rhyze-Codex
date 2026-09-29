@@ -27,7 +27,13 @@ export function FinancialReportView({
     `${basePath}?${new URLSearchParams({ ...Object.fromEntries(Object.entries(params).filter(([, v]) => Boolean(v))), ...extra } as Record<string, string>)}`;
   return (
     <section className="mt-6 space-y-5" aria-label="Financial report">
-      {report.params.occurrence && <EventReceiptSummary summary={report.eventSummaries.find(item => item.occurrenceId === report.params.occurrence)} />}
+      {report.params.occurrence && (
+        <EventReceiptSummary
+          summary={report.eventSummaries.find(
+            (item) => item.occurrenceId === report.params.occurrence,
+          )}
+        />
+      )}
       {summary && (
         <>
           <AnalyticsRangeControls
@@ -46,9 +52,113 @@ export function FinancialReportView({
                 : {}),
             }}
           />
+          {report.eventOccurrenceGroups.length > 0 && (
+            <section
+              aria-label="Receipts by event date"
+              className="space-y-4 border-t-4 border-rhyze-gold bg-white p-5"
+            >
+              <h2 className="font-display text-3xl">
+                EVENT RECEIPTS BY EVENT DATE · {report.range.label}
+              </h2>
+              <p className="text-sm text-rhyze-black/60">
+                Events whose scheduled date falls in this period. Includes all
+                recorded payment dates and refunds, before fees and instructor
+                pay. Completed means the scheduled end time has passed. These
+                receipts overlap cash reporting; the ledger below filters by
+                payment date. Do not add the two views.
+              </p>
+              {report.eventOccurrenceGroups.map((group) => (
+                <article
+                  key={group.name}
+                  className="border-t border-black/10 pt-4"
+                >
+                  <h3 className="font-display text-2xl">{group.name}</h3>
+                  <div className="mt-3 grid gap-4 lg:grid-cols-2">
+                    {(
+                      [
+                        ['completed', 'COMPLETED EVENTS'],
+                        ['upcoming', 'UPCOMING / IN PROGRESS'],
+                        ['cancelled', 'CANCELED EVENTS'],
+                      ] as const
+                    ).map(([key, label]) => {
+                      const bucket = group[key];
+                      if (!bucket.events.length) return null;
+                      return (
+                        <section
+                          key={key}
+                          className="border border-black/10 p-4"
+                        >
+                          <h4 className="text-sm font-black">
+                            {label} · {bucket.events.length}{' '}
+                            {bucket.events.length === 1 ? 'event' : 'events'}
+                          </h4>
+                          {bucket.totals.map((total) => (
+                            <div key={total.currency} className="mt-2">
+                              {total.currency !== 'UNKNOWN' && (
+                                <>
+                                  <p className="text-2xl font-black">
+                                    {formatReportMoney(
+                                      total.netCents,
+                                      total.currency,
+                                    )}
+                                  </p>
+                                  <p className="text-xs">
+                                    Stripe-verified:{' '}
+                                    {formatReportMoney(
+                                      total.verifiedNetCents,
+                                      total.currency,
+                                    )}{' '}
+                                    · Owner-confirmed Somble:{' '}
+                                    {formatReportMoney(
+                                      total.confirmedImportCents,
+                                      total.currency,
+                                    )}
+                                  </p>
+                                </>
+                              )}
+                              {total.unverifiedCents !== 0 && (
+                                <p className="text-xs">
+                                  Additional records awaiting confirmation:{' '}
+                                  {formatReportMoney(
+                                    total.unverifiedCents,
+                                    total.currency,
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                          <ul className="mt-3 space-y-3">
+                            {bucket.events.map((event) => (
+                              <li
+                                key={event.occurrenceId}
+                                className="border-t border-black/10 pt-2"
+                              >
+                                <Link
+                                  className="font-bold text-rhyze-coral"
+                                  href={`/admin/payments?${financialReportQuery({ range: 'custom', from: event.from, to: event.to, occurrence: event.occurrenceId })}`}
+                                >
+                                  {event.startAt.toLocaleDateString('en-US', {
+                                    timeZone: 'America/New_York',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                  })}
+                                </Link>
+                                <EventReceiptSummary summary={event} />
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      );
+                    })}
+                  </div>
+                </article>
+              ))}
+            </section>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-3xl tracking-wide">
-              COLLECTIONS · {report.range.label}
+              CASH COLLECTIONS · {report.range.label}
             </h2>
             <Link
               href={`/api/reports/revenue?${query}`}
@@ -219,7 +329,9 @@ export function FinancialReportView({
             </details>
           )}
           <section className="overflow-x-auto bg-white p-5">
-            <h3 className="font-display text-3xl">COLLECTIONS BY OFFERING</h3>
+            <h3 className="font-display text-3xl">
+              CASH COLLECTIONS BY OFFERING
+            </h3>
             <p className="mt-2 text-xs text-rhyze-black/55">
               Totals retain currency and source provenance. Imported amounts are
               not verified processor collections. Historical event labels use

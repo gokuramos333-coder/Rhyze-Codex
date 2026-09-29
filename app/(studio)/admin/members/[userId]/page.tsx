@@ -55,6 +55,7 @@ import {
 import { AdminMembershipStartForm } from '@/components/admin/AdminMembershipStartForm';
 import { AdminMembershipChangeForm, AdminMembershipChangeRecovery } from '@/components/admin/AdminMembershipChangeForm';
 import { quoteMembershipChangeAction, confirmMembershipChangeAction, reconcileMembershipChangeAction } from './membership-change-actions';
+import { correctManualMembershipAssignmentAction } from './manual-assignment-actions';
 import {
   isQualifyingActiveMembership,
   qualifyingMembershipProductKinds,
@@ -235,7 +236,7 @@ export default async function AdminMemberDetailPage(
     }),
     prisma.product.findMany({
       where: { isActive: true, kind: { in: qualifyingMembershipProductKinds } },
-      select: { id: true, name: true, priceCents: true, stripePriceId: true, billingInterval: true },
+      select: { id: true, name: true, priceCents: true, stripePriceId: true, billingInterval: true, kind: true, customPlanType: true, isUnlimited: true, isPublic: true },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     }),
   ]);
@@ -459,6 +460,12 @@ export default async function AdminMemberDetailPage(
       )}
       {searchParams.sent === 'membership-action' && (
         <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">Membership updated in Stripe and Rhyze.</p>
+      )}
+      {searchParams.sent === 'assignment-corrected' && (
+        <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">Manual assignment corrected to standard classes only. The access dates and original purchase were preserved.</p>
+      )}
+      {searchParams.error === 'assignment-correction' && (
+        <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold">The assignment was not changed. Check that this is an active no-charge admin assignment with matching access dates and no pending billing change or freeze.</p>
       )}
       {searchParams.sent === 'freeze' && (
         <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">Membership freeze scheduled. The member was notified.</p>
@@ -746,6 +753,26 @@ export default async function AdminMemberDetailPage(
                   </p>
                 )}
                 {membership.cancelAtPeriodEnd && <p className="mt-2 bg-red-100 p-2 text-xs font-black uppercase text-red-900">Cancels at period end</p>}
+                {actor.role === 'OWNER' && membership.status === 'ACTIVE' && !membership.stripeSubscriptionId &&
+                  (membership.purchase?.policyAcceptance as { source?: string } | null)?.source === 'ADMIN_ASSIGNMENT' &&
+                  membership.product.customPlanType !== 'COMPLIMENTARY_STANDARD' && (
+                  <form action={correctManualMembershipAssignmentAction} className="mt-3 grid gap-3 border border-rhyze-orange/30 bg-orange-50 p-4">
+                    <input type="hidden" name="userId" value={member.id} />
+                    <input type="hidden" name="membershipId" value={membership.id} />
+                    <p className="text-sm font-bold">Correct manual assignment to standard classes only</p>
+                    <p className="text-xs">Keeps access through {date(membership.currentPeriodEnd)}. Future complimentary event benefits stop. Remove any unused event grant separately under Credits.</p>
+                    <label className="grid gap-1 text-xs font-bold">Class-only plan
+                      <select name="productId" required className="min-h-10 border bg-white px-2 font-normal">
+                        <option value="">Choose the complimentary plan</option>
+                        {membershipProducts.filter(product => product.kind === 'MONTHLY_UNLIMITED' && product.customPlanType === 'COMPLIMENTARY_STANDARD' && product.isUnlimited && !product.isPublic && product.priceCents === 0 && !product.stripePriceId && product.billingInterval === 'ONE_TIME').map(product => <option key={product.id} value={product.id}>{product.name}</option>)}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-xs font-bold">Reason
+                      <input name="reason" minLength={5} maxLength={240} required className="min-h-10 border bg-white px-3 font-normal" />
+                    </label>
+                    <button className="min-h-10 bg-rhyze-black px-4 text-xs font-black uppercase text-white">Save class-only assignment</button>
+                  </form>
+                )}
                 {membership.planChanges.map(change => <div key={change.id} className="mt-3 border-l-4 border-rhyze-orange bg-orange-50 p-3 text-sm">
                   <strong>{change.toProduct.name} · {change.status.replaceAll('_', ' ')}</strong>
                   <p>Starts {date(change.effectiveAt)} · renewal date unchanged.</p>

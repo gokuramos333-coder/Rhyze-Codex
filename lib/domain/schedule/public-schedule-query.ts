@@ -71,7 +71,6 @@ export async function loadPublicScheduleSlots(
       },
     },
     orderBy: { startAt: 'asc' },
-    take: 180,
   });
 
   return occurrences.flatMap((occurrence) => {

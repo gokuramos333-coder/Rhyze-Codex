@@ -50,7 +50,10 @@ describe('archived Somble event attribution', () => {
     const raw = data();
     raw.sombleTransactions[0].id = 'cmscfu5vr000njr092k7nzgx6';
     raw.importedBookings![0].occurrence.id = 'owned-event-tcj-hip-hop-happy-hour-tricia';
+    raw.eventOccurrences = [{...raw.importedBookings![0].occurrence, endAt:new Date('2026-08-04T00:15:00Z'), status:'SCHEDULED'}];
     const report = buildFinancialReport(raw, { range: 'custom', from: '2026-08-01', to: '2026-08-31' });
+    expect(report.eventOccurrenceGroups[0].completed.totals[0]).toMatchObject({netCents:3000,confirmedImportCents:3000});
+    expect(buildFinancialReport(raw, {...params, offering:'unrelated'}).eventOccurrenceGroups).toEqual([]);
     // July presales belong to this event, but not to August cash collections.
     expect(report.rows).toHaveLength(0);
     expect(report.eventSummaries).toMatchObject([{
