@@ -8,6 +8,7 @@ import {
   campaignReview,
   approveCampaign,
   cancelCampaign,
+  deleteCampaign,
   prepareCampaign,
 } from '@/lib/newsletters/campaigns';
 import {
@@ -291,6 +292,97 @@ describe('Newsletter and outreach persistence — isolated PostgreSQL', () => {
       }),
     ).toBe(0);
     await cancelCampaign(actor.id, c.id);
+  });
+  it('deletes only the chosen unsent draft and retains an audit record', async () => {
+    const c = await draft();
+    const other = await draft();
+    await deleteCampaign(actor.id, c.id, c.version);
+    expect(
+      await prisma.emailCampaign.findUnique({ where: { id: c.id } }),
+    ).toBeNull();
+    expect(
+      await prisma.emailCampaign.findUnique({ where: { id: other.id } }),
+    ).not.toBeNull();
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          entityId: c.id,
+          action: 'NEWSLETTER_DELETED',
+          actorId: actor.id,
+        },
+      }),
+    ).toBe(1);
+    await expect(deleteCampaign(actor.id, c.id, c.version)).rejects.toThrow(
+      'unavailable',
+    );
+  });
+  it('rejects stale deletes and requires scheduled campaigns to be cancelled first', async () => {
+    const c = await draft();
+    await expect(deleteCampaign(actor.id, c.id, c.version - 1)).rejects.toThrow(
+      'changed',
+    );
+    await approve(c);
+    const scheduled = await prisma.emailCampaign.findUniqueOrThrow({
+      where: { id: c.id },
+    });
+    await expect(
+      deleteCampaign(actor.id, c.id, scheduled.version),
+    ).rejects.toThrow('Cancel');
+    await cancelCampaign(actor.id, c.id);
+    const cancelled = await prisma.emailCampaign.findUniqueOrThrow({
+      where: { id: c.id },
+    });
+    await deleteCampaign(actor.id, c.id, cancelled.version);
+    expect(
+      await prisma.emailCampaign.findUnique({ where: { id: c.id } }),
+    ).toBeNull();
+  });
+  it('concurrent deletion requests retain exactly one deletion audit', async () => {
+    const c = await draft();
+    const results = await Promise.allSettled([
+      deleteCampaign(actor.id, c.id, c.version),
+      deleteCampaign(actor.id, c.id, c.version),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(
+      await prisma.auditLog.count({
+        where: { entityId: c.id, action: 'NEWSLETTER_DELETED' },
+      }),
+    ).toBe(1);
+  });
+  it('preserves recipient history even after cancellation', async () => {
+    await customer();
+    const c = await draft();
+    await approve(c);
+    await prepareCampaign(c.id);
+    await cancelCampaign(actor.id, c.id);
+    const cancelled = await prisma.emailCampaign.findUniqueOrThrow({
+      where: { id: c.id },
+    });
+    await expect(
+      deleteCampaign(actor.id, c.id, cancelled.version),
+    ).rejects.toThrow('history');
+    expect(
+      await prisma.newsletterRecipient.count({ where: { campaignId: c.id } }),
+    ).toBeGreaterThan(0);
+  });
+  it('preserves sent and legacy campaigns', async () => {
+    for (const patch of [
+      { status: 'SENT' as const, sentAt: new Date() },
+      { templateType: 'LEGACY' },
+    ]) {
+      const c = await draft();
+      const saved = await prisma.emailCampaign.update({
+        where: { id: c.id },
+        data: patch,
+      });
+      await expect(
+        deleteCampaign(actor.id, c.id, saved.version),
+      ).rejects.toThrow('history');
+      expect(
+        await prisma.emailCampaign.findUnique({ where: { id: c.id } }),
+      ).not.toBeNull();
+    }
   });
   it('edits require reapproval and stale version saves fail', async () => {
     const c = await draft();

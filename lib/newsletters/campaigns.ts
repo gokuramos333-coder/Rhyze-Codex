@@ -22,6 +22,7 @@ import {
 } from './repository';
 import { renderNewsletter } from './render';
 import { templateCatalog } from './templates';
+import { campaignDeletionBlock, deletableCampaignStatuses } from './deletion';
 
 export async function campaignReview(id: string, sendAt?: Date) {
   const campaign = await prisma.emailCampaign.findUniqueOrThrow({
@@ -315,6 +316,53 @@ export async function approveCampaign(
   });
   return { scheduled: true };
 }
+export async function deleteCampaign(
+  actorId: string,
+  id: string,
+  version: number,
+) {
+  return prisma.$transaction(async (tx) => {
+    const c = await tx.emailCampaign.findUnique({
+      where: { id },
+      include: { _count: { select: { recipients: true } } },
+    });
+    if (!c)
+      throw Error('Campaign unavailable. It may already have been deleted.');
+    const blocked = campaignDeletionBlock({
+      ...c,
+      recipientCount: Math.max(c.recipientCount, c._count.recipients),
+    });
+    if (blocked) throw Error(blocked);
+    // The predicates also protect against edits/approval/dispatch after the read.
+    // Recipient foreign keys are restrictive; no delivery records are cascaded.
+    const result = await tx.emailCampaign.deleteMany({
+      where: {
+        id,
+        version,
+        status: { in: [...deletableCampaignStatuses] },
+        templateType: { not: 'LEGACY' },
+        sentSnapshot: { equals: Prisma.DbNull },
+        sentAt: null,
+        recipientCount: 0,
+        recipients: { none: {} },
+      },
+    });
+    if (!result.count) throw Error('Campaign changed. Reload before deleting.');
+    await audit(
+      actorId,
+      'DELETED',
+      id,
+      {
+        name: c.name,
+        status: c.status,
+        version: c.version,
+      },
+      tx,
+    );
+    return { deleted: true };
+  });
+}
+
 export async function cancelCampaign(actorId: string, id: string) {
   return prisma.$transaction(async (tx) => {
     const c = await tx.emailCampaign.findUniqueOrThrow({ where: { id } });

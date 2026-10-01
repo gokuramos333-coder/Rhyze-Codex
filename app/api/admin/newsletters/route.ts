@@ -17,6 +17,7 @@ import {
   campaignReview,
   cancelCampaign,
   createCampaign,
+  deleteCampaign,
   saveCampaign,
 } from '@/lib/newsletters/campaigns';
 import { templateCatalog } from '@/lib/newsletters/templates';
@@ -294,6 +295,12 @@ const schema = z.discriminatedUnion('action', [
     chosenUtc: z.string().optional(),
   }),
   z.object({ action: z.literal('cancel'), id }),
+  z.object({
+    action: z.literal('delete'),
+    id,
+    version,
+    confirmation: z.literal('DELETE CAMPAIGN'),
+  }),
   z.object({ action: z.literal('archive'), id }),
   z.object({ action: z.literal('capture') }),
   z.object({
@@ -385,6 +392,9 @@ export async function POST(request: Request) {
       }
       case 'cancel':
         result = await cancelCampaign(actor.id, input.id);
+        break;
+      case 'delete':
+        result = await deleteCampaign(actor.id, input.id, input.version);
         break;
       case 'archive':
         await prisma.emailCampaign.update({

@@ -11,6 +11,7 @@ vi.mock('@/lib/db/prisma', () => ({
     newsletterSettings: { findUnique: mocks.settings },
   },
 }));
+import * as campaigns from '@/lib/newsletters/campaigns';
 import { newsletterActor } from '@/lib/newsletters/access';
 import { GET, POST } from '@/app/api/admin/newsletters/route';
 import { POST as upload } from '@/app/api/admin/newsletters/assets/route';
@@ -69,6 +70,46 @@ describe('Newsletter and lead authorization', () => {
       ).toBe(403);
       expect(mocks.settings).not.toHaveBeenCalled();
     });
+  it('guards campaign deletion by role, origin, version and explicit confirmation', async () => {
+    const remove = vi
+      .spyOn(campaigns, 'deleteCampaign')
+      .mockResolvedValue({ deleted: true });
+    const body = {
+      action: 'delete',
+      id: 'draft',
+      version: 3,
+      confirmation: 'DELETE CAMPAIGN',
+    };
+    const req = (payload: unknown = body, origin = 'http://127.0.0.1:4317') =>
+      new Request('http://127.0.0.1:4317/api/admin/newsletters', {
+        method: 'POST',
+        headers: { origin, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    for (const role of ['MEMBER', 'INSTRUCTOR', 'MANAGER']) {
+      mocks.user.mockResolvedValue({
+        id: 'staff',
+        role,
+        status: 'ACTIVE',
+        email: 'sample@example.test',
+      });
+      expect((await POST(req())).status).toBe(403);
+    }
+    mocks.user.mockResolvedValue({
+      id: 'staff',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      email: 'sample@example.test',
+    });
+    expect((await POST(req(body, 'https://other.example'))).status).toBe(403);
+    expect((await POST(req({ ...body, confirmation: undefined }))).status).toBe(
+      400,
+    );
+    expect((await POST(req({ ...body, version: undefined }))).status).toBe(400);
+    expect(remove).not.toHaveBeenCalled();
+    expect((await POST(req())).status).toBe(200);
+    expect(remove).toHaveBeenCalledExactlyOnceWith('staff', 'draft', 3);
+  });
   it('does not trust a stale session role or inactive account', async () => {
     mocks.auth.mockResolvedValue({ user: { id: 'staff', role: 'OWNER' } });
     mocks.user.mockResolvedValue({

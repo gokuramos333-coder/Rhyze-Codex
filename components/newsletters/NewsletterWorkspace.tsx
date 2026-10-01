@@ -11,6 +11,7 @@ import {
   marketingEligibilityLabel,
 } from '@/lib/newsletters/domain';
 import { NewsletterEditor } from './NewsletterEditor';
+import { campaignDeletionBlock } from '@/lib/newsletters/deletion';
 import { command, type Bundle, type Campaign, type Template } from './types';
 import './newsletter.css';
 const tabs = [
@@ -291,6 +292,44 @@ export function NewsletterWorkspace() {
                       onClick={() => create({ duplicateId: c.id })}
                     >
                       Duplicate
+                    </button>
+                    <button
+                      className="nl-button nl-danger"
+                      disabled={
+                        busy ||
+                        Boolean(
+                          campaignDeletionBlock({
+                            ...c,
+                            recipientCount: c.recipients.length,
+                          }),
+                        )
+                      }
+                      title={
+                        campaignDeletionBlock({
+                          ...c,
+                          recipientCount: c.recipients.length,
+                        }) || 'Permanently delete this unsent campaign'
+                      }
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Delete “${c.name}”? This permanently removes this unsent campaign and cannot be undone.`,
+                          )
+                        )
+                          return;
+                        const result = await action(
+                          {
+                            action: 'delete',
+                            id: c.id,
+                            version: c.version,
+                            confirmation: 'DELETE CAMPAIGN',
+                          },
+                          'Campaign deleted.',
+                        );
+                        if (result?.deleted) setPage(1);
+                      }}
+                    >
+                      Delete
                     </button>
                     {['SCHEDULED', 'SENDING', 'NEEDS_REVIEW'].includes(
                       c.status,
