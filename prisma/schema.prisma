@@ -159,6 +159,9 @@ enum EmailDirection {
 }
 
 enum CampaignStatus {
+  NEEDS_REVIEW
+  PARTIALLY_SENT
+  FAILED
   DRAFT
   SCHEDULED
   SENDING
@@ -197,30 +200,30 @@ enum TransferStatus {
 }
 
 model User {
-  id                   String     @id @default(cuid())
-  name                 String?
-  email                String     @unique
-  emailVerified        DateTime?
-  image                String?
-  passwordHash         String?
-  credentialsUpdatedAt DateTime?
-  role                 Role       @default(MEMBER)
-  status               UserStatus @default(ACTIVE)
-  lastLoginAt          DateTime?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
-  stripeCustomerId     String?    @unique
+  id                     String     @id @default(cuid())
+  name                   String?
+  email                  String     @unique
+  emailVerified          DateTime?
+  image                  String?
+  passwordHash           String?
+  credentialsUpdatedAt   DateTime?
+  role                   Role       @default(MEMBER)
+  status                 UserStatus @default(ACTIVE)
+  lastLoginAt            DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  stripeCustomerId       String?    @unique
   emailChangeRequestedAt DateTime?
-  source_label         String?
-  source_fbclid        String?
-  source_utm_source    String?
-  source_utm_medium    String?
-  source_utm_campaign  String?
-  source_utm_term      String?
-  source_utm_content   String?
-  source_referrer      String?
-  source_landing_path  String?
-  source_captured_at   DateTime?
+  source_label           String?
+  source_fbclid          String?
+  source_utm_source      String?
+  source_utm_medium      String?
+  source_utm_campaign    String?
+  source_utm_term        String?
+  source_utm_content     String?
+  source_referrer        String?
+  source_landing_path    String?
+  source_captured_at     DateTime?
 
   accounts                 Account[]
   sessions                 Session[]
@@ -249,6 +252,11 @@ model User {
   commerceOrders           CommerceOrder[]
   paymentRecords           PaymentRecord[]
   emailMessages            EmailMessage[]
+  leadProfile              CustomerLeadProfile?
+  outreachEntries          CustomerOutreach[]          @relation("OutreachCustomer")
+  staffOutreach            CustomerOutreach[]          @relation("OutreachStaff")
+  assignedLeads            CustomerLeadProfile[]       @relation("LeadAssignee")
+  newsletterRecipients     NewsletterRecipient[]
   campaignsCreated         EmailCampaign[]             @relation("CampaignCreator")
   instructorApplication    InstructorApplication?      @relation("InstructorApplicant")
   instructorReviews        InstructorApplication[]     @relation("InstructorReviewer")
@@ -957,9 +965,10 @@ model EmailMessage {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
-  attachments EmailAttachment[]
-  callbackRequest CallbackRequest?
+  user                User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attachments         EmailAttachment[]
+  callbackRequest     CallbackRequest?
+  newsletterRecipient NewsletterRecipient?
 
   @@index([status, scheduledFor])
   @@index([userId, createdAt])
@@ -1027,6 +1036,23 @@ model EmailCampaign {
   recipientCount Int            @default(0)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+
+  version          Int                   @default(1)
+  templateType     String                @default("LEGACY")
+  document         Json?
+  audience         Json?
+  timezone         String                @default("America/New_York")
+  targetWeek       String?
+  scheduleMode     String                @default("AUTO")
+  approvedById     String?
+  approvedAt       DateTime?
+  approvedVersion  Int?
+  approvedSnapshot Json?
+  sentSnapshot     Json?
+  holdReason       String?
+  archivedAt       DateTime?
+  leaseAt          DateTime?
+  recipients       NewsletterRecipient[]
 
   createdBy User @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
@@ -1400,4 +1426,120 @@ model SombleTransaction {
   @@index([transferredAt])
   @@index([contentType, transferredAt])
   @@index([userId, transferredAt])
+}
+
+model CustomerLeadProfile {
+  userId          String    @id
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version         Int       @default(0)
+  outcome         String    @default("NOT_CONTACTED")
+  doNotContact    Boolean   @default(false)
+  followUpAt      DateTime?
+  assignedToId    String?
+  assignedTo      User?     @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  lastContactedAt DateTime?
+  consent         String    @default("UNKNOWN")
+  consentSource   String?
+  consentAt       DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
+model CustomerOutreach {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("OutreachCustomer", fields: [userId], references: [id], onDelete: Restrict)
+  actorId       String
+  actor         User     @relation("OutreachStaff", fields: [actorId], references: [id], onDelete: Restrict)
+  actorName     String
+  actorInitials String
+  type          String
+  method        String?
+  attempt       Int?
+  outcome       String?
+  note          String?
+  occurredAt    DateTime @default(now())
+  operationKey  String   @unique
+
+  @@index([userId, occurredAt])
+}
+
+model NewsletterTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  type        String
+  version     Int      @default(1)
+  document    Json
+  subject     String
+  previewText String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model NewsletterRecipient {
+  id               String            @id @default(cuid())
+  campaignId       String
+  campaign         EmailCampaign     @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  userId           String?
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email            String
+  firstName        String?
+  membershipAtSend String
+  status           String            @default("QUEUED")
+  exclusionReason  String?
+  emailMessageId   String?           @unique
+  emailMessage     EmailMessage?     @relation(fields: [emailMessageId], references: [id], onDelete: Restrict)
+  token            String            @unique @default(uuid())
+  attempts         Int               @default(0)
+  leaseAt          DateTime?
+  nextAttemptAt    DateTime          @default(now())
+  lastError        String?
+  acceptedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  events           NewsletterEvent[]
+
+  @@unique([campaignId, email])
+  @@index([status, nextAttemptAt])
+}
+
+model NewsletterEvent {
+  id          String              @id
+  recipientId String
+  recipient   NewsletterRecipient @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+  type        String
+  occurredAt  DateTime
+  link        String?
+  automated   Boolean?
+  detail      String?
+
+  @@index([recipientId, type, occurredAt])
+}
+
+model MarketingSuppression {
+  email     String   @id
+  reason    String
+  source    String
+  createdAt DateTime @default(now())
+}
+
+model NewsletterAsset {
+  id          String   @id @default(cuid())
+  url         String   @unique
+  name        String
+  alt         String
+  createdById String
+  createdAt   DateTime @default(now())
+}
+
+model NewsletterSettings {
+  id              String   @id @default("studio")
+  version         Int      @default(1)
+  replyTo         String   @default("")
+  postalAddress   String   @default("The Shoppes at Lafayette, 75 NJ-15, Building J, Lafayette Township, NJ 07848")
+  googleReviewUrl String   @default("")
+  engagementDays  Int      @default(30)
+  attributionDays Int      @default(7)
+  opensSupported  Boolean  @default(false)
+  clicksSupported Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
 }

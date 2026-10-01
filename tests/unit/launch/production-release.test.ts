@@ -59,6 +59,8 @@ const environment = () =>
     }),
   );
 const localEnv = {
+  NEWSLETTER_TEST_DATABASE_URL:
+    'postgresql://tester@127.0.0.1:55439/rhyze_newsletter_preview',
   DATABASE_URL: 'postgresql://tester@127.0.0.1:55439/callback_test',
   CALLBACK_TEST_DATABASE_URL:
     'postgresql://tester@127.0.0.1:55439/callback_test',
@@ -205,6 +207,22 @@ describe('release input and production isolation', () => {
       NETLIFY: 'true',
       NEXT_PUBLIC_APP_URL: 'https://www.rhyzefitness.com',
     });
+    expect(env.NEWSLETTER_TEST_DATABASE_URL).toBe(
+      localEnv.NEWSLETTER_TEST_DATABASE_URL,
+    );
+    expect(() =>
+      releaseTestEnvironment({
+        ...localEnv,
+        NEWSLETTER_TEST_DATABASE_URL: undefined,
+      }),
+    ).toThrow();
+    expect(() =>
+      releaseTestEnvironment({
+        ...localEnv,
+        NEWSLETTER_TEST_DATABASE_URL:
+          'postgresql://tester@production.test/rhyze_newsletter_preview',
+      }),
+    ).toThrow();
     expect(env.STRIPE_SECRET_KEY).toBeUndefined();
     expect(env.RESEND_API_KEY).toBeUndefined();
     expect(env.NETLIFY).toBeUndefined();

@@ -1,0 +1,1020 @@
+PROJECT: RHYZE FITNESS — CUSTOMER LEAD TRACKING + COMPLETE NEWSLETTER SYSTEM
+
+Update the EXISTING Rhyze Fitness website/admin system with all the features below.
+
+These features should work together inside our current database and dashboard. Do not create a separate application, duplicate customer database, or disconnected marketing system.
+
+The correct brand name is RHYZE FITNESS.
+
+MAIN GOALS
+
+1. Track personal outreach to customers who are not members.
+2. Show which staff member contacted each customer, when, how, and the outcome.
+3. Create a Membership Leads view using existing customer records.
+4. Add an admin-only Newsletters section.
+5. Create branded, customizable email templates.
+6. Automatically populate newsletters with the correct classes and events.
+7. Send campaigns to selected customer groups.
+8. Support photo uploads, fonts, colors, and layout customization.
+9. Allow immediate sending and scheduled sending.
+10. Track delivery, recorded opens, repeat opens, clicks, bounces, unsubscribes, and supported booking/membership outcomes.
+11. Preserve previous campaigns, their exact sent content, and their analytics.
+12. Easily duplicate past campaigns and the last weekly schedule email.
+13. Highlight engaged non-members for appropriate personal follow-up.
+
+==================================================
+1. FIRST INSPECT THE EXISTING SYSTEM
+==================================================
+
+Before coding, inspect:
+
+- Project structure and current admin interface.
+- Customer/account database.
+- Membership statuses and membership integration.
+- Class bookings, actual attendance, events, and cancellations.
+- Existing customer notes and contact-tracking functionality.
+- Authentication and staff/admin permissions.
+- Existing email tools, templates, sender configuration, and provider.
+- Marketing consent, unsubscribe, and suppression data.
+- Scheduling, background jobs, queues, and existing automations.
+- Image/file storage.
+- Website branding and existing marketing copy.
+- Existing analytics, booking attribution, and email webhooks.
+
+Reuse working components, integrations, and database conventions wherever practical.
+
+WeStaff NJ is only a reference for the contact-tracking experience. Do not connect its business data to Rhyze or modify a separate WeStaff project.
+
+Give a brief implementation plan, then implement the features in manageable phases. Do not stop at a proposal or build nonfunctional placeholder screens.
+
+Use safe, backward-compatible migrations. Preserve existing records and functionality.
+
+Do not send real marketing campaigns, activate recurring sends, or perform production bulk sends during development or testing. Those actions must require an authorized admin’s explicit confirmation.
+
+If credentials, provider capabilities, or external access are missing, implement everything that can be completed safely and clearly identify the remaining setup. Do not fabricate successful sends or analytics.
+
+==================================================
+2. CUSTOMER CONTACT TRACKING
+==================================================
+
+Expand the EXISTING customer database rather than creating a second list.
+
+Keep current customer names, accounts, memberships, bookings, and other existing information visible.
+
+Add a Contact Status column with an easy dropdown, especially usable on mobile.
+
+Support actions/statuses such as:
+
+- Not Contacted
+- Texted — 1st Attempt
+- Called — 1st Attempt
+- Texted — 2nd Attempt
+- Called — 2nd Attempt
+- Additional text/phone attempts as needed
+- No Answer
+- Left Voicemail
+- Spoke With Customer
+- Interested
+- Follow-Up Needed
+- Wants to Join Later
+- Not Interested
+- Membership Sold / Converted
+- Do Not Contact
+
+Use structured contact method, attempt count, and outcome fields underneath the interface where appropriate. Keep the user-facing workflow simple.
+
+Do not replace the customer’s actual membership status with a sales/contact status. Membership status must continue to come from the existing membership system.
+
+A staff member selecting “Membership Sold” must not create an active paid membership or change billing records.
+
+PERSONAL OUTREACH VS. STATUS UPDATES
+
+Recording a completed call or text should create an outreach entry.
+
+Changing an outcome or follow-up status should be recorded as a status update, not counted as another contact attempt.
+
+Logging “Texted” or “Called” records an action staff performed. It must not automatically send a text or place a phone call.
+
+==================================================
+3. AUTOMATIC STAFF INITIALS, TIMESTAMPS, AND NOTES
+==================================================
+
+Whenever a staff member logs outreach, automatically record:
+
+- Authenticated staff user ID.
+- Staff name.
+- Staff initials.
+- Contact method.
+- Attempt number.
+- Contact date/time.
+- Outcome.
+- Optional note.
+
+Use the logged-in user. Do not require staff to type their own names.
+
+Example:
+
+Contact: Texted — 1st Attempt
+Contacted By: VR
+Full Name: Vanessa Ramos
+Date/Time: [actual contact time]
+Note: Took one class and is interested in a membership next month.
+
+Display initials compactly in the customer table. Show the full name on hover, tap, or in the details view.
+
+Do not hard-code Vanessa’s initials. Generate initials for every authorized staff account, with full names available to distinguish people with identical initials.
+
+Add a shared contact/notes timeline to each customer profile.
+
+Preserve every previous attempt and note. Each entry should show who added it and when.
+
+Example notes:
+
+“Enjoyed the first class; asked about membership options.”
+“Interested in evening classes only.”
+“Called; no answer.”
+“Would like us to follow up next month.”
+“Currently unavailable.”
+
+Include a follow-up date and assigned staff member where practical using existing assignment functionality.
+
+Only genuine logged outreach should change Last Contacted. A newsletter send, email open, or administrative edit must not change it.
+
+Make recent activity visible before another staff member logs outreach. Protect against accidental duplicate submissions and silent overwrites when multiple staff members work on the same customer.
+
+==================================================
+4. MEMBERSHIP LEADS VIEW
+==================================================
+
+Inside the existing customer database, add a tab or saved filtered view:
+
+MEMBERSHIP LEADS
+
+This should show relevant customers who are not active members, including:
+
+- People with an account but no active membership.
+- People who attended one class.
+- Repeat drop-in customers without memberships.
+- Event attendees who are not members.
+- Former or expired members, clearly labeled.
+
+Keep all these people attached to their existing customer records.
+
+Display useful existing information such as:
+
+- Name.
+- Email/phone, subject to staff permissions.
+- Current membership status.
+- Classes attended.
+- Events attended.
+- Most recent attendance.
+- Contact status.
+- Contact attempt count.
+- Last contacted date.
+- Contacted by initials/name.
+- Follow-up date.
+- Assigned staff member.
+- Relevant email engagement summary.
+
+Clearly distinguish booked, attended, cancelled, and no-show activity. Do not describe a booking as attendance unless attendance data confirms it.
+
+Provide filters for contact status, membership status, attendance, assigned staff, follow-up date, and recent activity.
+
+Support quick actions to log a call/text and add a note without unnecessary navigation.
+
+==================================================
+5. ENGAGED NON-MEMBERS QUICK FILTER
+==================================================
+
+Add a prominent quick filter inside Membership Leads:
+
+ENGAGED NON-MEMBERS
+
+Identify non-members with recent recorded activity such as:
+
+- Clicking membership information.
+- Clicking class or event booking links.
+- Booking or attending multiple drop-in classes.
+- Attending events.
+- Recorded newsletter engagement.
+
+Use a configurable recent-activity window, such as 30 days.
+
+Show WHY each customer appears.
+
+Examples:
+
+“Clicked membership link 2 days ago.”
+“Attended 3 classes this month.”
+“Clicked this week’s schedule.”
+
+Prioritize stronger recorded signals such as clicks, bookings, and attendance rather than relying only on email opens.
+
+Do not claim someone definitely wants to buy a membership. Do not create an unexplained AI interest score.
+
+Keep outreach permissions separate from engagement. An engaged customer who has opted out must not become eligible for prohibited marketing contact.
+
+==================================================
+6. ADMIN-ONLY NEWSLETTERS SECTION
+==================================================
+
+Add NEWSLETTERS to the left-side admin toolbar, near the existing email/templates area where appropriate.
+
+This entire section, including recipient-level analytics, must be admin-only.
+
+Enforce permissions server-side, not just by hiding navigation.
+
+Include:
+
+- Create Newsletter
+- Templates
+- Weekly Schedule
+- Drafts
+- Scheduled Emails
+- Campaign History / Previous Blasts
+- Analytics
+- Audience Groups
+- Suppression List
+- Email Settings / Health, where appropriate
+
+Provide clear primary actions:
+
+CREATE NEWSLETTER
+CREATE WEEKLY SCHEDULE
+DUPLICATE LAST WEEKLY SCHEDULE
+
+Keep the interface consistent with the current Rhyze admin system and easy for nontechnical staff to use.
+
+==================================================
+7. AUDIENCE SELECTION
+==================================================
+
+Use the existing customer database as the source of audiences.
+
+Support groups such as:
+
+- All eligible marketing subscribers.
+- Active members.
+- Non-members.
+- Membership leads.
+- Engaged non-members.
+- Customers who attended exactly one class.
+- Customers who attended multiple classes without a membership.
+- Customers who attended exactly one event.
+- Event attendees who are not members.
+- Drop-in customers.
+- Former/expired members.
+- Customers with no recent attendance.
+- Attendees or registrants for a selected class.
+- Attendees or registrants for a selected event.
+
+Keep attendance-based and booking-based audiences distinct.
+
+Allow combinations of filters and useful exclusions, such as:
+
+“Non-members who attended a class within 30 days.”
+
+“Promote this event, excluding people already registered.”
+
+Before sending, show:
+
+- Audience definition.
+- Matching customer count.
+- Unique eligible recipient count.
+- Excluded/suppressed count.
+- Reasons for exclusion.
+- Reviewable recipient list.
+
+Deduplicate overlapping groups and email addresses so a person is not sent the same campaign repeatedly through different selected segments.
+
+Do not assume that having an account or email address automatically establishes marketing eligibility. Respect existing consent rules and preferences. Flag unknown eligibility for review rather than silently including it.
+
+==================================================
+8. WEEKLY SCHEDULE NEWSLETTER
+==================================================
+
+Create a reusable template and shortcut:
+
+CREATE WEEKLY SCHEDULE EMAIL
+
+Pull classes and events from the SAME authoritative data source that powers the website.
+
+Do not make staff manually rebuild the schedule every week.
+
+Populate available information including:
+
+- Class/event name.
+- Date.
+- Time and time zone.
+- Instructor.
+- Location, if applicable.
+- Description.
+- Approved image.
+- Booking link.
+- Availability, only when reliable.
+
+Make the target week explicit with a visible date range and week selector.
+
+Use America/New_York by default.
+
+For the default Monday–Sunday weekly newsletter:
+
+- A Sunday send should normally feature the upcoming Monday–Sunday.
+- A Monday send should normally feature that Monday–Sunday.
+- Future scheduled campaigns should use the week associated with their planned send date, not simply today’s week.
+- The admin can change the target week explicitly.
+
+Provide REFRESH SCHEDULE.
+
+Group classes clearly by day and include a separate events section.
+
+Use clear booking buttons such as:
+
+BOOK CLASS
+SAVE YOUR SPOT
+VIEW THE FULL SCHEDULE
+
+Handle cancelled, sold-out, unavailable, or changed sessions accurately. Do not show an active booking invitation for a cancelled session.
+
+When refreshing, update dynamic schedule blocks without overwriting the admin’s custom introduction, photos, or other unrelated edits.
+
+==================================================
+9. BRANDED TEMPLATE LIBRARY
+==================================================
+
+Create complete, editable templates with real starter copy and layouts, not just template names.
+
+Include:
+
+1. This Week at Rhyze.
+2. New Class Announcement.
+3. New Event Announcement.
+4. Class Registration — 24 Hours Left.
+5. Event Registration — 24 Hours Left.
+6. Limited Spots / Last Chance.
+7. Membership Invitation.
+8. We Miss You / Come Back.
+9. Active Member Update.
+10. Google Review Request.
+11. General Announcement.
+12. Instructor Spotlight.
+13. Community / Member Spotlight.
+14. Special Promotion / Offer.
+15. Merchandise Announcement, using existing products when available.
+
+Each template should include:
+
+- Subject line.
+- Preview/preheader text.
+- Branded header.
+- Suggested headline.
+- Editable body copy.
+- Image area where appropriate.
+- Relevant call-to-action buttons.
+- Footer.
+- Unsubscribe/preferences information.
+
+Match Rhyze’s actual branding by inspecting:
+
+- Existing website assets and copy.
+- Existing email templates.
+- Approved marketing material in the project.
+- Official social/Instagram links and accessible content.
+
+Use the existing brand voice: friendly, energetic, welcoming, community-focused, and natural.
+
+Do not claim to have reviewed inaccessible social content. Use verified project assets and identify any missing brand references.
+
+Do not invent testimonials, promotions, prices, discounts, deadlines, availability, or business facts.
+
+Use the verified Google review link from existing configuration, or provide an admin setting to enter it. Block publishing a review-request campaign with an unresolved placeholder URL.
+
+For urgency templates, base “24 hours left” and “limited spots” on a real deadline or reliable availability. Revalidate when the campaign is rescheduled.
+
+==================================================
+10. FULL NEWSLETTER CUSTOMIZATION
+==================================================
+
+Provide an easy visual/block editor.
+
+Allow admins to:
+
+- Upload and replace photos.
+- Browse an existing image library.
+- Reuse previously uploaded campaign images.
+- Crop or resize images.
+- Add image alt text.
+- Edit headings, paragraphs, captions, and buttons.
+- Change fonts using supported options.
+- Change font sizes, weights, alignment, and colors.
+- Change background and button colors.
+- Adjust spacing and padding.
+- Add or remove sections.
+- Reorder sections.
+- Use supported columns, dividers, and image/text blocks.
+- Edit links and calls to action.
+- Add class, event, or schedule blocks.
+- Preview desktop and mobile layouts.
+
+Provide Rhyze-branded defaults while allowing reasonable customization.
+
+Use email-compatible layouts and font fallbacks. Do not guarantee that an uploaded/custom font will render identically in every email client.
+
+Keep templates readable and responsive. Avoid layouts that require scripts or unsupported interactive elements inside the email.
+
+Validate image uploads, enforce sensible file-size/type limits, and optimize images.
+
+Use durable image URLs suitable for delivered emails. Do not use short-lived preview links that will break after the campaign is sent.
+
+Only approved newsletter assets should be accessible to recipients. Do not expose private customer files or unrelated storage.
+
+Include:
+
+SAVE DRAFT
+PREVIEW DESKTOP
+PREVIEW MOBILE
+SEND TEST EMAIL
+SAVE AS TEMPLATE
+DUPLICATE TEMPLATE
+
+Editing a campaign created from a template must never overwrite the master template.
+
+Use autosave or reliable draft saving with clear saved/unsaved status. Prevent silent overwrites by multiple admins.
+
+==================================================
+11. PERSONALIZATION AND SAFETY CHECKS
+==================================================
+
+Support first-name personalization with a safe fallback.
+
+Example:
+
+“Hey Sarah!”
+
+Fallback:
+
+“Hey there!”
+
+Preview both named and fallback versions.
+
+Before sending, check for:
+
+- Missing subject lines.
+- Broken or missing booking links.
+- Unresolved placeholders.
+- Missing required footer information.
+- Invalid campaign dates.
+- Expired promotions.
+- Stale schedule references.
+- Missing sender/reply-to configuration.
+
+Keep private customer notes out of newsletter content.
+
+==================================================
+12. SEND NOW AND SCHEDULE SEND
+==================================================
+
+Every campaign should support:
+
+SEND NOW
+SCHEDULE SEND
+
+For scheduled sending, allow admins to choose:
+
+- Date.
+- Time.
+- Time zone.
+
+Default to America/New_York and display the full date, time, and zone clearly.
+
+Handle daylight-saving transitions correctly. Reject past or invalid local send times and resolve ambiguous times explicitly.
+
+Sending must run through a server-side queue/scheduler. It must not depend on an admin leaving the browser open.
+
+Before either sending action, show a confirmation screen with:
+
+- Campaign name.
+- Subject and preview text.
+- Sender and reply-to.
+- Audience definition.
+- Estimated eligible recipients.
+- Target schedule week, if applicable.
+- Send date/time.
+- Email preview.
+- Send Test option.
+
+Require:
+
+CONFIRM & SEND NOW
+
+or:
+
+CONFIRM & SCHEDULE
+
+Saving a draft, duplicating a campaign, or editing a template must never trigger a real campaign.
+
+Do not enable recurring Sunday/Monday sends automatically. The initial requirement is the ability to schedule each campaign for a chosen date and time.
+
+==================================================
+13. SCHEDULED CAMPAIGN MANAGEMENT
+==================================================
+
+Show scheduled campaigns in a dedicated view.
+
+Display campaign, subject, audience, estimated recipients, scheduled time, created by, and current status.
+
+Support:
+
+- Edit.
+- Reschedule.
+- Cancel Send.
+- Preview.
+- Send Test.
+
+If an admin edits approved content or the audience, require reconfirmation before the scheduled campaign can send.
+
+Use clear statuses such as:
+
+Draft
+Scheduled
+Needs Review / On Hold
+Sending
+Partially Sent
+Sent
+Cancelled
+Failed
+
+Record who scheduled, edited, rescheduled, cancelled, and approved each campaign.
+
+Prevent a cancelled campaign from being sent.
+
+Once delivery has started, clearly explain that already-dispatched messages cannot be recalled. Stop unsent recipients when supported rather than reporting that the entire campaign was cancelled.
+
+==================================================
+14. REFRESH AND VALIDATE BEFORE DISPATCH
+==================================================
+
+At dispatch time:
+
+- Revalidate the chosen audience.
+- Recheck current unsubscribes, complaints, and suppression.
+- Refresh approved dynamic schedule fields from the authoritative source.
+- Verify the target week, deadlines, availability, and booking links.
+- Freeze the final content and recipient snapshot for that send.
+
+Distinguish routine dynamic updates from material changes.
+
+If a featured event is cancelled, an offer becomes invalid, or an important change requires editorial judgment, put the campaign on hold and notify admins instead of sending misleading content.
+
+Do not silently rewrite the admin’s custom wording.
+
+Show material differences from the approved preview when review is required.
+
+After sending, preserve the exact delivered version. A sent email is a historical snapshot; do not pretend it can be updated later.
+
+Include links to the current website schedule so recipients can check subsequent changes.
+
+==================================================
+15. DUPLICATE CAMPAIGNS
+==================================================
+
+Add a prominent:
+
+DUPLICATE LAST WEEKLY SCHEDULE
+
+This should:
+
+- Find the most recently sent weekly schedule campaign.
+- Create a NEW draft with a new campaign ID.
+- Preserve reusable layout, fonts, colors, photos, and branding.
+- Set the correct target week.
+- Refresh classes, events, dates, instructors, and links.
+- Flag outdated date references in manually written content.
+- Require preview and approval before sending.
+
+If there is no previous weekly campaign, start from the weekly schedule template.
+
+Also add:
+
+DUPLICATE AS NEW DRAFT
+
+to every previous campaign.
+
+Never copy:
+
+- Analytics.
+- Delivery events.
+- Sent status.
+- Recipient delivery records.
+- Provider message IDs.
+- Send approvals.
+- The original scheduled job.
+
+Audience rules may be copied as a starting point, but eligibility must be checked again.
+
+The original campaign and its analytics must remain unchanged.
+
+==================================================
+16. CAMPAIGN HISTORY / PREVIOUS BLASTS
+==================================================
+
+Inside Newsletters, include a permanent, easy-to-find section:
+
+CAMPAIGN HISTORY / PREVIOUS BLASTS
+
+It can appear below the main dashboard or as a clearly labeled tab beside Templates. Keep sent history separate from reusable master templates.
+
+Default sorting: newest sent campaign first.
+
+For each campaign, preserve:
+
+- Campaign name.
+- Subject and preheader.
+- Exact sent content and layout.
+- Send-time images/assets.
+- Template/design version.
+- Audience definition and actual recipient snapshot.
+- Membership/audience classification at send time.
+- Scheduled and actual dispatch timestamps.
+- Admin who sent/approved it.
+- Send status and delivery results.
+- Campaign and recipient analytics.
+
+Provide:
+
+VIEW EMAIL
+VIEW ANALYTICS
+VIEW RECIPIENTS
+DUPLICATE AS NEW DRAFT
+EXPORT REPORT
+ARCHIVE
+
+Search/filter by campaign name, subject, date, type, audience, sender, and status.
+
+Preserve the exact sent content while allowing genuine later delivery/engagement events to update its analytics.
+
+If older newsletter campaigns already exist in the current database or provider, import/link available history without resending anything. Preserve known original dates and IDs. Clearly label historical data that is incomplete or unavailable.
+
+Archiving should hide a campaign from the main view without erasing its content or analytics.
+
+Avoid casual permanent deletion. Follow the project’s approved retention and customer-data deletion requirements.
+
+==================================================
+17. CAMPAIGN ANALYTICS
+==================================================
+
+Use reliable email-provider events and existing analytics integrations.
+
+For each campaign, show supported metrics including:
+
+- Selected recipients.
+- Eligible recipients.
+- Excluded/suppressed recipients.
+- Send attempts.
+- Provider-accepted/sent messages.
+- Delivered messages.
+- Delivery rate.
+- Unique recorded opens.
+- Total recorded opens.
+- Recorded open rate.
+- Unique recorded clicks.
+- Total recorded clicks.
+- Click-through rate.
+- Hard bounces.
+- Soft bounces, when supported.
+- Rejected/failed deliveries.
+- Unsubscribes.
+- Spam complaints, when supported.
+- Pending/unknown delivery status.
+
+Define metrics clearly. For example:
+
+Unique recorded open rate =
+Delivered recipients with a recorded open / Delivered recipients.
+
+Unique click-through rate =
+Delivered recipients with a recorded click / Delivered recipients.
+
+Show denominators and handle zero denominators without misleading percentages.
+
+Distinguish provider acceptance from confirmed delivery. Do not claim inbox placement or reading.
+
+If the provider does not supply a metric, show “Unavailable” or “Not supported,” not a fake zero.
+
+Show when analytics were last updated.
+
+==================================================
+18. RECIPIENT-LEVEL ANALYTICS
+==================================================
+
+Admins should be able to open a campaign and view individual recipients.
+
+Display supported information such as:
+
+- Customer name and email.
+- Membership status, with send-time/current status clearly distinguished.
+- Send/delivery status.
+- First recorded open.
+- Last recorded open.
+- Recorded open count.
+- Recorded click count.
+- Links clicked.
+- Bounce category and safe reason.
+- Unsubscribe date.
+- Complaint/suppression status.
+
+Provide filters such as:
+
+Recorded Open
+No Recorded Open
+Clicked
+No Recorded Click
+Bounced
+Unsubscribed
+Member
+Non-Member
+
+Use “No Recorded Open,” not a claim that the person definitely did not read the email.
+
+Treat opens as recorded tracking events, not proof of human reading. Label privacy-related, automated, or uncertain events when the provider supplies that information.
+
+Likewise, identify or exclude known automated/security-scanner clicks where supported. Unknown activity should remain labeled appropriately.
+
+Do not automatically resend to non-openers. Allow an admin-reviewed follow-up draft with audience eligibility and recent-contact checks.
+
+==================================================
+19. LINK PERFORMANCE AND CUSTOMER EMAIL HISTORY
+==================================================
+
+Show top links per campaign, including unique and total recorded clicks.
+
+Examples:
+
+- Weekly schedule.
+- Membership options.
+- Specific class.
+- Specific event.
+- Google review page.
+- Merchandise.
+
+Where supported, allow admins to see which recipients clicked each link.
+
+Add a permission-controlled Email Activity section to existing customer profiles.
+
+Show campaigns received, delivery status, recorded engagement, and supported follow-through.
+
+Keep mass newsletter activity SEPARATE from personal outreach.
+
+Receiving or engaging with a newsletter must not:
+
+- Increment personal call/text attempts.
+- Mark the person personally contacted by Vanessa.
+- Change the customer’s actual membership.
+- Clear a Do Not Contact preference.
+
+The Membership Leads view can display authorized engagement summaries without exposing full admin-only analytics to unauthorized staff.
+
+==================================================
+20. BOOKINGS, MEMBERSHIPS, AND ATTRIBUTION
+==================================================
+
+Where the current booking and membership integrations allow it, connect campaign interactions with:
+
+- Class bookings.
+- Event bookings.
+- New membership purchases.
+- Relevant completed purchases.
+
+Use campaign tracking parameters and secure identifiers without putting customer emails or other personal information into URLs.
+
+Use a documented attribution rule and configurable window, such as seven days after a qualifying click.
+
+Prefer wording such as:
+
+“Membership purchased within 7 days of a recorded campaign click.”
+
+Do not claim the email caused the purchase.
+
+Distinguish attributed activity from all bookings that happened after a campaign.
+
+Define how multiple campaign interactions are handled so one purchase is not unintentionally counted as a new conversion several times.
+
+Respect cancellations/refunds when supported, and clearly distinguish gross bookings from completed or net outcomes.
+
+If a third-party booking platform cannot return reliable attribution, show the limitation. Do not invent conversions or claim that a Google review was posted merely because its link was clicked.
+
+==================================================
+21. ANALYTICS DASHBOARD AND COMPARISONS
+==================================================
+
+Provide an overall dashboard with:
+
+- Eligible marketing subscribers.
+- Active subscribers.
+- Unsubscribed contacts.
+- Suppressed addresses.
+- Bounced/invalid addresses.
+- Campaigns sent.
+- Delivery performance.
+- Recorded open/click performance.
+- Supported booking/membership results.
+
+Support:
+
+- Last 7 days.
+- Last 30 days.
+- Last 90 days.
+- This year.
+- Custom date range.
+
+Allow comparisons by campaign, template type, audience, and send date/time.
+
+Show subjects, send times, delivered counts, engagement, unsubscribes, and supported outcomes together.
+
+Do not declare a “best subject” or “best send time” from a tiny sample or unmatched audiences.
+
+Optional: add simple subject-line A/B testing if the provider supports it without delaying the core system. Never simulate results.
+
+Include a low/no recent engagement audience for admin-reviewed re-engagement campaigns. Do not delete or suppress a customer solely because no opens were recorded.
+
+Allow authorized CSV exports with appropriate access controls.
+
+==================================================
+22. UNSUBSCRIBES, CONSENT, AND EMAIL HEALTH
+==================================================
+
+Every marketing campaign must use:
+
+- A verified/configured sender identity.
+- Appropriate business/footer information.
+- A working unsubscribe option.
+- Existing preference and suppression rules.
+- Supported provider unsubscribe headers/configuration where available.
+
+Unsubscribe actions must be easy for recipients and must not require logging into an account.
+
+Maintain an admin-visible suppression list covering:
+
+- Unsubscribed.
+- Hard bounce.
+- Spam complaint.
+- Admin suppression.
+- Other supported provider reasons.
+
+Handle soft bounces according to the provider’s retry/suppression rules.
+
+Unsubscribing must NOT delete customer accounts, memberships, attendance, notes, or payment history.
+
+Separate marketing eligibility from essential transactional communications such as booking confirmations, using the existing email architecture. Do not use transactional sending to bypass marketing opt-outs.
+
+A Do Not Contact setting must be respected according to its defined scope. Do not reinterpret an email-only unsubscribe as consent for another marketing channel.
+
+Show missing sender configuration, domain setup, or provider restrictions clearly. Do not claim the newsletter system is production-ready while delivery prerequisites are incomplete.
+
+==================================================
+23. DELIVERY RELIABILITY AND SECURITY
+==================================================
+
+Use the existing email provider and background-job infrastructure where possible.
+
+Do not create an unnecessary second sending system.
+
+Use:
+
+- Durable campaign/recipient send records.
+- Stable idempotency keys where supported.
+- Database uniqueness protections.
+- Queue locks or equivalent concurrency controls.
+- Controlled batches.
+- Provider rate-limit handling.
+- Safe retries.
+- Clear partial-failure reporting.
+
+A retry should target only unresolved/unsent recipients, not blindly resend the entire campaign.
+
+If provider acceptance is uncertain after a timeout, reconcile status where possible instead of blindly resending.
+
+Recheck unsubscribe/suppression immediately before each recipient is dispatched.
+
+Preserve successful sends when part of a batch fails.
+
+Verify incoming provider webhook signatures using the supported mechanism. Process duplicate and out-of-order events safely without double-counting.
+
+Secure all admin endpoints, exports, customer lists, and analytics.
+
+Store credentials only in the existing secrets/environment system. Do not expose them in source code, logs, previews, or error messages.
+
+Sanitize newsletter content and validate uploaded files. Keep analytics and private customer records inaccessible through public URLs.
+
+==================================================
+24. AUDIT TRAIL
+==================================================
+
+Record important actions with authenticated user and timestamp:
+
+- Personal outreach logged.
+- Contact outcome changed.
+- Note added.
+- Template created/edited.
+- Campaign created/duplicated.
+- Audience changed.
+- Test email requested.
+- Campaign approved/scheduled.
+- Campaign edited/rescheduled/cancelled.
+- Campaign put on hold.
+- Sending started/completed/partially failed.
+- Campaign archived.
+- Analytics exported.
+- Suppression/preference changes.
+
+Preserve history rather than silently overwriting important business records.
+
+==================================================
+25. TESTING AND ACCEPTANCE
+==================================================
+
+Use automated tests plus practical UI checks. Use safe test recipients, mocks, or a provider sandbox where appropriate.
+
+CUSTOMER TRACKING
+
+Verify existing customers and memberships remain unchanged.
+Test first/second/additional text and call attempts, automatic initials, timestamps, notes, follow-up dates, mobile use, and multiple staff members.
+Confirm status changes and newsletters do not count as personal outreach.
+Confirm Do Not Contact behavior.
+
+AUDIENCES
+
+Test active members, non-members, one-class attendees, one-event attendees, former members, combined filters, duplicate emails, unknown consent, and suppressed contacts.
+Verify attendance is not confused with bookings.
+Confirm recipient counts and exclusions are accurate.
+
+EDITOR AND TEMPLATES
+
+Test all template types, image uploads, font fallbacks, layout changes, personalization, mobile/desktop previews, autosave, test sends, and unresolved-placeholder warnings.
+Confirm template edits and campaign edits remain separate.
+
+SCHEDULE CONTENT
+
+Test Sunday and Monday defaults, future weeks, chosen date ranges, cancellations, sold-out sessions, changed instructors/times, booking links, and urgency deadlines.
+Confirm refresh does not overwrite unrelated custom content.
+
+DUPLICATION AND HISTORY
+
+Test Duplicate Last Weekly Schedule and Duplicate as New Draft.
+Confirm a new ID, refreshed dynamic content, no inherited analytics, no copied send approval, and an unchanged original campaign.
+Verify old campaigns remain searchable with exact sent content and available historical analytics.
+
+SENDING
+
+Test immediate send, future send, rescheduling, editing/reapproval, cancellation, browser closure, queue retries, concurrent workers, provider timeouts, partial failures, and send-time unsubscribes.
+Test daylight-saving boundaries and changes that require Needs Review.
+
+ANALYTICS
+
+Test delivery, unique/repeated recorded opens, no recorded opens, clicks, automated-event flags, bounces, unsubscribe, complaints, unavailable metrics, duplicate webhooks, out-of-order webhooks, rate calculations, date filters, and exports.
+Confirm per-customer and campaign totals reconcile.
+
+ATTRIBUTION
+
+Test supported class/event/member follow-through, the attribution window, duplicate conversion protection, and unavailable external data.
+
+SECURITY AND REGRESSIONS
+
+Verify non-admins cannot access newsletters, analytics, exports, or recipient lists.
+Test direct endpoint/record access, uploads, webhook verification, and secret handling.
+Verify existing accounts, classes, events, memberships, bookings, payments, transactional emails, and admin functionality still work.
+
+Do not report unexecuted tests as passed. Distinguish automated tests, manual checks, and external-provider checks that remain outstanding.
+
+==================================================
+26. FINAL DELIVERY
+==================================================
+
+Implement the complete integrated workflow:
+
+Existing Customer Database
+→ Membership Leads
+→ Staff Outreach + Notes
+→ Newsletters
+→ Audience Selection
+→ Branded Customizable Template
+→ Accurate Schedule/Class/Event Content
+→ Preview + Test Email
+→ Send Now or Schedule
+→ Durable Campaign History
+→ Delivery and Engagement Analytics
+→ Engaged Non-Members Follow-Up
+
+At completion, provide:
+
+- A concise summary of what was implemented.
+- Where each feature appears in the admin interface.
+- Database migrations and configuration changes.
+- Required provider credentials/settings still missing.
+- Tests actually run and their results.
+- Any known limitations.
+- Deployment/rollback considerations for safe activation.
+
+Prioritize reliability, ease of use, accurate data, permission controls, and preserving the existing system.
+
+The final experience should let Vanessa or another authorized admin quickly reuse a branded newsletter, load the correct week’s classes and events, customize its photos and layout, choose the appropriate audience, schedule delivery, and later see what was delivered, what engagement was recorded, and which customers may benefit from appropriate follow-up.

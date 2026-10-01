@@ -76,6 +76,8 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 # DATABASE_URL and CALLBACK_TEST_DATABASE_URL use callback_test;
 # IDENTITY_TEST_DATABASE_URL and VIP_TEST_DATABASE_URL use identity_migration;
 # PLAN_CHANGE_TEST_DATABASE_URL uses membership_plan_test.
+# NEWSLETTER_TEST_DATABASE_URL uses rhyze_newsletter_preview (separate isolated
+# suite with synthetic fixtures and mocked/captured outbound email).
 # Only localhost/127.0.0.1 and those exact test databases are accepted.
 # Tests require the current schema and the case-insensitive User-email index.
 # The script does not migrate, seed, reset, or recreate any database.

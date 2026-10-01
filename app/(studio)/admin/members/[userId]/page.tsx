@@ -1,3 +1,5 @@
+import { LeadsWorkspace } from '@/components/newsletters/LeadsWorkspace';
+import { CustomerEmailActivity } from '@/components/newsletters/CustomerEmailActivity';
 import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
@@ -1080,6 +1082,7 @@ export default async function AdminMemberDetailPage(
           </section>
         </div>
       </div>
+      <section id="outreach" className="mt-8"><LeadsWorkspace userId={member.id}/><CustomerEmailActivity userId={member.id}/></section>
     </>
   );
 }

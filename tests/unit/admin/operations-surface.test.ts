@@ -34,10 +34,13 @@ describe('admin and instructor operational surfaces', () => {
     expect(memberBookings).toContain('Booked at');
   });
 
-  it('offers class-attendee campaigns and immediate sending', () => {
+  it('routes campaigns through the consent-aware newsletter workflow', () => {
     const page = readFileSync('app/(studio)/admin/campaigns/page.tsx', 'utf8');
-    expect(page).toContain('Attendees for one class');
-    expect(page).toContain('Send now');
+    expect(page).toContain("redirect('/admin/newsletters')");
+    const rules = readFileSync('lib/newsletters/domain.ts', 'utf8');
+    const editor = readFileSync('components/newsletters/NewsletterEditor.tsx', 'utf8');
+    expect(rules).toContain('OCCURRENCE_ATTENDED');
+    expect(editor).toContain('CONFIRM & SEND NOW');
   });
 
   it('shows the freeze sales promise across membership conversion surfaces', () => {

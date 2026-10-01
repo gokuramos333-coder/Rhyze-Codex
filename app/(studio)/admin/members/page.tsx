@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ContactStatusControl } from '@/components/newsletters/ContactStatusControl';
 import { Download, Mail, Search, UserPlus } from 'lucide-react';
 import { prisma } from '@/lib/db/prisma';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
@@ -59,6 +60,8 @@ export default async function AdminMembersPage(
     where: buildClientDirectoryWhere({ q, source, plan, account, membership }),
     include: {
       sombleClientProfile: true,
+      leadProfile: true,
+      outreachEntries: { where: { type: "OUTREACH" }, orderBy: { occurredAt: "desc" }, take: 1 },
       memberships: {
         where: membership === 'active'
           ? qualifyingMembershipWhere
@@ -113,6 +116,7 @@ export default async function AdminMembersPage(
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/admin/members/leads" className="border border-rhyze-coral px-5 py-3 text-xs font-black uppercase">Membership leads</Link>
           <Link
             href="/admin/members/new"
             className="inline-flex items-center gap-2 bg-rhyze-gradient px-5 py-3 text-xs font-black uppercase text-rhyze-black"
@@ -208,6 +212,7 @@ export default async function AdminMembersPage(
               <th>App</th>
               <th>Transfers</th>
               <th>Current plan</th>
+              <th>Contact status</th>
               <th>Contact</th>
             </tr>
           </thead>
@@ -257,6 +262,7 @@ export default async function AdminMembersPage(
                     <span className="text-rhyze-black/45">No native plan</span>
                   )}
                 </td>
+                <td><ContactStatusControl userId={member.id} version={member.leadProfile?.version || 0} outcome={member.leadProfile?.outcome || "NOT_CONTACTED"} lastStaff={member.outreachEntries[0]?.actorName} lastContacted={member.leadProfile?.lastContactedAt?.toISOString()} /></td>
                 <td>
                   <a
                     href={`mailto:${member.email}`}

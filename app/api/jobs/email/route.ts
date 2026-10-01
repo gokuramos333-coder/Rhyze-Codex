@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { runNewsletterBatch } from '@/lib/newsletters/delivery';
 import { prisma } from '@/lib/db/prisma';
 import { renderTransactionalEmail } from '@/lib/notifications/email-content';
 import { replyAddressForEmail } from '@/lib/notifications/email-archive';
@@ -29,9 +30,16 @@ export async function POST(request: Request) {
     );
   }
 
+  // Newsletter failures must not block essential transactional notifications.
+  const newsletters = await runNewsletterBatch().catch(() => {
+    console.error('Newsletter queue failed; transactional processing continues.');
+    return { paused: false, accepted: 0, captured: 0, failed: true };
+  });
   const resumeAt = emailDeliveryResumeAt();
   const due = await prisma.emailMessage.findMany({
     where: {
+      // Legacy marketing queues need consent-aware review in Newsletters.
+      template: { notIn: ['CAMPAIGN', 'NEWSLETTER_V1', 'NEWSLETTER_TEST'] },
       OR: [
         { status: 'QUEUED', scheduledFor: { lte: new Date() } },
         callbackStaleLease(new Date()),
@@ -173,6 +181,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     queued: due.length,
     pendingApproval: due.length - deliverable.length,
+    newsletters,
     delivered,
     failed,
     cancelled,

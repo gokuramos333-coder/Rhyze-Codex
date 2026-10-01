@@ -36,6 +36,7 @@ const navigation = [
   { href: '/admin/payments', label: 'Sales' },
   { href: '/admin/instructors', label: 'Instructors' },
   { href: '/admin/messages', label: 'Messages' },
+  { href: '/admin/newsletters', label: 'Newsletters' },
   { href: '/admin/email-archive', label: 'Email archive' },
   { href: '/admin/email-previews', label: 'Email previews' },
   { href: '/admin/slideshow', label: 'Slideshow' },

@@ -68,8 +68,15 @@ export function readPrivateDocument(key: string) {
   return readObject(key);
 }
 
+export async function putNewsletterImage(id: string, body: Buffer) {
+  if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error("Invalid asset ID");
+  const key = `newsletters/${id}.jpg`;
+  await putObject(key, "image/jpeg", body);
+  return `/api/media/${key}`;
+}
+
 export function readPublicImage(key: string) {
-  if (!/^(profiles|classes-gallery)\/[a-f0-9-]+\.(jpg|png)$/.test(key)) {
+  if (!/^(profiles|classes-gallery|newsletters)\/[a-f0-9-]+\.(jpg|png)$/.test(key)) {
     throw new Error('Invalid public media key.');
   }
   return readObject(key);

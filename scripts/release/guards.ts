@@ -200,6 +200,7 @@ export function releaseTestEnvironment(
     IDENTITY_TEST_DATABASE_URL: ['identity_migration'],
     VIP_TEST_DATABASE_URL: ['identity_migration'],
     PLAN_CHANGE_TEST_DATABASE_URL: ['membership_plan_test'],
+    NEWSLETTER_TEST_DATABASE_URL: ['rhyze_newsletter_preview'],
   };
   for (const [key, names] of Object.entries(databases)) {
     try {

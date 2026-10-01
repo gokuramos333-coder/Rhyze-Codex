@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { newsletterWebhook } from '@/lib/newsletters/delivery';
 import type { Resend, WebhookEventPayload } from 'resend';
 import { inboundThreadReference, resendStatusForEvent } from '@/lib/notifications/email-archive';
 
@@ -174,6 +175,7 @@ export async function processResendWebhook(input: {
       await archiveInboundEmail({ ...input, event: input.event });
     } else {
       await updateOutboundStatus(input);
+      await newsletterWebhook(input.eventId, input.event as unknown as { type: string; created_at?: string; data: Record<string, unknown> }, input.prisma);
     }
     await input.prisma.resendWebhookEvent.update({
       where: { id: input.eventId },

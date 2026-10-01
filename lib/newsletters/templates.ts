@@ -1,0 +1,182 @@
+import { blockSchema, documentSchema, type NewsletterDocument } from './domain';
+const specs = [
+  [
+    'WEEKLY',
+    'This Week at Rhyze',
+    'Your week, in rhythm',
+    'A little movement. A lot of possibility.',
+    'Hey {{first_name}}!\n\nA new week is a fresh chance to make a little time for you. Come dance, get stronger, try something new, or simply enjoy moving with a welcoming community. Wherever you’re starting from, there’s a place for you here.\n\nTake a look at what’s happening this week, we’d love to see you. 💛',
+    'VIEW THE FULL SCHEDULE',
+    '/schedule',
+  ],
+  [
+    'NEW_CLASS',
+    'New Class Announcement',
+    'Meet your next favorite class',
+    'A fresh way to move together.',
+    'Hey {{first_name}}!\n\nThere’s a new class on the Rhyze schedule, and we’d love for you to try it.\n\nYou don’t have to feel ready. Just come as you are. Whether it’s your first class or your favorite weekly routine, we’re here to welcome you.\n\nMeet your instructor and explore the class details below. 💛',
+    'BOOK CLASS',
+    '/schedule',
+  ],
+  [
+    'NEW_EVENT',
+    'New Event Announcement',
+    'Something to look forward to',
+    'Make room for a little Rhyze.',
+    'Let’s make a memory together. Explore our featured event, see the details, and save your spot when you’re ready.',
+    'SAVE YOUR SPOT',
+    '/events',
+  ],
+  [
+    'CLASS_24_HOURS',
+    'Class Registration — 24 Hours Left',
+    'Last day to join us',
+    'Registration closes within 24 hours.',
+    'Still thinking about joining? Check the class and registration deadline below before making your plans. We’d love to see you.',
+    'BOOK CLASS',
+    '/schedule',
+  ],
+  [
+    'EVENT_24_HOURS',
+    'Event Registration — 24 Hours Left',
+    'There’s still time to join us',
+    'Check the event deadline before you book.',
+    'Our registration deadline is coming up. Take a look at the event details and reserve your place before registration closes.',
+    'SAVE YOUR SPOT',
+    '/events',
+  ],
+  [
+    'LIMITED_SPOTS',
+    'Limited Spots / Last Chance',
+    'A few places to find your rhythm',
+    'Check current availability.',
+    'There are a few spaces in our featured session. Availability can change, so check the current schedule before making your plans.',
+    'CHECK AVAILABILITY',
+    '/schedule',
+  ],
+  [
+    'MEMBERSHIP',
+    'Membership Invitation',
+    'Your time. Your rhythm.',
+    'Find a membership that fits you.',
+    'Hey {{first_name}}!\n\nBetween everything you do for everyone else, make a little room for yourself this week. Find a class that feels good, bring a friend, and let’s move together.\n\nExplore a membership that fits your rhythm. Have questions? Reply and we’ll help you choose.',
+    'EXPLORE MEMBERSHIPS',
+    '/memberships',
+  ],
+  [
+    'COME_BACK',
+    'We Miss You / Come Back',
+    'Your next class is waiting',
+    'Come back at your own pace.',
+    'There’s always a place for you here. When you’re ready to move again, explore the schedule and pick a class that feels right. We’d love to welcome you back.',
+    'FIND A CLASS',
+    '/schedule',
+  ],
+  [
+    'MEMBER_UPDATE',
+    'Active Member Update',
+    'A note for our Rhyze community',
+    'What’s happening at your studio.',
+    'Hey {{first_name}}!\nThank you for making Rhyze part of your routine. Here’s your studio update. Add the details your members need to know before sending.',
+    'VIEW MY RHYZE',
+    '/member',
+  ],
+  [
+    'REVIEW',
+    'Google Review Request',
+    'Share your Rhyze experience',
+    'Your voice helps our community grow.',
+    'Enjoyed your time at Rhyze? We’d appreciate an honest review of your experience. Your feedback helps others get to know the studio. Thank you for being part of our community.',
+    'LEAVE A REVIEW',
+    '',
+  ],
+  [
+    'GENERAL',
+    'General Announcement',
+    'A little news from Rhyze',
+    'A studio update, just for you.',
+    'Hey {{first_name}}!\nWe have something to share with our community. Add your announcement here, then preview it before sending.',
+    'EXPLORE RHYZE',
+    '/',
+  ],
+  [
+    'INSTRUCTOR',
+    'Instructor Spotlight',
+    'Meet the people behind the movement',
+    'Get to know your instructor.',
+    'Every class has a person bringing their energy and care to the room. Add your instructor’s approved introduction, photo, and class details here.',
+    'FIND THEIR CLASS',
+    '/schedule',
+  ],
+  [
+    'COMMUNITY',
+    'Community / Member Spotlight',
+    'This is our community',
+    'Celebrate a Rhyze story.',
+    'The people around us make this place special. Share an approved community story here, with permission from anyone featured.',
+    'MOVE WITH US',
+    '/schedule',
+  ],
+  [
+    'OFFER',
+    'Special Promotion / Offer',
+    'Find your next reason to move',
+    'Explore an approved Rhyze offer.',
+    'Add the current, approved offer and its terms here. Include who it applies to and the exact expiration date before sharing it with the community.',
+    'VIEW MEMBERSHIPS',
+    '/memberships',
+  ],
+  [
+    'MERCHANDISE',
+    'Merchandise Announcement',
+    'Bring a little Rhyze with you',
+    'Explore what’s in store.',
+    'Take a look at our current collection. Choose an available product from the existing store and add its approved details here.',
+    'EXPLORE THE STORE',
+    '/shop',
+  ],
+] as const;
+export const templateCatalog = specs.map(
+  ([type, name, subject, previewText, body, cta, url]) => ({
+    type,
+    name,
+    subject,
+    previewText,
+    document: documentSchema.parse({
+      version: 1,
+      blocks: [
+        blockSchema.parse({
+          id: 'headline',
+          type: 'heading',
+          text: subject,
+          fontSize: 36,
+          weight: 'bold',
+          padding: 24,
+        }),
+        blockSchema.parse({
+          id: 'intro',
+          type: 'text',
+          text: body,
+          padding: 24,
+        }),
+        ...(['WEEKLY'].includes(type)
+          ? [blockSchema.parse({ id: 'schedule', type: 'schedule' })]
+          : ['NEW_CLASS', 'CLASS_24_HOURS'].includes(type)
+            ? [blockSchema.parse({ id: 'featured', type: 'class' })]
+            : ['NEW_EVENT', 'EVENT_24_HOURS', 'LIMITED_SPOTS'].includes(type)
+              ? [blockSchema.parse({ id: 'featured', type: 'event' })]
+              : []),
+        blockSchema.parse({
+          id: 'cta',
+          type: 'button',
+          text: cta,
+          url,
+          padding: 24,
+        }),
+      ],
+    }),
+  }),
+);
+export function freshDocument(document: NewsletterDocument) {
+  return documentSchema.parse(JSON.parse(JSON.stringify(document)));
+}

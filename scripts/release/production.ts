@@ -314,6 +314,7 @@ async function main() {
         'member-attribution',
         'native-vip-ordering',
         'membership-plan-changes',
+        'newsletter-workflow',
       ]) {
         if (
           !results.testResults.some(
