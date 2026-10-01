@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   label,
+  marketingEligibilityLabel,
   easternDate,
   outcomes,
   localSendCandidates,
@@ -362,11 +363,7 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
                         <small>No recent recorded signals</small>
                       )}
                       <small>
-                        {c.consent === 'OPTED_IN'
-                          ? 'Marketing opt-in recorded'
-                          : c.consent === 'OPTED_OUT'
-                            ? 'Marketing opted out'
-                            : 'Marketing consent unknown'}
+                        {marketingEligibilityLabel(c)}
                       </small>
                     </td>
                     <td>

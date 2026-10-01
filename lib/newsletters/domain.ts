@@ -144,6 +144,8 @@ export type Customer = {
   recordedOpens: number;
   consent: string;
   consentSource: string;
+  // Owner-approved customer audience policy; separate from customer opt-in evidence.
+  marketingApproval?: 'CUSTOMER_PROFILE';
   doNotContact: boolean;
   suppression: string | null;
   accountStatus: string;
@@ -185,16 +187,28 @@ export function matchesAudience(c: Customer, a: Audience) {
 export function eligibility(c: Customer, a?: Audience) {
   if (c.doNotContact) return 'Do not contact';
   if (c.suppression) return c.suppression;
-  if (c.accountStatus !== 'ACTIVE') return 'Account not active';
-  if (c.consent !== 'OPTED_IN')
-    return c.consent === 'OPTED_OUT'
-      ? 'Marketing opted out'
-      : 'Consent unknown — review required';
+  const profileApproved = c.marketingApproval === 'CUSTOMER_PROFILE';
+  if (
+    c.accountStatus !== 'ACTIVE' &&
+    !(profileApproved && c.accountStatus === 'INVITED')
+  )
+    return 'Account not active';
+  if (c.consent === 'OPTED_OUT') return 'Marketing opted out';
+  if (c.consent !== 'OPTED_IN' && !profileApproved)
+    return 'Consent unknown — review required';
   if (!z.string().email().safeParse(normalizeEmail(c.email)).success)
     return 'Invalid email';
   if (a?.excludeBooked && c.bookedIds.includes(a.excludeBooked))
     return 'Already registered';
   return null;
+}
+export function marketingEligibilityLabel(c: Customer) {
+  return (
+    eligibility(c) ||
+    (c.consent === 'OPTED_IN'
+      ? 'Marketing opt-in recorded'
+      : 'Owner-approved customer profile')
+  );
 }
 export function resolveAudience(customers: Customer[], a: Audience) {
   const matched = customers.filter((c) => matchesAudience(c, a));

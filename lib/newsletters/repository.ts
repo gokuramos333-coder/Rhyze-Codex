@@ -190,6 +190,9 @@ export async function loadCustomers(
       recordedOpens: opens.length,
       consent,
       consentSource: source,
+      // Gui approved existing/future customer profiles on 2026-10-01.
+      // Do not rewrite consent or reactivate an opt-out to apply this policy.
+      marketingApproval: 'CUSTOMER_PROFILE',
       doNotContact: p?.doNotContact || false,
       suppression: suppressed.get(normalizeEmail(u.email)) || null,
       accountStatus: u.status,

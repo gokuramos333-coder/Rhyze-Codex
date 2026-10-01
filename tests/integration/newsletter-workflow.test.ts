@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/db/prisma';
-import { logOutreach } from '@/lib/newsletters/repository';
+import { logOutreach, loadCustomers } from '@/lib/newsletters/repository';
 import {
   createCampaign,
   saveCampaign,
@@ -16,7 +16,7 @@ import {
   unsubscribe,
 } from '@/lib/newsletters/delivery';
 import { sendNewsletterTest } from '@/lib/newsletters/test-delivery';
-import { defaultAudience } from '@/lib/newsletters/domain';
+import { defaultAudience, eligibility } from '@/lib/newsletters/domain';
 // Validate before application imports instantiate Prisma; this file has its own
 // disposable database, independent of the other release integration suites.
 vi.hoisted(() => {
@@ -50,7 +50,7 @@ vi.mock('resend', () => ({
     emails = { send: sender };
   },
 }));
-async function customer() {
+async function customer(consent: 'OPTED_IN' | 'UNKNOWN' = 'OPTED_IN') {
   const id = 'nl-test-' + randomUUID();
   users.push(id);
   await prisma.user.create({
@@ -63,8 +63,9 @@ async function customer() {
       notificationPreference: { create: { marketingEmail: true } },
       leadProfile: {
         create: {
-          consent: 'OPTED_IN',
-          consentSource: 'Synthetic test consent',
+          consent,
+          consentSource:
+            consent === 'OPTED_IN' ? 'Synthetic test consent' : null,
           assignedToId: actor.id,
         },
       },
@@ -141,6 +142,36 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 describe('Newsletter and outreach persistence — isolated PostgreSQL', () => {
+  it.each(['ACTIVE', 'INVITED'] as const)(
+    'automatically includes a new %s profile without writing opt-in evidence',
+    async (status) => {
+      const id = 'nl-test-' + randomUUID();
+      users.push(id);
+      await prisma.user.create({
+        data: {
+          id,
+          email: id + '@example.test',
+          name: 'Synthetic new profile',
+          role: 'MEMBER',
+          status,
+        },
+      });
+      const c = (await loadCustomers()).find((x) => x.id === id)!;
+      expect(c.marketingApproval).toBe('CUSTOMER_PROFILE');
+      expect(c.consent).toBe('UNKNOWN');
+      expect(c.consentSource).toBe('');
+      expect(eligibility(c)).toBeNull();
+      expect(
+        await prisma.customerLeadProfile.findUnique({ where: { userId: id } }),
+      ).toBeNull();
+      await prisma.notificationPreference.create({
+        data: { userId: id, marketingEmail: false },
+      });
+      const optedOut = (await loadCustomers()).find((x) => x.id === id)!;
+      expect(eligibility(optedOut)).toBe('Marketing opted out');
+    },
+  );
+
   it('logs staff identity once; status and notes do not increment contact attempts', async () => {
     const id = await customer();
     const op = randomUUID();
@@ -338,6 +369,25 @@ describe('Newsletter and outreach persistence — isolated PostgreSQL', () => {
         .map((x) => x.id)
         .sort(),
     ).toEqual(ids);
+  });
+  it('reviews and captures an owner-approved profile without rewriting its consent', async () => {
+    const id = await customer('UNKNOWN');
+    const c = await draft();
+    const review = await campaignReview(c.id);
+    expect(review.recipients.eligible.some((r) => r.customer.id === id)).toBe(
+      true,
+    );
+    await approve(c);
+    await runNewsletterBatch();
+    const recipient = await prisma.newsletterRecipient.findFirstOrThrow({
+      where: { campaignId: c.id, userId: id },
+    });
+    expect(recipient.status).toBe('CAPTURED');
+    const profile = await prisma.customerLeadProfile.findUniqueOrThrow({
+      where: { userId: id },
+    });
+    expect(profile.consent).toBe('UNKNOWN');
+    expect(profile.consentSource).toBeNull();
   });
   it('dispatch honors opt-out after approval without changing personal outreach', async () => {
     const id = await customer();

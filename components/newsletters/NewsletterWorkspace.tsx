@@ -8,6 +8,7 @@ import {
   easternDate,
   label,
   resolveAudience,
+  marketingEligibilityLabel,
 } from '@/lib/newsletters/domain';
 import { NewsletterEditor } from './NewsletterEditor';
 import { command, type Bundle, type Campaign, type Template } from './types';
@@ -797,8 +798,10 @@ export function NewsletterWorkspace() {
             <>
               <h2>The right message, to the right people.</h2>
               <p className="nl-muted">
-                Existing customer records and newsletter signups. Having an
-                account is not marketing consent.
+                Existing and future customer profiles, including invited
+                profiles and class attendees, are approved for the newsletter
+                audience. Unsubscribes, Do Not Contact, blocked addresses and
+                suspended or archived accounts remain excluded.
               </p>
               <div className="nl-grid">
                 {[
@@ -830,7 +833,7 @@ export function NewsletterWorkspace() {
                   );
                 })}
               </div>
-              <h3>Consent review</h3>
+              <h3>Eligibility & preferences</h3>
               <div className="nl-actions">
                 <button
                   className="nl-button"
@@ -854,8 +857,10 @@ export function NewsletterWorkspace() {
                 </button>
               </div>
               <p className="nl-muted">
-                Only record an opt-in when you have evidence. An email
-                unsubscribe or Do Not Contact remains respected.
+                Customer-profile approval is the owner’s audience policy, not a
+                claim that the customer explicitly subscribed. Record a separate
+                opt-in only when you have evidence. Unsubscribes and Do Not
+                Contact remain respected.
               </p>
               <div className="nl-table-wrap">
                 <table>
@@ -863,7 +868,7 @@ export function NewsletterWorkspace() {
                     <tr>
                       <th>Customer</th>
                       <th>Eligibility</th>
-                      <th>Evidence</th>
+                      <th>Basis / preferences</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -877,9 +882,12 @@ export function NewsletterWorkspace() {
                             {c.name}
                             <small>{c.email}</small>
                           </td>
-                          <td>{label(c.consent)}</td>
+                          <td>{marketingEligibilityLabel(c)}</td>
                           <td>
-                            {c.consentSource || 'No explicit opt-in evidence'}
+                            {c.consentSource ||
+                              (c.marketingApproval === 'CUSTOMER_PROFILE'
+                                ? 'Owner-approved customer audience · October 1, 2026'
+                                : 'No explicit opt-in evidence')}
                           </td>
                           <td>
                             <button

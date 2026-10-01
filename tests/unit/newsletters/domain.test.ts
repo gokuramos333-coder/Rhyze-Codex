@@ -9,6 +9,7 @@ import {
   defaultAudience,
   resolveAudience,
   matchesAudience,
+  eligibility,
   materialChanges,
   initials,
   blockSchema,
@@ -77,6 +78,53 @@ describe('Newsletter audience and outreach invariants', () => {
       resolveAudience([customer({ consent: 'UNKNOWN' })], defaultAudience())
         .eligible,
     ).toHaveLength(0));
+  it.each(['ACTIVE', 'INVITED'])(
+    'includes owner-approved %s customer profiles without inventing consent',
+    (accountStatus) => {
+      const c = customer({
+        consent: 'UNKNOWN',
+        consentSource: '',
+        accountStatus,
+        marketingApproval: 'CUSTOMER_PROFILE',
+      });
+      expect(eligibility(c)).toBeNull();
+      expect(c.consent).toBe('UNKNOWN');
+      expect(c.consentSource).toBe('');
+    },
+  );
+  it.each([
+    { consent: 'OPTED_OUT' },
+    { doNotContact: true },
+    { suppression: 'Hard bounce' },
+    { suppression: 'Unsubscribed' },
+    { accountStatus: 'SUSPENDED' },
+    { accountStatus: 'ARCHIVED' },
+    { email: 'invalid' },
+  ])('customer-profile approval preserves exclusion %j', (blocked) => {
+    expect(
+      eligibility(
+        customer({
+          consent: 'UNKNOWN',
+          marketingApproval: 'CUSTOMER_PROFILE',
+          ...blocked,
+        }),
+      ),
+    ).not.toBeNull();
+  });
+  it('customer-profile approval cannot bypass an opt-out on the same address', () => {
+    expect(
+      resolveAudience(
+        [
+          customer({
+            consent: 'UNKNOWN',
+            marketingApproval: 'CUSTOMER_PROFILE',
+          }),
+          customer({ id: 'other', consent: 'OPTED_OUT' }),
+        ],
+        defaultAudience(),
+      ).eligible,
+    ).toHaveLength(0);
+  });
   it('deduplicates overlapping groups and normalized emails', () => {
     const a = { ...defaultAudience(), groups: ['ALL', 'NON_MEMBERS'] as const };
     const r = resolveAudience(
