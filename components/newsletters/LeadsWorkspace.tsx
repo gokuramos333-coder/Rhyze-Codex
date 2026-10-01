@@ -22,6 +22,8 @@ type Entry = {
   note: string | null;
   occurredAt: string;
 };
+const LEADS_PER_PAGE = 50;
+
 export function LeadsWorkspace({ userId }: { userId?: string }) {
   const [customers, setCustomers] = useState<Customer[]>([]),
     [capture, setCapture] = useState(false),
@@ -96,6 +98,10 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
     .sort((a, b) =>
       filter === 'ENGAGED' ? b.strongSignals - a.strongSignals : 0,
     );
+  const pageCustomers = filtered.slice(
+    (page - 1) * LEADS_PER_PAGE,
+    page * LEADS_PER_PAGE,
+  );
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected || busy) return;
@@ -296,7 +302,7 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice((page - 1) * 15, page * 15).map((c) => (
+                {pageCustomers.map((c) => (
                   <tr key={c.id}>
                     <td>
                       <Link href={'/admin/members/' + c.id}>
@@ -384,7 +390,7 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
               {filtered.length} customers · Page {page}
             </span>
             <button
-              disabled={page * 15 >= filtered.length}
+              disabled={page * LEADS_PER_PAGE >= filtered.length}
               onClick={() => setPage((p) => p + 1)}
             >
               Next
