@@ -66,3 +66,8 @@ export function occurrenceInstructorName(occurrence: OccurrenceInstructorSource)
     'Instructor TBA'
   );
 }
+
+/** Use the same occurrence title and assigned instructor as the public calendar. */
+export function instructorOccurrenceTitle(occurrence: OccurrenceTitleSource & OccurrenceInstructorSource) {
+  return occurrenceTitleWithInstructor(occurrenceTitle(occurrence), occurrenceInstructorName(occurrence));
+}

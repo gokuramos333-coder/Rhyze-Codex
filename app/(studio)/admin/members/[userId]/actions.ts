@@ -1,4 +1,7 @@
 'use server';
+import { isDeepStrictEqual } from 'node:util';
+import type { Prisma } from '@prisma/client';
+import { memberCouponParams } from '@/lib/domain/memberships/member-pricing';
 
 import { sourceAttributionSelect } from '@/lib/attribution/first-touch';
 
@@ -945,7 +948,7 @@ async function reviewLockedMembershipChangeRequest(formData: FormData) {
 }
 
 export async function startAdminMembershipCheckoutAction(formData: FormData) {
-  await requireApprovedOwner();
+  const actor = await requireApprovedOwner();
   const userId = String(formData.get('userId') || '');
   const productId = String(formData.get('productId') || '');
   if (!userId || !productId || !stripeIsConfigured()) {
@@ -954,7 +957,12 @@ export async function startAdminMembershipCheckoutAction(formData: FormData) {
   const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://www.rhyzefitness.com';
   let checkoutUrl: string;
   try {
-    checkoutUrl = await startAdminMembershipCheckout({ clientId: userId, productId, origin }, {
+    checkoutUrl = await startAdminMembershipCheckout({ clientId: userId, productId, origin,
+      monthlyPrice: String(formData.get('monthlyPrice') || ''),
+      discountDuration: String(formData.get('discountDuration') || ''),
+      discountMonths: String(formData.get('discountMonths') || ''),
+      discountReason: String(formData.get('discountReason') || ''),
+    }, {
       findClient: (id) => prisma.user.findFirst({
         where: { id, NOT: { email: { endsWith: '@rhyze.local' } }, status: { not: 'ARCHIVED' } },
         select: { id: true, email: true, name: true, stripeCustomerId: true, ...sourceAttributionSelect },
@@ -970,17 +978,38 @@ export async function startAdminMembershipCheckoutAction(formData: FormData) {
         where: { userId: id, ...qualifyingMembershipWhere },
         select: { id: true },
       })),
-      createPurchase: (input) => prisma.purchase.create({ data: input, select: { id: true } }),
+      createPurchase: async (input) => prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+        const current = await tx.membership.findFirst({where:{userId,...qualifyingMembershipWhere},select:{id:true}});
+        const pending = await tx.purchase.findFirst({where:{userId,status:'PENDING',policyAcceptance:{path:['source'],equals:'ADMIN_CHECKOUT'}},select:{id:true,productId:true,amountCents:true,policyAcceptance:true,stripeCheckoutSessionId:true,createdAt:true}});
+        if (current) throw Error('This client already has a current membership.');
+        if (pending) {
+          if (pending.productId !== input.productId || pending.amountCents !== input.amountCents || !isDeepStrictEqual(pending.policyAcceptance, input.policyAcceptance)) throw Error('A different admin checkout is pending. Complete or expire it in Stripe before changing the offer.');
+          if (!pending.stripeCheckoutSessionId && Date.now() - pending.createdAt.getTime() > 23 * 60 * 60_000) throw Error('The previous checkout result needs a Stripe review before it can be retried.');
+          return pending;
+        }
+        const purchase = await tx.purchase.create({ data: { ...input, policyAcceptance: input.policyAcceptance as Prisma.InputJsonValue | undefined }, select: { id: true } });
+        await tx.auditLog.create({data: {actorId: actor.id, action: 'ADMIN_MEMBERSHIP_CHECKOUT_STARTED', entityType: 'Purchase', entityId: purchase.id, after: {userId, productId, amountCents: input.amountCents, pricing: (input.policyAcceptance || null) as Prisma.InputJsonValue}}});
+        return purchase;
+      }),
+      createClientDiscount: async (pricing, product, clientId, purchaseId) => {
+        const stripe = getStripe();
+        const price = await stripe.prices.retrieve(product.stripePriceId!);
+        if (!price.active || price.currency !== 'usd' || price.unit_amount !== product.priceCents || price.recurring?.interval !== 'month' || price.recurring.interval_count !== 1) throw Error('Stripe catalog does not match the membership.');
+        const stripeProduct = typeof price.product === 'string' ? price.product : price.product.id;
+        return (await stripe.coupons.create(memberCouponParams(pricing,clientId,product.id,stripeProduct),{idempotencyKey:`admin-member-discount:${purchaseId}`})).id;
+      },
       createCheckoutSession: (input, idempotencyKey) => getStripe().checkout.sessions.create(
         input as never,
         { idempotencyKey },
       ),
+      retrieveCheckoutSession: (id) => getStripe().checkout.sessions.retrieve(id),
       saveCheckoutSession: async (purchaseId, stripeCheckoutSessionId) => {
         await prisma.purchase.update({ where: { id: purchaseId }, data: { stripeCheckoutSessionId } });
       },
       failPurchase: async (purchaseId) => {
-        await prisma.purchase.update({
-          where: { id: purchaseId },
+        await prisma.purchase.updateMany({
+          where: { id: purchaseId, status: 'PENDING' },
           data: { status: 'FAILED', failedAt: new Date() },
         });
       },

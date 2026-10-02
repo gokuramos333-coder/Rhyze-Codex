@@ -1,4 +1,5 @@
 'use server';
+import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -38,7 +39,7 @@ export async function sendClassMessageAction(formData: FormData) {
   if (!subject || body.length < 10) redirect(`/instructor/classes/${occurrenceId}/message?error=message`);
   const occurrence = await prisma.classOccurrence.findFirst({
     where: { id: occurrenceId, instructorId: instructor.id },
-    include: { template: true, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
+    include: { template: true, instructor: {select:{name:true}}, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
   });
   if (!occurrence) redirect('/instructor/schedule');
   await prisma.$transaction(async (tx) => {
@@ -58,7 +59,7 @@ export async function sendClassMessageAction(formData: FormData) {
           name: booking.user.name || 'Rhyzer',
           messageSubject: subject,
           body,
-          className: occurrence.template.name,
+          className: instructorOccurrenceTitle(occurrence),
           classDate: classDate(occurrence.startAt),
           classTime: classTime(occurrence.startAt),
           bookingsUrl: '/member/bookings',
@@ -80,7 +81,7 @@ export async function cancelAssignedClassAction(formData: FormData) {
   if (reason.length < 10) redirect(`/instructor/classes/${occurrenceId}/message?error=reason`);
   const occurrence = await prisma.classOccurrence.findFirst({
     where: { id: occurrenceId, instructorId: instructor.id, status: 'SCHEDULED' },
-    include: { template: true, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
+    include: { template: true, instructor: {select:{name:true}}, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
   });
   if (!occurrence) redirect('/instructor/schedule');
   await prisma.$transaction(async (tx) => {
@@ -92,15 +93,15 @@ export async function cancelAssignedClassAction(formData: FormData) {
         const released = await tx.creditLedgerEntry.findFirst({ where: { bookingId: booking.id, type: { in: ['RELEASE','RESTORE'] } } });
         if (!released) await tx.creditLedgerEntry.create({ data: { creditAccountId: reservation.creditAccountId, bookingId: booking.id, type: 'RELEASE', quantity: 1, reason: 'Instructor cancelled class' } });
       }
-      await tx.inAppNotification.create({ data: { userId: booking.userId, title: `${occurrence.template.name} was cancelled`, body: reason, link: '/member/bookings', dedupeKey: `class-cancelled:${occurrenceId}:${booking.userId}` } });
+      await tx.inAppNotification.create({ data: { userId: booking.userId, title: `${instructorOccurrenceTitle(occurrence)} was cancelled`, body: reason, link: '/member/bookings', dedupeKey: `class-cancelled:${occurrenceId}:${booking.userId}` } });
       await queueEmail(tx, {
         userId: booking.userId,
         to: booking.user.email,
-        subject: `${occurrence.template.name} was cancelled`,
+        subject: `${instructorOccurrenceTitle(occurrence)} was cancelled`,
         template: 'CLASS_CANCELLED',
         payload: {
           name: booking.user.name || 'Rhyzer',
-          className: occurrence.template.name,
+          className: instructorOccurrenceTitle(occurrence),
           classDate: classDate(occurrence.startAt),
           classTime: classTime(occurrence.startAt),
           reason,
@@ -109,7 +110,7 @@ export async function cancelAssignedClassAction(formData: FormData) {
         dedupeKey: `class-cancelled-email:${occurrenceId}:${booking.userId}`,
       });
     }
-    await tx.classMessage.create({ data: { occurrenceId, instructorId: instructor.id, subject: `${occurrence.template.name} cancelled`, body: reason, kind: 'CANCELLATION', recipientCount: occurrence.bookings.length } });
+    await tx.classMessage.create({ data: { occurrenceId, instructorId: instructor.id, subject: `${instructorOccurrenceTitle(occurrence)} cancelled`, body: reason, kind: 'CANCELLATION', recipientCount: occurrence.bookings.length } });
     await tx.auditLog.create({ data: { actorId: instructor.id, action: 'class.cancelled.by-instructor', entityType: 'ClassOccurrence', entityId: occurrenceId } });
   });
   revalidatePath('/instructor/schedule');

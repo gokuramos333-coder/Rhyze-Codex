@@ -1,3 +1,4 @@
+import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
@@ -13,14 +14,14 @@ export default async function ClassMessagePage(
   const instructor = await requireArea('instructor');
   const occurrence = await prisma.classOccurrence.findFirst({
     where: { id: params.occurrenceId, instructorId: instructor.id },
-    include: { template: true, _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } }, classMessages: { orderBy: { createdAt: 'desc' }, take: 10 } },
+    include: { template: true, instructor: { select: { name: true } }, _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } }, classMessages: { orderBy: { createdAt: 'desc' }, take: 10 } },
   });
   if (!occurrence) notFound();
   const isCancelled = occurrence.status === 'CANCELLED';
   return (
     <>
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class communications</p>
-      <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
+      <h1 className="mt-3 font-display text-6xl tracking-wider">{instructorOccurrenceTitle(occurrence)}</h1>
       <p className="mt-3 text-rhyze-black/55">{memberBookingDateTimeLabel(occurrence)} · {occurrence._count.bookings} confirmed recipients</p>
       {isCancelled && <p className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">This class is already canceled. Members can no longer book it.</p>}
       {searchParams.sent && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">Update queued by email and delivered to member inboxes.</p>}
@@ -51,7 +52,7 @@ export default async function ClassMessagePage(
               <textarea name="customCancellationReason" rows={5} placeholder="Example: I apologize for the inconvenience, but due to an emergency I need to cancel today’s class." className="border p-3"/>
             </label>
             <div className="border border-rhyze-gold/50 bg-[#fff8dc] p-4 text-sm font-bold">
-              Email preview: We need to cancel {occurrence.template.name}. We apologize for the inconvenience and appreciate your understanding. The selected or custom reason will appear in the email before credit-return language.
+              Email preview: We need to cancel {instructorOccurrenceTitle(occurrence)}. We apologize for the inconvenience and appreciate your understanding. The selected or custom reason will appear in the email before credit-return language.
             </div>
             <button className="min-h-12 border border-rhyze-coral px-4 text-xs font-black uppercase tracking-widest text-rhyze-coral">Cancel class and send approved email</button>
           </form>

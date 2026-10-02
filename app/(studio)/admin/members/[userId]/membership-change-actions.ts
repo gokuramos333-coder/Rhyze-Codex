@@ -17,6 +17,10 @@ const quoteInput = z.object({
   productId: z.string().min(1),
   timing: z.enum(['NOW', 'NEXT_RENEWAL', 'DATE']),
   date: z.string().default(''),
+  monthlyPrice: z.string().optional(),
+  discountDuration: z.string().optional(),
+  discountMonths: z.string().optional(),
+  discountReason: z.string().optional(),
 });
 export async function quoteMembershipChangeAction(
   data: FormData,

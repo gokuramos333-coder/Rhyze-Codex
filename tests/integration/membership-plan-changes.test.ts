@@ -136,6 +136,7 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
     });
     const price = (suffix: string) => ({
       id: `price_${suffix}_${id}`,
+      product: `prod_${suffix}_${id}`,
       active: true,
       currency: 'usd',
       unit_amount: suffix === 'old' ? 9200 : 11900,
@@ -185,7 +186,20 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
       currency: 'usd',
       lines: { data: [] },
     };
+    const coupons = new Map<string, Record<string, unknown>>();
     const stripe = {
+      coupons: {
+        create: vi.fn(async (input: Stripe.CouponCreateParams) => {
+          const coupon = {
+            id: `coupon_${randomUUID()}`,
+            valid: true,
+            ...input,
+          };
+          coupons.set(coupon.id, coupon);
+          return coupon;
+        }),
+        retrieve: vi.fn(async (id: string) => coupons.get(id)),
+      },
       subscriptions: {
         retrieve: vi.fn(async () => subscription),
         update: vi.fn(
@@ -285,6 +299,157 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
       process,
     };
   }
+  it('reviews a timed client discount and applies the same coupon once without unpaid access', async () => {
+    const f = await fixture();
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      {
+        ...f.input,
+        monthlyPrice: '99',
+        discountDuration: 'repeating',
+        discountMonths: '3',
+        discountReason: 'Owner approved',
+      },
+      now,
+    );
+    expect(q.quote).toMatchObject({
+      monthlyCents: 9900,
+      pricing: { amountOff: 2000, months: 3 },
+    });
+    expect(f.stripe.subscriptions.update).not.toHaveBeenCalled();
+    expect(f.stripe.coupons.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount_off: 2000,
+        max_redemptions: 1,
+        duration_in_months: 3,
+        applies_to: { products: [`prod_new_${f.id}`] },
+      }),
+      expect.anything(),
+    );
+    const couponId = (q.quote as { couponId: string }).couponId;
+    expect(f.stripe.invoices.createPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ discounts: [{ coupon: couponId }] }),
+    );
+    await f.confirm(q.id);
+    await f.confirm(q.id);
+    expect(f.stripe.subscriptions.update).toHaveBeenCalledTimes(1);
+    expect(f.stripe.subscriptions.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        discounts: [{ coupon: couponId }],
+        payment_behavior: 'pending_if_incomplete',
+      }),
+      expect.anything(),
+    );
+    expect(
+      await db.membership.findUnique({ where: { id: f.id } }),
+    ).toMatchObject({ productId: `${f.id}-old` });
+  });
+  it('places future discounts only on the changed phase and retains their duration', async () => {
+    const f = await fixture();
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      {
+        ...f.input,
+        timing: 'NEXT_RENEWAL',
+        monthlyPrice: '99',
+        discountDuration: 'forever',
+        discountReason: 'Owner approved',
+      },
+      now,
+    );
+    await f.confirm(q.id);
+    expect(f.stripe.subscriptionSchedules.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        phases: [
+          expect.objectContaining({ discounts: [] }),
+          expect.objectContaining({
+            discounts: [{ coupon: (q.quote as { couponId: string }).couponId }],
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+  it('schedules a price-only change at renewal without replacing the plan or granting credits', async () => {
+    const f = await fixture();
+    f.stripe.prices.retrieve.mockResolvedValue(
+      f.subscription.items.data[0].price,
+    );
+    const input = {
+      ...f.input,
+      productId: `${f.id}-old`,
+      monthlyPrice: '79',
+      discountDuration: 'forever',
+      discountReason: 'Owner offer',
+    };
+    await expect(
+      quoteAdminPlanChange(db, f.stripe as unknown as Stripe, input, now),
+    ).rejects.toThrow(/next renewal/);
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      { ...input, timing: 'NEXT_RENEWAL' },
+      now,
+    );
+    await f.confirm(q.id);
+    expect(f.stripe.subscriptions.update).not.toHaveBeenCalled();
+    expect(f.stripe.subscriptionSchedules.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        phases: [
+          expect.objectContaining({
+            items: [{ price: `price_old_${f.id}`, quantity: 1 }],
+          }),
+          expect.objectContaining({
+            items: [{ price: `price_old_${f.id}`, quantity: 1 }],
+            discounts: [{ coupon: (q.quote as { couponId: string }).couponId }],
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+    expect(
+      await db.creditLedgerEntry.count({ where: { creditAccountId: f.id } }),
+    ).toBe(2);
+  });
+  it('refuses changed coupon terms and invalid pricing before any charge', async () => {
+    const f = await fixture();
+    await expect(
+      quoteAdminPlanChange(
+        db,
+        f.stripe as unknown as Stripe,
+        {
+          ...f.input,
+          monthlyPrice: '999',
+          discountDuration: 'forever',
+          discountReason: 'Owner approved',
+        },
+        now,
+      ),
+    ).rejects.toThrow(/price/);
+    expect(f.stripe.coupons.create).not.toHaveBeenCalled();
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      {
+        ...f.input,
+        monthlyPrice: '99',
+        discountDuration: 'forever',
+        discountReason: 'Owner approved',
+      },
+      now,
+    );
+    f.stripe.coupons.retrieve.mockResolvedValueOnce({
+      valid: true,
+      amount_off: 1,
+    });
+    await expect(f.confirm(q.id)).rejects.toThrow(/discount changed/);
+    expect(f.stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
   it('quotes without mutating Stripe and confirms once without granting unpaid access', async () => {
     const f = await fixture();
     const q = await f.quote();

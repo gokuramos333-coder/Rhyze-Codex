@@ -1,3 +1,4 @@
+import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -24,7 +25,7 @@ export default async function InstructorArtworkPage({ params }: { params: Promis
   return (
     <>
       <Link href="/instructor/schedule" className="text-xs font-black uppercase tracking-widest text-rhyze-coral">← My classes</Link>
-      <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
+      <h1 className="mt-3 font-display text-6xl tracking-wider">{instructorOccurrenceTitle(occurrence)}</h1>
       <p className="mt-3 text-rhyze-black/55">{memberBookingDateTimeLabel(occurrence)}</p>
       <p className="mt-3 text-sm font-bold">This photo applies only to this assigned date, not other instructors’ classes.</p>
       <ClassArtworkForm id={occurrence.id} action={updateOccurrenceArtworkAction} currentPhotoUrl={occurrence.imageUrl} fallbackPhotoUrl={resolveClassArtwork({ ...occurrence, imageUrl: null })} />

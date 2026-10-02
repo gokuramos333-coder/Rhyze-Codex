@@ -243,6 +243,11 @@ export default async function AdminMemberDetailPage(
     }),
   ]);
   if (!member) notFound();
+  const clientPricingHistory = await prisma.membershipPlanChange.findMany({
+    where: { membership: { userId: member.id }, status: { in: ['APPLIED', 'SCHEDULED', 'AWAITING_PAYMENT', 'SUBMITTING'] } },
+    orderBy: { createdAt: 'desc' }, take: 10,
+    select: { id: true, status: true, effectiveAt: true, quote: true },
+  });
   const recovery = eligibleRecovery(member, member.memberships);
   const reviewedRecovery = recoveryForUser(member.id);
   const recoveryInvitation = reviewedRecovery ? await prisma.emailMessage.findUnique({ where: { dedupeKey: `${recoveryPurchaseId(reviewedRecovery)}:invitation` }, select: { status: true, sentAt: true } }) : null;
@@ -437,7 +442,7 @@ export default async function AdminMemberDetailPage(
       )}
       {searchParams.membership === 'checkout-error' && (
         <p className="mt-6 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">
-          Membership checkout could not start. The client was not charged. Confirm the selected plan has a Stripe price and try again.
+          Membership checkout could not be verified. Check the client’s pending checkout in Stripe before changing the offer. Selecting the same plan and pricing resumes an open checkout; an expired checkout needs a fresh review.
         </p>
       )}
       {searchParams.membership === 'assigned' && (
@@ -731,6 +736,10 @@ export default async function AdminMemberDetailPage(
           </InfoSection>
 
           <InfoSection id="memberships" title="MEMBERSHIPS">
+            {clientPricingHistory.some(change => (change.quote as {pricingLabel?: string}).pricingLabel) && <details className="mb-4 border border-rhyze-orange/30 bg-orange-50 p-3 text-sm"><summary className="cursor-pointer font-bold">Client pricing history</summary>
+              <p className="mt-2 text-xs">Saved arrangements, not a live invoice quote. Expired discounts return to regular pricing automatically. Review a new quote before making a billing change.</p>
+              {clientPricingHistory.map(change => { const label=(change.quote as {pricingLabel?: string}).pricingLabel;return label ? <p className="mt-2" key={change.id}>{label} · {change.status.replaceAll('_',' ')} · starts {date(change.effectiveAt)}</p> : null; })}
+            </details>}
             {!hasQualifyingMembership && (
               <AdminMembershipStartForm
                 userId={member.id}

@@ -1,3 +1,4 @@
+import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import Link from 'next/link';
 import { instructorRosterHref } from '@/lib/admin/assigned-roster-navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -32,6 +33,7 @@ export default async function InstructorSchedulePage() {
     },
     include: {
       template: true,
+      instructor: { select: { name: true } },
       room: true,
       bookings: {
         where: confirmedRosterBookingWhere(),
@@ -131,7 +133,7 @@ export default async function InstructorSchedulePage() {
                   CLASS CANCELED
                 </span>
               )}
-              <strong className="block font-display text-3xl tracking-wider">{item.template.name}</strong>
+              <strong className="block font-display text-3xl tracking-wider">{instructorOccurrenceTitle(item)}</strong>
               <span className="text-sm text-rhyze-black/55">{memberBookingDateTimeLabel(item)} · {item.room?.name || 'Room TBA'}</span>
               {item.status === 'CANCELLED' && (
                 <span className="mt-2 block text-sm font-bold text-red-900">

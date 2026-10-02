@@ -1,4 +1,5 @@
 import React from 'react';
+import { MemberPricingFields } from './MemberPricingFields';
 
 type MembershipProduct = {
   id: string;
@@ -52,6 +53,8 @@ export function AdminMembershipStartForm({
           <select name="productId" required className="mt-4 min-h-12 w-full border border-black/15 px-3">
             <PlanOptions products={products.filter((product) => product.stripePriceId)} />
           </select>
+          <div className="mt-3 text-sm"><MemberPricingFields /></div>
+          <p className="mt-3 text-xs">Review the amount on Stripe before paying. Creating checkout does not grant access or charge the card.</p>
           <button className="mt-3 w-full bg-rhyze-gradient px-4 py-3 text-xs font-black uppercase tracking-widest">
             Continue to secure checkout
           </button>

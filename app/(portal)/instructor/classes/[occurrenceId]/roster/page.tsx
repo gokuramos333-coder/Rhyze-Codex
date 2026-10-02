@@ -1,3 +1,4 @@
+import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
@@ -22,7 +23,7 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
       ...(user.role === 'INSTRUCTOR' ? { instructorId: user.id } : {}),
     },
     include: {
-      template: true,
+      template: true, instructor: { select: { name: true } },
       room: true,
       bookings: {
         where: rosterHistoryBookingWhere(),
@@ -77,7 +78,7 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
     <>
       <LiveDataRefresh />
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class roster</p>
-      <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
+      <h1 className="mt-3 font-display text-6xl tracking-wider">{instructorOccurrenceTitle(occurrence)}</h1>
       {occurrence.instructorId === user.id && <Link href={`/instructor/classes/${occurrence.id}/artwork`} className="mt-4 inline-block border border-rhyze-orange px-4 py-3 text-xs font-black uppercase tracking-widest text-rhyze-coral">Manage class / event photo</Link>}
       <p className="mt-3 text-rhyze-black/55">{memberBookingDateTimeLabel(occurrence)} · {occurrence.room?.name || 'Room TBA'} · {confirmedBookings.length + occurrence.historicalSignupCount}/{occurrence.capacity} booked</p>
       {occurrence.status === 'CANCELLED' && (

@@ -96,3 +96,37 @@ it('shows an inline error, not a false success, when Stripe cannot quote', async
     screen.queryByRole('button', { name: 'Confirm membership change' }),
   ).toBeNull();
 });
+
+it('includes custom price terms in review and invalidates them after editing', async () => {
+  const p = props();
+  render(<AdminMembershipChangeForm {...p} />);
+  fireEvent.click(screen.getByText('Change membership'));
+  fireEvent.click(screen.getByLabelText('Set a client-specific monthly price'));
+  fireEvent.change(screen.getByLabelText('Client price per month (USD)'), {
+    target: { value: '99' },
+  });
+  fireEvent.change(screen.getByLabelText('Number of months from activation'), {
+    target: { value: '3' },
+  });
+  fireEvent.change(screen.getByLabelText('Reason'), {
+    target: { value: 'Owner-approved offer' },
+  });
+  fireEvent.submit(
+    screen.getByRole('button', { name: 'Review change' }).closest('form')!,
+  );
+  await screen.findByRole('button', { name: 'Confirm membership change' });
+  const data = (p.quoteAction.mock.calls as unknown as [FormData][])[0][0];
+  expect(data.get('monthlyPrice')).toBe('99');
+  expect(data.get('discountDuration')).toBe('repeating');
+  expect(data.get('discountMonths')).toBe('3');
+  expect(p.confirmAction).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Discount lasts'), {
+    target: { value: 'forever' },
+  });
+  expect(
+    screen.queryByRole('button', { name: 'Confirm membership change' }),
+  ).toBeNull();
+  expect(
+    screen.queryByLabelText('Number of months from activation'),
+  ).toBeNull();
+});

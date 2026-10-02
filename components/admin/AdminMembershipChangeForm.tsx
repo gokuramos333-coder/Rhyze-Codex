@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { MemberPricingFields } from './MemberPricingFields';
 export type MembershipChangeQuote = {
   id: string;
   toName: string;
@@ -10,6 +11,7 @@ export type MembershipChangeQuote = {
   effectiveAt: string;
   renewalAt: string;
   timing: string;
+  pricingLabel?: string | null;
 };
 export type MembershipChangeResult = {
   quote?: MembershipChangeQuote;
@@ -125,13 +127,12 @@ export function AdminMembershipChangeForm(props: Props) {
                     <option value="" disabled>
                       Select a membership
                     </option>
-                    {props.products
-                      .filter((p) => p.id !== props.currentProductId)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} — {money(p.priceCents)}/month
-                        </option>
-                      ))}
+                    {props.products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {money(p.priceCents)}/month
+                        {p.id === props.currentProductId ? ' (current)' : ''}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="grid gap-1 font-bold">
@@ -170,6 +171,12 @@ export function AdminMembershipChangeForm(props: Props) {
                     </p>
                   </div>
                 )}
+                <MemberPricingFields />
+                <p className="text-xs text-black/60 sm:col-span-2">
+                  Review prepares a quote and, when needed, an unapplied Stripe
+                  discount. It does not charge. For a price-only change to the
+                  current plan, choose Next renewal.
+                </p>
                 <button
                   disabled={pending}
                   className="min-h-11 bg-rhyze-black px-4 py-3 font-bold text-white disabled:opacity-50 sm:col-span-2"
@@ -186,6 +193,9 @@ export function AdminMembershipChangeForm(props: Props) {
                 <h4 className="font-bold">
                   {quote.toName} — {money(quote.monthlyCents)}/month
                 </h4>
+                {quote.pricingLabel && (
+                  <p className="font-bold">{quote.pricingLabel}</p>
+                )}
                 <p>
                   Starts {date(quote.effectiveAt)}. Renewal stays{' '}
                   {date(quote.renewalAt)}.
@@ -198,7 +208,8 @@ export function AdminMembershipChangeForm(props: Props) {
                 <p className="text-xs text-black/70">
                   A billing credit reduces future invoices; it is not a card
                   refund. The first invoice may include that credit. Future full
-                  months use the new plan price. New access starts after payment
+                  months use the reviewed client price for the chosen duration,
+                  then the regular plan price. New access starts after payment
                   succeeds; credits already used this month are not granted
                   again.
                 </p>

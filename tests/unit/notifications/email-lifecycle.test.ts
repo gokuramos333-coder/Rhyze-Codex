@@ -106,7 +106,7 @@ describe('Rhyze email lifecycle wiring', () => {
     expect(transfers).toContain('previousClass:');
     expect(transfers).toContain('newClass:');
     expect(transfers).toContain("bookingsUrl: '/member/bookings'");
-    expect(messages).toContain('className: occurrence.template.name');
+    expect(messages).toContain('className: instructorOccurrenceTitle(occurrence)');
     expect(messages).toContain('classDate:');
     expect(messages).toContain('classTime:');
   });
