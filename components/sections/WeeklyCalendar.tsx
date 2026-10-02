@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { WAITLIST_CAPACITY } from '@/lib/domain/bookings/booking-rules';
 import {
   buildMonthlyCalendar,
+  localDateKey,
   type PublicCalendarSlot,
 } from '@/lib/domain/schedule/public-calendar';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
@@ -68,9 +69,10 @@ export function WeeklyCalendar({
   initialDateKey,
   initialView = 'daily',
 }: Props) {
+  const todayDateKey = localDateKey(new Date(), 'America/New_York');
   const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(initialDateKey || '')
     ? initialDateKey!
-    : slots[0]?.dateKey || new Date().toISOString().slice(0, 10);
+    : todayDateKey;
   const [view, setView] = useState<CalendarView>(initialView);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const daySlots = useMemo(
@@ -223,7 +225,11 @@ export function WeeklyCalendar({
               <CustomerScheduleCard key={slot.id} slot={slot} compact={compact} />
             )) : (
               <div className="rounded-xl bg-rhyze-black p-8 text-center">
-                <h4 className="font-display text-3xl tracking-wider">No Classes Bookable</h4>
+                <h4 className="font-display text-3xl tracking-wider">
+                  {selectedDate === todayDateKey
+                    ? 'No classes scheduled today.'
+                    : 'No classes scheduled for this day.'}
+                </h4>
                 <p className="mt-2 text-sm text-rhyze-cream/60">Use the arrows to find the next class day.</p>
               </div>
             )}
