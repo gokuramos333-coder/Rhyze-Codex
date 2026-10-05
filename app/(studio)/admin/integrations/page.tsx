@@ -1,14 +1,22 @@
 import Link from 'next/link';
 import { CheckCircle2, CircleAlert } from 'lucide-react';
-import { stripeAccountMode, stripeConfiguration } from '@/lib/payments/stripe';
+import { getStripe, stripeAccountMode, stripeConfiguration } from '@/lib/payments/stripe';
+import { inspectPortalConfiguration } from '@/lib/payments/portal-readiness';
 
-export default function AdminIntegrationsPage() {
+export default async function AdminIntegrationsPage() {
   const stripe = stripeConfiguration();
+  const portal = stripe.portal
+    ? await inspectPortalConfiguration(
+        getStripe().billingPortal.configurations,
+        process.env.STRIPE_PORTAL_CONFIGURATION_ID,
+        stripeAccountMode() === 'live',
+      )
+    : { ready: false, reason: 'missing-key' };
   const integrations = [
   {
     name: 'Stripe',
-    configured: stripe.checkout && stripe.webhooks,
-    description: `Checkout: ${stripe.checkout ? 'ready' : 'missing key'} · Webhooks: ${stripe.webhooks ? 'ready' : 'missing secret'} · Customer portal: ${stripe.portal ? 'ready' : 'not ready'} · Mode: ${stripeAccountMode()}`,
+    configured: stripe.checkout && stripe.webhooks && portal.ready,
+    description: `Checkout: ${stripe.checkout ? 'ready' : 'missing key'} · Webhooks: ${stripe.webhooks ? 'ready' : 'missing secret'} · Customer portal: ${portal.ready ? 'ready' : 'not ready — check the active billing configuration in this Stripe mode'} · Mode: ${stripeAccountMode()}`,
     href: 'https://dashboard.stripe.com/',
   },
   {

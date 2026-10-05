@@ -55,7 +55,7 @@ function transport(fault = '') {
       }
       if (path === '/admin/integrations')
         return html(
-          `${page}<p>Mode: ${fault === 'test-mode' ? 'test' : 'live'} · Checkout: ready · Webhooks: ready</p>`,
+          `${page}<p>Mode: ${fault === 'test-mode' ? 'test' : 'live'} · Checkout: ready · Webhooks: ready · Customer portal: ${fault === 'portal' ? 'not ready' : 'ready'}</p>`,
         );
     }
     if (path.endsWith('.css'))
@@ -100,6 +100,7 @@ describe('post-release live HTTP checks', () => {
   });
   it.each([
     'test-mode',
+    'portal',
     'asset-html',
     'asset-404',
     'identity',

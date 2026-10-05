@@ -169,10 +169,11 @@ export async function verifyLiveHttp(
       if (
         !/Mode:\s*live\b/.test(plain) ||
         !/Checkout:\s*ready\b/.test(plain) ||
-        !/Webhooks:\s*ready\b/.test(plain)
+        !/Webhooks:\s*ready\b/.test(plain) ||
+        !/Customer portal:\s*ready\b/.test(plain)
       )
         throw Error(
-          'Production runtime does not report LIVE Stripe checkout and webhook configuration.',
+          'Production runtime does not report LIVE Stripe checkout, webhook and customer portal readiness.',
         );
     }
     roles.push(account.role);

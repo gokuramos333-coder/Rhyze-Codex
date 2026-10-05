@@ -6,6 +6,7 @@ import { openStripePortalAction } from './actions';
 import { isVisiblePaymentHistoryPurchase } from '@/lib/payments/payment-history-visibility';
 
 const messages: Record<string, string> = {
+  'portal-unavailable': 'Sorry, we could not open secure billing right now. Please try again shortly or contact the studio for help. No payment details were changed.',
   'stripe-not-connected': 'Stripe billing is not connected yet. No payment details were changed.',
   'no-stripe-customer': 'Your Stripe billing profile will be created with your first completed purchase.',
 };
