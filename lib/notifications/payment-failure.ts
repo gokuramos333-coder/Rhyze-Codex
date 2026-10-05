@@ -1,3 +1,4 @@
+import { approvedOwnerEmails } from '@/lib/auth/owner-access';
 import type { Prisma } from '@prisma/client';
 import { queueEmail } from '@/lib/notifications/email-queue';
 
@@ -45,4 +46,46 @@ export async function queuePaymentFailureEmail(
       billingUrl: '/sign-in?callbackUrl=%2Fmember%2Fbilling',
     },
   });
+
+  const amount = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: (invoice.currency || 'usd').toUpperCase(),
+  }).format(Number(amountCents) / 100);
+  const memberName = user.name || user.email;
+  const adminUrl = `/admin/members/${user.id}#payment-history`;
+  const title = `Membership payment failed: ${memberName}`;
+  const admins = await tx.user.findMany({
+    where: {
+      role: 'OWNER',
+      status: 'ACTIVE',
+      email: { in: approvedOwnerEmails(), mode: 'insensitive' },
+    },
+    select: { id: true },
+  });
+  if (admins.length)
+    await tx.inAppNotification.createMany({
+      data: admins.map((admin) => ({
+        userId: admin.id,
+        title,
+        body: `${memberName}'s membership payment of ${amount} did not go through. Review their billing before retrying.`,
+        link: adminUrl,
+        dedupeKey: `payment-failed-admin:${invoice.id}:${admin.id}`,
+      })),
+      skipDuplicates: true,
+    });
+  for (const to of ['melissa@rhyzefit.com', 'vanessa@rhyzefit.com']) {
+    await queueEmail(tx, {
+      to,
+      subject: `${title} — ${amount}`,
+      template: 'ADMIN_PAYMENT_FAILED',
+      dedupeKey: `payment-failed-admin:${invoice.id}:${to}`,
+      payload: {
+        memberName,
+        memberEmail: user.email,
+        amount,
+        invoiceId: invoice.id,
+        adminUrl,
+      },
+    });
+  }
 }

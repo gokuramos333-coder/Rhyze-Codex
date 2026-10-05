@@ -276,6 +276,17 @@ export const emailTemplateCatalog = {
       callout: { title: 'Need a hand?', body: 'Reply to this email and our team will be happy to help. Please don’t send card details by email.' },
     }),
   },
+  ADMIN_PAYMENT_FAILED: {
+    label: 'Failed membership payment — management', category: 'Memberships & payments', trigger: 'When a membership invoice payment fails',
+    subject: (p) => `Membership payment failed: ${text(p, 'memberName', 'Member')} — ${dollars(p)}`,
+    sample: { memberName: 'Sample Member', memberEmail: 'member@example.test', amount: '$199.00', invoiceId: 'Sample invoice', adminUrl: '/admin/members' },
+    present: (p) => ({
+      eyebrow: 'Billing needs attention', headline: 'A membership payment didn’t go through',
+      paragraphs: [`${text(p, 'memberName', 'A member')}'s membership payment could not be collected. A separate email has been queued for the member with instructions to sign in and update their card.`, 'Check the current invoice status before taking action; a later attempt may already have succeeded.'],
+      facts: [{ label: 'Member', value: text(p, 'memberName', 'Member') }, { label: 'Email', value: text(p, 'memberEmail', 'View account') }, { label: 'Amount outstanding', value: dollars(p) }, { label: 'Stripe invoice', value: text(p, 'invoiceId', 'View account') }],
+      cta: { label: 'Review member billing', href: text(p, 'adminUrl', '/admin/members') },
+    }),
+  },
   TRIAL_ENDING: {
     label: '$7 trial ending', category: 'Memberships & payments', trigger: 'One day before the seven-day trial expires',
     subject: () => 'Your Rhyze intro week ends tomorrow', sample: member,

@@ -29,6 +29,7 @@ const requiredTemplates = [
   'PAYMENT_RECEIPT',
   'MEMBERSHIP_RENEWED',
   'PAYMENT_FAILED',
+  'ADMIN_PAYMENT_FAILED',
   'TRIAL_ENDING',
   'MEMBERSHIP_PAUSED',
   'MEMBERSHIP_RESUMED',
@@ -125,4 +126,12 @@ describe('failed membership payment email', () => {
     expect(email.text).toContain('Manage payment method + invoices');
     expect(email.text).not.toContain('stay uninterrupted');
   });
+});
+
+
+it('management failure email includes member, amount and a private admin link', () => {
+  const email = renderTransactionalEmail({ template: 'ADMIN_PAYMENT_FAILED', subject: 'Payment failed', payload: {
+    memberName: 'Test Member', memberEmail: 'member@example.test', amount: '$199.00', invoiceId: 'in_example', adminUrl: '/admin/members/example#payment-history',
+  }});
+  for (const value of ['Test Member', 'member@example.test', '$199.00', 'in_example', '/admin/members/example#payment-history']) expect(email.text).toContain(value);
 });

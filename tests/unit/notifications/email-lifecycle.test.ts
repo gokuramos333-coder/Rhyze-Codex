@@ -49,7 +49,8 @@ describe('Rhyze email lifecycle wiring', () => {
     expect(helper).toContain('inAppNotification.createMany');
     expect(helper).toContain("endsWith: '@rhyze.local'");
     expect(layout).toContain('booking-cancelled-admin:');
-    expect(layout).toContain('Recent class cancellation');
+    expect(layout).toContain('Recent admin alerts');
+    expect(layout).toContain('payment-failed-admin:');
   });
 
   it('queues purchase, receipt, renewal, and management-sale messages', () => {

@@ -16,6 +16,7 @@ describe('VIP paid renewal entitlement through real webhook processing', () => {
       purchase: { id: 'purchase', status: 'PAID', paidAt: new Date('2026-09-03T16:00Z'), creditAccount: account } };
     const paymentRecords = new Map<string, unknown>();
     const tx: any = {
+      user: { findMany: async () => [] },
       $queryRaw: vi.fn(),
       purchase: { findUnique: async () => m.purchase, update: async ({ data }: any) => Object.assign(m.purchase, data) },
       membership: { findUnique: async () => m, update: async ({ data }: any) => Object.assign(m, data), updateMany: async ({ data }: any) => Object.assign(m, data) },

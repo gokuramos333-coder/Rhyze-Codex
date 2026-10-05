@@ -25,7 +25,7 @@ function fixture() {
     creditAccount: { findUnique: async () => account, upsert: vi.fn(async ({ update }: any) => Object.assign(account, update)) },
     paymentRecord: { findUnique: async ({ where }: any) => records.get(where.stripeInvoiceId) ?? null,
       upsert: async ({ where, create, update }: any) => { const value = records.get(where.stripeInvoiceId); records.set(where.stripeInvoiceId, value ? { ...value, ...update } : create); } },
-    inAppNotification: { create: vi.fn() }, user: { update: vi.fn() },
+    inAppNotification: { create: vi.fn() }, user: { update: vi.fn(), findMany: async () => [] },
   };
   const event = (type: string, at: number, object: any) => ({ id: `evt_${type}_${at}`, type, created: at, data: { object } }) as Stripe.Event;
   const invoice = (id: string, start: number, end: number, paidAt = start) => ({ id, subscription: 'sub', status: 'paid', amount_paid: 22200,

@@ -114,6 +114,7 @@ function fixture() {
       update: async ({ data }: any) => Object.assign(state.purchase, data),
     },
     user: {
+      findMany: async () => [],
       findUnique: async () => ({ ...user, memberships: [state.membership] }),
     },
     membership: {
@@ -192,7 +193,7 @@ describe('Somble payment-first fulfillment', () => {
       status: 'open', amount_paid: 0, amount_remaining: 9200,
       status_transitions: { paid_at: null },
     })));
-    expect(f.state.emails).toEqual([expect.objectContaining({
+    expect(f.state.emails.filter((e: any) => e.template === 'PAYMENT_FAILED')).toEqual([expect.objectContaining({
       template: 'PAYMENT_FAILED', dedupeKey: 'payment-failed:in_first',
       payload: expect.objectContaining({
         amountCents: 9200, billingUrl: '/sign-in?callbackUrl=%2Fmember%2Fbilling',

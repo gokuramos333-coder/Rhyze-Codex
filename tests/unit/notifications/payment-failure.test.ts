@@ -12,11 +12,49 @@ function fixture(status: string | null = null) {
     paymentRecord: {
       findUnique: vi.fn(async () => (status ? { status } : null)),
     },
+    user: { findMany: vi.fn(async () => [{ id: 'owner' }]) },
+    inAppNotification: { createMany: vi.fn() },
     emailMessage: { upsert: vi.fn(async () => ({})) },
   };
   return tx;
 }
 describe('membership payment failure notice', () => {
+  it('alerts authorized admins and emails both requested managers with member and amount', async () => {
+    const tx = fixture();
+    await queuePaymentFailureEmail(tx, user, invoice);
+    const emails = tx.emailMessage.upsert.mock.calls.map(
+      ([args]: any) => args.create,
+    );
+    expect(
+      emails.filter((e: any) => e.template === 'ADMIN_PAYMENT_FAILED'),
+    ).toEqual([
+      expect.objectContaining({
+        to: 'melissa@rhyzefit.com',
+        payload: expect.objectContaining({
+          memberName: 'Test',
+          amount: '$199.00',
+          memberEmail: user.email,
+        }),
+      }),
+      expect.objectContaining({
+        to: 'vanessa@rhyzefit.com',
+        payload: expect.objectContaining({
+          adminUrl: '/admin/members/member#payment-history',
+        }),
+      }),
+    ]);
+    expect(tx.inAppNotification.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          userId: 'owner',
+          dedupeKey: 'payment-failed-admin:in_unpaid:owner',
+          body: expect.stringContaining('$199.00'),
+        }),
+      ],
+      skipDuplicates: true,
+    });
+  });
+
   it('uses the outstanding amount and a stable per-invoice key, without resetting delivery state', async () => {
     const tx = fixture();
     await queuePaymentFailureEmail(tx, user, {
@@ -44,6 +82,7 @@ describe('membership payment failure notice', () => {
       const tx = fixture();
       await queuePaymentFailureEmail(tx, user, { ...invoice, status });
       expect(tx.emailMessage.upsert).not.toHaveBeenCalled();
+      expect(tx.inAppNotification.createMany).not.toHaveBeenCalled();
     },
   );
   it.each(['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'])(
@@ -52,6 +91,7 @@ describe('membership payment failure notice', () => {
       const tx = fixture(status);
       await queuePaymentFailureEmail(tx, user, invoice);
       expect(tx.emailMessage.upsert).not.toHaveBeenCalled();
+      expect(tx.inAppNotification.createMany).not.toHaveBeenCalled();
     },
   );
   it.each([0, -100, 1.5, NaN])(
@@ -63,6 +103,7 @@ describe('membership payment failure notice', () => {
         amount_remaining,
       });
       expect(tx.emailMessage.upsert).not.toHaveBeenCalled();
+      expect(tx.inAppNotification.createMany).not.toHaveBeenCalled();
     },
   );
 });

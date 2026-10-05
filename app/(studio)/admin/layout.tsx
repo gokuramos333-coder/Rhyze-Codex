@@ -58,21 +58,24 @@ export default async function AdminLayout({
       link: { startsWith: '/admin/messages/' },
     },
   });
-  const latestCancellationAlerts = await prisma.inAppNotification.findMany({
+  const latestAdminAlerts = await prisma.inAppNotification.findMany({
     where: {
       userId: user.id,
       readAt: null,
-      dedupeKey: { startsWith: 'booking-cancelled-admin:' },
+      OR: [
+        { dedupeKey: { startsWith: 'booking-cancelled-admin:' } },
+        { dedupeKey: { startsWith: 'payment-failed-admin:' } },
+      ],
     },
     orderBy: { createdAt: 'desc' },
     take: 3,
   });
-  const cancellationUnreadCount = latestCancellationAlerts.length;
+  const adminAlertUnreadCount = latestAdminAlerts.length;
   const navigationWithBadges = navigation.map((item) =>
     item.href === '/admin/messages'
       ? { ...item, badge: unreadCount }
       : item.href === '/admin/activity'
-        ? { ...item, badge: cancellationUnreadCount }
+        ? { ...item, badge: adminAlertUnreadCount }
         : item,
   );
 
@@ -81,15 +84,15 @@ export default async function AdminLayout({
       area="ADMIN"
       user={user}
       navigation={navigationWithBadges}
-      unreadCount={unreadCount + cancellationUnreadCount}
+      unreadCount={unreadCount + adminAlertUnreadCount}
     >
-      {latestCancellationAlerts.length > 0 && (
+      {latestAdminAlerts.length > 0 && (
         <div className="mb-5 rounded-3xl border border-red-200 bg-red-50 p-4 text-sm text-red-950 shadow-lg shadow-red-950/5">
           <p className="font-black uppercase tracking-[0.18em] text-red-700">
-            Recent class cancellation
+            Recent admin alerts
           </p>
           <div className="mt-3 grid gap-2">
-            {latestCancellationAlerts.map((alert) => (
+            {latestAdminAlerts.map((alert) => (
               <div
                 key={alert.id}
                 className="flex items-start gap-2 rounded-2xl bg-white/80 p-3 transition hover:bg-white"
