@@ -1,3 +1,4 @@
+import { queueEmail } from '@/lib/notifications/email-queue';
 import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import { randomUUID } from 'node:crypto';
@@ -1408,6 +1409,11 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
         'invoice.payment_failed',
       ),
     );
+    expect(queueEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      userId: f.id, template: 'PAYMENT_FAILED',
+      dedupeKey: `payment-failed:${f.invoice('change').id}`,
+      payload: expect.objectContaining({ billingUrl: '/sign-in?callbackUrl=%2Fmember%2Fbilling' }),
+    }));
     expect(
       await db.membership.findUnique({ where: { id: f.id } }),
     ).toMatchObject({ status: 'ACTIVE', productId: `${f.id}-old` });

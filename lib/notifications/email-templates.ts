@@ -264,8 +264,17 @@ export const emailTemplateCatalog = {
   },
   PAYMENT_FAILED: {
     label: 'Failed payment', category: 'Memberships & payments', trigger: 'When Stripe cannot collect a membership payment',
-    subject: () => 'Your Rhyze payment needs attention', sample: { ...member, amount: '$92.00', billingUrl: '/member/billing' },
-    present: (p) => ({ eyebrow: 'Billing update', headline: 'Please update your payment method', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`, paragraphs: [`We could not complete your ${dollars(p, 'amountCents')} payment. Update your payment method so your membership and class access stay uninterrupted.`], cta: { label: 'Update payment method', href: text(p, 'billingUrl', '/member/billing') }, callout: { title: 'Need help?', body: 'Reply to this email and our management team will help you review the account.' } }),
+    subject: () => 'Your Rhyze payment needs attention', sample: { ...member, amountCents: 19900, currency: 'usd', billingUrl: '/sign-in?callbackUrl=%2Fmember%2Fbilling' },
+    present: (p) => ({
+      eyebrow: 'A little billing help', headline: 'Let’s get your payment sorted', greeting: `Hi ${text(p, 'name', 'Rhyzer')},`,
+      paragraphs: [
+        `We’re sorry for the inconvenience—your membership payment of ${typeof p.amountCents === 'number' ? new Intl.NumberFormat('en-US', { style: 'currency', currency: text(p, 'currency', 'usd').toUpperCase() }).format(p.amountCents / 100) : dollars(p)} didn’t go through. We’re here to help.`,
+        'Use the button below to sign in to your Rhyze account. On your Billing page, choose “Manage payment method + invoices” to securely enter a new card in Stripe and review any outstanding payment.',
+        'If you’ve already taken care of this payment, thank you—you can disregard this message.',
+      ],
+      cta: { label: 'Sign in to update my card', href: '/sign-in?callbackUrl=%2Fmember%2Fbilling' },
+      callout: { title: 'Need a hand?', body: 'Reply to this email and our team will be happy to help. Please don’t send card details by email.' },
+    }),
   },
   TRIAL_ENDING: {
     label: '$7 trial ending', category: 'Memberships & payments', trigger: 'One day before the seven-day trial expires',

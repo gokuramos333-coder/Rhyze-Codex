@@ -1,3 +1,4 @@
+import { queuePaymentFailureEmail } from '@/lib/notifications/payment-failure';
 import type Stripe from 'stripe';
 import type { Prisma } from '@prisma/client';
 import {
@@ -144,6 +145,7 @@ export async function processSombleRecoveryEvent(
     return true;
   }
   if (event.type === 'invoice.payment_failed') {
+    await queuePaymentFailureEmail(tx, user, object as Stripe.Invoice);
     if (
       membership.purchaseId === purchase.id &&
       membership.currentPeriodEnd &&

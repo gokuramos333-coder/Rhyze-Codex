@@ -1,3 +1,4 @@
+import { queuePaymentFailureEmail } from '@/lib/notifications/payment-failure';
 import { fulfillClassTicket } from '@/lib/payments/class-ticket-fulfillment';
 import { classTicketBinding, classTicketCreditTerms, classTicketFulfillment } from '@/lib/payments/class-ticket';
 import type Stripe from 'stripe';
@@ -193,17 +194,6 @@ async function notifyPaymentFailure(
       title: 'Payment needs attention',
       body: `Stripe could not collect $${(amountCents / 100).toFixed(2)}. Update your payment method to keep your membership active.`,
       link: '/member/billing',
-    },
-  });
-  await queueEmail(tx, {
-    userId: user.id,
-    to: user.email,
-    subject: 'Your Rhyze payment needs attention',
-    template: 'PAYMENT_FAILED',
-    payload: {
-      name: user.name || 'Rhyzer',
-      amountCents,
-      billingUrl: '/member/billing',
     },
   });
 }
@@ -1132,6 +1122,18 @@ export async function processStripeEvent(
       ? await nativeVipEntitlementDecision(tx, event, action, membership)
       : null;
     if (entitlement?.settled) return;
+    if (!nativeVip) {
+      const existing = await tx.paymentRecord.findUnique({
+        where: { stripeInvoiceId: action.invoiceId },
+      });
+      if (
+        (event.data.object as Stripe.Invoice).status === 'paid' ||
+        (existing && ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(existing.status))
+      ) return;
+    }
+    // Notification eligibility depends on invoice settlement, not whether this
+    // event is newer than a subscription lifecycle update affecting access.
+    await queuePaymentFailureEmail(tx, membership.user, event.data.object as Stripe.Invoice);
     if (!nativeVip)
       await tx.membership.update({
         where: { id: membership.id },

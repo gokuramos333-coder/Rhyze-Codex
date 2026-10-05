@@ -186,6 +186,20 @@ function fixture() {
   return { tx, state };
 }
 describe('Somble payment-first fulfillment', () => {
+  it('queues a friendly billing email for an unpaid recovered membership invoice', async () => {
+    const f = fixture();
+    await processSombleRecoveryEvent(f.tx, event('invoice.payment_failed', invoice({
+      status: 'open', amount_paid: 0, amount_remaining: 9200,
+      status_transitions: { paid_at: null },
+    })));
+    expect(f.state.emails).toEqual([expect.objectContaining({
+      template: 'PAYMENT_FAILED', dedupeKey: 'payment-failed:in_first',
+      payload: expect.objectContaining({
+        amountCents: 9200, billingUrl: '/sign-in?callbackUrl=%2Fmember%2Fbilling',
+      }),
+    })]);
+  });
+
   describe('lifecycle event ordering', () => {
     it.each([
       ['paused', 'PAUSED'],

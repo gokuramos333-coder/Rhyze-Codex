@@ -1,3 +1,4 @@
+import { queuePaymentFailureEmail } from '@/lib/notifications/payment-failure';
 import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import type { Prisma } from '@prisma/client';
@@ -339,6 +340,7 @@ export async function processMembershipPlanChangeEvent(
     return true;
   }
   if (!paid) {
+    await queuePaymentFailureEmail(tx, membership.user, object as Stripe.Invoice);
     if (
       !adjustment &&
       event.created >= state.paidEnd &&

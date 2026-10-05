@@ -1,3 +1,4 @@
+import { queueEmail } from '@/lib/notifications/email-queue';
 import type Stripe from 'stripe';
 import { describe, expect, it, vi } from 'vitest';
 import { processStripeEvent } from '@/lib/payments/webhook-processor';
@@ -33,6 +34,44 @@ function fixture() {
   return { tx, purchase, membership, account, records, invoice, run };
 }
 describe('native VIP ordered paid entitlement, independent from invoice accounting', () => {
+  it('notifies an unpaid VIP even when a newer lifecycle event arrived first', async () => {
+    const f = fixture();
+    await f.run('customer.subscription.updated', oct + 20, {
+      id: 'sub', status: 'past_due', current_period_start: oct, current_period_end: nov,
+    });
+    vi.mocked(queueEmail).mockClear();
+    await f.run('invoice.payment_failed', oct + 10, {
+      ...f.invoice('reordered', oct, nov), status: 'open', amount_paid: 0,
+    });
+    expect(queueEmail).toHaveBeenCalledWith(f.tx, expect.objectContaining({
+      template: 'PAYMENT_FAILED', dedupeKey: 'payment-failed:reordered',
+    }));
+  });
+  it('does not notify a settled non-VIP invoice from a stale open failure snapshot', async () => {
+    const f = fixture();
+    f.membership.product.kind = 'LIMITED_MEMBERSHIP';
+    f.records.set('already-paid', { status: 'SUCCEEDED' });
+    vi.mocked(queueEmail).mockClear();
+    await f.run('invoice.payment_failed', oct + 10, {
+      ...f.invoice('already-paid', oct, nov), status: 'open', amount_paid: 0,
+    });
+    expect(queueEmail).not.toHaveBeenCalled();
+    expect(f.records.get('already-paid').status).toBe('SUCCEEDED');
+    expect(f.membership.status).toBe('ACTIVE');
+  });
+
+  it('queues the common billing notice for an unpaid native VIP renewal', async () => {
+    const f = fixture();
+    vi.mocked(queueEmail).mockClear();
+    await f.run('invoice.payment_failed', oct + 10, {
+      ...f.invoice('unpaid', oct, nov), status: 'open', amount_paid: 0,
+      status_transitions: { paid_at: null },
+    });
+    expect(queueEmail).toHaveBeenCalledWith(f.tx, expect.objectContaining({
+      template: 'PAYMENT_FAILED', dedupeKey: 'payment-failed:unpaid',
+    }));
+  });
+
   it.each(['failed-first', 'paid-first'])('settled payment wins a same-second dunning tie (%s), once across replays', async order => {
     const f = fixture();
     const at = oct + 10;

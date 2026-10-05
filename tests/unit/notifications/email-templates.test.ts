@@ -111,3 +111,18 @@ describe('Rhyze email template catalog', () => {
     }
   });
 });
+
+
+describe('failed membership payment email', () => {
+  it('apologizes and explains secure sign-in and card update without promising access', () => {
+    const email = renderTransactionalEmail({
+      template: 'PAYMENT_FAILED', subject: 'Your Rhyze payment needs attention',
+      payload: { name: 'Test Member', amountCents: 19900 },
+    });
+    expect(email.text).toContain('sorry for the inconvenience');
+    expect(email.text).toContain('$199.00');
+    expect(email.text).toContain('/sign-in?callbackUrl=%2Fmember%2Fbilling');
+    expect(email.text).toContain('Manage payment method + invoices');
+    expect(email.text).not.toContain('stay uninterrupted');
+  });
+});
