@@ -1,3 +1,5 @@
+import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
+import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import type { Prisma } from '@prisma/client';
 import type Stripe from 'stripe';
 import { planChangeCreditAdjustment } from '@/lib/domain/memberships/plan-change-policy';
@@ -180,23 +182,35 @@ export async function processMembershipPlanChangeEvent(
     )
   )
     return true;
-  const operation = membership.planChanges.find(
-    (change) =>
-      change.submittedAt &&
-      change.status !== 'QUOTED' &&
-      lines.some(
-        (line) =>
-          linePrice(line) === change.toPriceId &&
-          Number(line.period?.start) >=
-            Math.floor(change.effectiveAt.getTime() / 1000) &&
-          (!adjustment || isProration(line)),
-      ),
-  );
+  const operation =
+    membership.planChanges.find(
+      (change) => change.stripeInvoiceId === String(object.id),
+    ) ||
+    membership.planChanges.find(
+      (change) =>
+        change.submittedAt &&
+        change.status !== 'QUOTED' &&
+        lines.some(
+          (line) =>
+            linePrice(line) === change.toPriceId &&
+            Number(line.period?.start) >=
+              Math.floor(change.effectiveAt.getTime() / 1000) &&
+            (!adjustment ||
+              isProration(line) ||
+              (change.quote as { resetBillingCycle?: boolean })
+                ?.resetBillingCycle === true),
+        ),
+    );
+  const resetsCycle =
+    adjustment &&
+    (operation?.quote as { resetBillingCycle?: boolean } | null)
+      ?.resetBillingCycle === true;
+  const proratedAdjustment = adjustment && !resetsCycle;
   const candidates = lines.filter((line) =>
     adjustment
       ? operation &&
         linePrice(line) === operation.toPriceId &&
-        isProration(line)
+        (resetsCycle ? !isProration(line) : isProration(line))
       : !isProration(line) && linePrice(line),
   );
   if (candidates.length !== 1)
@@ -221,6 +235,40 @@ export async function processMembershipPlanChangeEvent(
     identifier(payment?.payment?.payment_intent) ||
     identifier(object.payment_intent);
   const invoiceId = String(object.id);
+  if (resetsCycle) {
+    const quote = operation!.quote as { monthlyCents?: number };
+    const expectedAmount = quote.monthlyCents;
+    const anchor = new Date(start * 1000);
+    const nextMonth = new Date(start * 1000);
+    nextMonth.setUTCDate(1);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    const lastDay = new Date(
+      Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0),
+    ).getUTCDate();
+    nextMonth.setUTCDate(Math.min(anchor.getUTCDate(), lastDay));
+    // Bind to the exact invoice returned by this reviewed update. Early webhooks
+    // fail closed and retry after the submitting request persists that binding.
+    if (
+      !operation!.stripeInvoiceId ||
+      operation!.stripeInvoiceId !== invoiceId ||
+      !Number.isInteger(expectedAmount) ||
+      Number(expectedAmount) <= 0 ||
+      object.amount_due !== expectedAmount ||
+      object.total !== expectedAmount ||
+      (event.type === 'invoice.paid' &&
+        object.amount_paid !== expectedAmount) ||
+      start < Math.floor(operation!.effectiveAt.getTime() / 1000) ||
+      lines.length !== 1 ||
+      line.quantity !== 1 ||
+      (identifier(line.parent?.subscription_item_details?.subscription_item) ||
+        identifier(line.subscription_item)) !== operation!.stripeItemId ||
+      end !== nextMonth.getTime() / 1000
+    ) {
+      throw Error(
+        'Full-month reset invoice does not match the approved payment and period.',
+      );
+    }
+  }
   const existing = await tx.paymentRecord.findFirst({
     where: {
       OR: [
@@ -325,7 +373,10 @@ export async function processMembershipPlanChangeEvent(
     (adjustment
       ? Boolean(operation?.activeMembershipId) &&
         !state.fundingReversedAt &&
-        end === state.paidEnd
+        (resetsCycle
+          ? end > state.paidEnd &&
+            start >= Math.floor(operation!.effectiveAt.getTime() / 1000)
+          : end === state.paidEnd)
       : end > state.paidEnd);
   if (!canApply) return true;
   const balance = account.entries.reduce(
@@ -333,7 +384,7 @@ export async function processMembershipPlanChangeEvent(
     0,
   );
   let quantity: number;
-  if (adjustment) {
+  if (proratedAdjustment) {
     const cycleEntries = account.entries.filter(
       (entry) => entry.createdAt.getTime() >= state.paidStart * 1000,
     );
@@ -390,7 +441,7 @@ export async function processMembershipPlanChangeEvent(
       label: product.name,
       isUnlimited: product.isUnlimited,
       validUntil: new Date(end * 1000),
-      ...(!adjustment ? { validFrom: new Date(start * 1000) } : {}),
+      ...(!proratedAdjustment ? { validFrom: new Date(start * 1000) } : {}),
     },
   });
   await tx.creditLedgerEntry.create({
@@ -399,7 +450,7 @@ export async function processMembershipPlanChangeEvent(
       sourceStripeInvoiceId: invoiceId,
       type: quantity < 0 ? 'EXPIRE' : 'GRANT',
       quantity,
-      reason: adjustment
+      reason: proratedAdjustment
         ? 'Paid membership plan adjustment; prior use retained'
         : 'Paid membership renewal',
     },
@@ -409,7 +460,7 @@ export async function processMembershipPlanChangeEvent(
     data: {
       productId: product.id,
       status: 'ACTIVE',
-      ...(!adjustment
+      ...(!proratedAdjustment
         ? {
             currentPeriodStart: new Date(start * 1000),
             currentPeriodEnd: new Date(end * 1000),
@@ -418,20 +469,26 @@ export async function processMembershipPlanChangeEvent(
     },
   });
   await saveState({
-    paidStart: adjustment ? state.paidStart : start,
+    paidStart: proratedAdjustment ? state.paidStart : start,
     paidEnd: end,
     paidAt,
     lastInvoiceId: invoiceId,
     fundingInvoiceIds: [
-      ...(adjustment ? state.fundingInvoiceIds || [] : []),
+      ...(proratedAdjustment ? state.fundingInvoiceIds || [] : []),
       invoiceId,
     ],
     fundingPaymentIntentIds: [
-      ...(adjustment ? state.fundingPaymentIntentIds || [] : []),
+      ...(proratedAdjustment ? state.fundingPaymentIntentIds || [] : []),
       ...(intent ? [intent] : []),
     ],
     fundingReversedAt: 0,
   });
+  if (product.kind === 'VIP' && product.isUnlimited)
+    await grantVipEventCredit(
+      tx,
+      membership.userId,
+      vipMonthlyBenefitWindowForDate(new Date(paidAt * 1000)),
+    );
   if (operation?.activeMembershipId && operation.toProductId === product.id) {
     await tx.membershipPlanChange.update({
       where: { id: operation.id },
@@ -462,7 +519,9 @@ export async function processMembershipPlanChangeEvent(
     data: {
       userId: membership.userId,
       title: adjustment ? 'Membership updated' : 'Membership renewed',
-      body: `${product.name} is active. Your renewal date stays on the existing monthly schedule.`,
+      body: resetsCycle
+        ? `${product.name} is active. Your new paid month renews on ${new Date(end * 1000).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}.`
+        : `${product.name} is active. Your renewal date stays on the existing monthly schedule.`,
       link: '/member/membership',
     },
   });

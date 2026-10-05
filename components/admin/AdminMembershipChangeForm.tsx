@@ -12,6 +12,9 @@ export type MembershipChangeQuote = {
   renewalAt: string;
   timing: string;
   pricingLabel?: string | null;
+  existingDiscountLabel?: string | null;
+  requiresDiscountReplacement?: boolean;
+  resetBillingCycle?: boolean;
 };
 export type MembershipChangeResult = {
   quote?: MembershipChangeQuote;
@@ -45,11 +48,13 @@ export function AdminMembershipChangeForm(props: Props) {
   const [timing, setTiming] = useState('NEXT_RENEWAL');
   const [result, setResult] = useState<MembershipChangeResult>({});
   const [pending, setPending] = useState(false);
+  const [replaceDiscount, setReplaceDiscount] = useState(false);
   async function review(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     setPending(true);
     setResult({});
+    setReplaceDiscount(false);
     try {
       setResult(await props.quoteAction(data));
     } catch {
@@ -66,6 +71,7 @@ export function AdminMembershipChangeForm(props: Props) {
     const data = new FormData();
     data.set('quoteId', result.quote.id);
     data.set('userId', props.userId);
+    data.set('replaceExistingDiscount', String(replaceDiscount));
     setPending(true);
     try {
       setResult(await props.confirmAction(data));
@@ -89,8 +95,8 @@ export function AdminMembershipChangeForm(props: Props) {
       </summary>
       <div className="space-y-4 border-t border-black/10 p-4 text-sm">
         <p className="text-black/70">
-          Keep the current renewal date. Stripe charges or credits only the
-          difference for the remaining days. Existing bookings stay in place.
+          Choose when the change starts and review the exact Stripe charge.
+          Existing bookings stay in place.
         </p>
         {result.message ? (
           <p
@@ -171,6 +177,22 @@ export function AdminMembershipChangeForm(props: Props) {
                     </p>
                   </div>
                 )}
+                {timing === 'NOW' && (
+                  <label className="flex items-start gap-3 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      name="resetBillingCycle"
+                      value="true"
+                      className="mt-1"
+                    />
+                    <span>
+                      Start a new paid month today. Charge the full monthly
+                      price and reset the renewal date. Unused days on the old
+                      plan will not be credited. Leave unchecked to charge only
+                      the prorated difference.
+                    </span>
+                  </label>
+                )}
                 <MemberPricingFields />
                 <p className="text-xs text-black/60 sm:col-span-2">
                   Review prepares a quote and, when needed, an unapplied Stripe
@@ -196,9 +218,27 @@ export function AdminMembershipChangeForm(props: Props) {
                 {quote.pricingLabel && (
                   <p className="font-bold">{quote.pricingLabel}</p>
                 )}
+                {quote.requiresDiscountReplacement && (
+                  <label className="flex items-start gap-3 border border-orange-300 bg-white p-3">
+                    <input
+                      type="checkbox"
+                      checked={replaceDiscount}
+                      onChange={(e) => setReplaceDiscount(e.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>
+                      Replace existing promotion:{' '}
+                      <strong>{quote.existingDiscountLabel}</strong>. The new
+                      client price above replaces this promotion; discounts will
+                      not stack.
+                    </span>
+                  </label>
+                )}
                 <p>
-                  Starts {date(quote.effectiveAt)}. Renewal stays{' '}
-                  {date(quote.renewalAt)}.
+                  Starts {date(quote.effectiveAt)}.{' '}
+                  {quote.resetBillingCycle
+                    ? 'A full paid month starts today; future renewals follow this new monthly date. Unused old-plan days are not credited.'
+                    : `Renewal stays ${date(quote.renewalAt)}.`}
                 </p>
                 <p className="font-bold">
                   {quote.creditCents > 0
@@ -210,13 +250,18 @@ export function AdminMembershipChangeForm(props: Props) {
                   refund. The first invoice may include that credit. Future full
                   months use the reviewed client price for the chosen duration,
                   then the regular plan price. New access starts after payment
-                  succeeds; credits already used this month are not granted
-                  again.
+                  succeeds.{' '}
+                  {quote.resetBillingCycle
+                    ? 'Standard class access starts for the new paid month. VIP event benefits remain limited to one per calendar month.'
+                    : 'Credits already used this month are not granted again.'}
                 </p>
                 <button
                   type="button"
                   onClick={confirm}
-                  disabled={pending}
+                  disabled={
+                    pending ||
+                    (!!quote.requiresDiscountReplacement && !replaceDiscount)
+                  }
                   className="min-h-11 w-full bg-rhyze-black px-4 py-3 font-bold text-white disabled:opacity-50"
                 >
                   {pending ? 'Confirming…' : 'Confirm membership change'}

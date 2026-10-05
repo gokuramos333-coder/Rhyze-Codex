@@ -59,13 +59,14 @@ export function immediateChangeParams(
   itemId: string,
   priceId: string,
   at: number,
+  resetBillingCycle = false,
 ): Stripe.SubscriptionUpdateParams {
   return {
     items: [{ id: itemId, price: priceId, quantity: 1 }],
-    billing_cycle_anchor: 'unchanged',
-    proration_behavior: 'always_invoice',
+    billing_cycle_anchor: resetBillingCycle ? 'now' : 'unchanged',
+    proration_behavior: resetBillingCycle ? 'none' : 'always_invoice',
     payment_behavior: 'pending_if_incomplete',
-    proration_date: at,
+    ...(!resetBillingCycle ? { proration_date: at } : {}),
     expand: ['latest_invoice'],
   };
 }

@@ -130,3 +130,50 @@ it('includes custom price terms in review and invalidates them after editing', a
     screen.queryByLabelText('Number of months from activation'),
   ).toBeNull();
 });
+
+it('requires acknowledgment of the existing promotion before sending confirmation', async () => {
+  const p = {
+    ...props(),
+    quoteAction: vi.fn(async () => ({
+      quote: {
+        ...quote,
+        requiresDiscountReplacement: true,
+        existingDiscountLabel: 'RHYZE2026: 20% off for 2 months',
+      },
+    })),
+  };
+  render(<AdminMembershipChangeForm {...p} />);
+  fireEvent.click(screen.getByText('Change membership'));
+  fireEvent.submit(
+    screen.getByRole('button', { name: 'Review change' }).closest('form')!,
+  );
+  const confirm = await screen.findByRole('button', {
+    name: 'Confirm membership change',
+  });
+  expect((confirm as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: /Replace existing promotion/ }),
+  );
+  expect((confirm as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(confirm);
+  await screen.findByText('Membership updated.');
+  const data = (p.confirmAction.mock.calls as unknown as [FormData][])[0][0];
+  expect(data.get('replaceExistingDiscount')).toBe('true');
+});
+it('submits a new paid month only when explicitly selected for an immediate upgrade', async () => {
+  const p = props();
+  render(<AdminMembershipChangeForm {...p} />);
+  fireEvent.click(screen.getByText('Change membership'));
+  fireEvent.change(screen.getByLabelText('Start the change'), {
+    target: { value: 'NOW' },
+  });
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: /Start a new paid month/ }),
+  );
+  fireEvent.submit(
+    screen.getByRole('button', { name: 'Review change' }).closest('form')!,
+  );
+  await screen.findByRole('button', { name: 'Confirm membership change' });
+  const data = (p.quoteAction.mock.calls as unknown as [FormData][])[0][0];
+  expect(data.get('resetBillingCycle')).toBe('true');
+});

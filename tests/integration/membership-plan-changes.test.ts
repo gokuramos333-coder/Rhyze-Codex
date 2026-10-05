@@ -1,3 +1,5 @@
+import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
+import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import { randomUUID } from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
@@ -255,6 +257,7 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
       status: 'paid',
       amount_paid: 1072,
       amount_due: 1072,
+      total: 1072,
       currency: 'usd',
       billing_reason: reason,
       status_transitions: { paid_at: periodStart + 5 },
@@ -264,6 +267,8 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
         data: [
           {
             type: 'subscription',
+            quantity: 1,
+            subscription_item: `si_${id}`,
             price: price('new'),
             proration: reason === 'subscription_update',
             amount: 1072,
@@ -299,6 +304,343 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
       process,
     };
   }
+  it('starts a new full paid month only after the reset invoice succeeds and only once', async () => {
+    const f = await fixture();
+    f.preview.amount_due = 11900;
+    f.preview.total = 11900;
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      { ...f.input, resetBillingCycle: true },
+      now,
+    );
+    expect(q.quote).toMatchObject({
+      resetBillingCycle: true,
+      chargeCents: 11900,
+    });
+    await f.confirm(q.id);
+    expect(f.stripe.subscriptions.update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        billing_cycle_anchor: 'now',
+        proration_behavior: 'none',
+        payment_behavior: 'pending_if_incomplete',
+      }),
+      expect.anything(),
+    );
+    expect(
+      (await db.membership.findUniqueOrThrow({ where: { id: f.id } }))
+        .productId,
+    ).toBe(`${f.id}-old`);
+    const paidStart = Math.floor(now.getTime() / 1000) + 10;
+    const paidEnd = Date.parse('2026-10-21T18:00:10Z') / 1000;
+    const invoice = f.invoice(
+      'change',
+      'subscription_update',
+      paidStart,
+      paidEnd,
+    );
+    invoice.lines.data[0].proration = false;
+    invoice.lines.data[0].amount = 11900;
+    invoice.amount_paid = 11900;
+    invoice.amount_due = 11900;
+    invoice.total = 11900;
+    await f.process(f.event(invoice));
+    await f.process(f.event(invoice));
+    expect(
+      await db.membership.findUniqueOrThrow({ where: { id: f.id } }),
+    ).toMatchObject({
+      productId: `${f.id}-new`,
+      status: 'ACTIVE',
+      currentPeriodStart: new Date(paidStart * 1000),
+      currentPeriodEnd: new Date(paidEnd * 1000),
+    });
+    expect(
+      await db.membershipPlanChange.findUniqueOrThrow({ where: { id: q.id } }),
+    ).toMatchObject({ status: 'APPLIED' });
+    expect(
+      await db.paymentRecord.count({ where: { stripeInvoiceId: invoice.id } }),
+    ).toBe(1);
+    expect(
+      await db.creditLedgerEntry.count({
+        where: { sourceStripeInvoiceId: invoice.id },
+      }),
+    ).toBe(1);
+  });
+  it.each([
+    'unbound',
+    'wrong-invoice',
+    'zero-paid',
+    'wrong-item',
+    'wrong-period',
+    'early-period',
+    'extra-line',
+  ])(
+    'rejects an unverified reset receipt: %s, without recording payment or granting access',
+    async (problem) => {
+      const f = await fixture();
+      f.preview.amount_due = f.preview.total = 11900;
+      const q = await quoteAdminPlanChange(
+        db,
+        f.stripe as unknown as Stripe,
+        { ...f.input, resetBillingCycle: true },
+        now,
+      );
+      await f.confirm(q.id);
+      const invoice = f.invoice(
+        'change',
+        'subscription_update',
+        Math.floor(now.getTime() / 1000) + 10,
+        Date.parse('2026-10-21T18:00:10Z') / 1000,
+      );
+      invoice.lines.data[0].proration = false;
+      invoice.amount_paid = invoice.amount_due = invoice.total = 11900;
+      if (problem === 'unbound')
+        await db.membershipPlanChange.update({
+          where: { id: q.id },
+          data: { stripeInvoiceId: null },
+        });
+      if (problem === 'wrong-invoice') invoice.id += '-unrelated';
+      if (problem === 'zero-paid')
+        invoice.amount_paid = invoice.amount_due = invoice.total = 0;
+      if (problem === 'wrong-item')
+        invoice.lines.data[0].subscription_item = 'si_other';
+      if (problem === 'wrong-period') invoice.lines.data[0].period.end += 86400;
+      if (problem === 'early-period') {
+        invoice.lines.data[0].period.start -= 86400;
+        invoice.lines.data[0].period.end -= 86400;
+      }
+      if (problem === 'extra-line')
+        invoice.lines.data.push({ ...invoice.lines.data[0] });
+      await expect(f.process(f.event(invoice))).rejects.toThrow(
+        /reset invoice|ambiguous/i,
+      );
+      expect(
+        (await db.membership.findUniqueOrThrow({ where: { id: f.id } }))
+          .productId,
+      ).toBe(`${f.id}-old`);
+      expect(
+        await db.paymentRecord.count({
+          where: { stripeInvoiceId: invoice.id },
+        }),
+      ).toBe(0);
+      if (problem === 'unbound') {
+        await db.membershipPlanChange.update({
+          where: { id: q.id },
+          data: { stripeInvoiceId: invoice.id },
+        });
+        await f.process(f.event(invoice));
+        expect(
+          (
+            await db.membershipPlanChange.findUniqueOrThrow({
+              where: { id: q.id },
+            })
+          ).status,
+        ).toBe('APPLIED');
+      }
+    },
+  );
+  it('grants exactly one calendar-month event credit after a paid VIP upgrade', async () => {
+    const f = await fixture();
+    await db.product.update({
+      where: { id: `${f.id}-new` },
+      data: { kind: 'VIP', isUnlimited: true, includedCredits: null },
+    });
+    f.preview.amount_due = 11900;
+    f.preview.total = 11900;
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      { ...f.input, resetBillingCycle: true },
+      now,
+    );
+    await f.confirm(q.id);
+    expect(
+      await db.creditAccount.count({
+        where: { userId: f.id, sourcePurchaseId: null },
+      }),
+    ).toBe(0);
+    const invoice = f.invoice(
+      'change',
+      'subscription_update',
+      Math.floor(now.getTime() / 1000) + 10,
+      Date.parse('2026-10-21T18:00:10Z') / 1000,
+    );
+    invoice.lines.data[0].proration = false;
+    invoice.lines.data[0].amount = 11900;
+    invoice.amount_paid = 11900;
+    invoice.amount_due = 11900;
+    invoice.total = 11900;
+    await f.process(f.event(invoice));
+    await f.process(f.event(invoice));
+    await Promise.all([
+      grantVipEventCredit(db, f.id, vipMonthlyBenefitWindowForDate(now)),
+      grantVipEventCredit(db, f.id, vipMonthlyBenefitWindowForDate(now)),
+    ]);
+    const accounts = await db.creditAccount.findMany({
+      where: { userId: f.id },
+      include: { entries: true },
+    });
+    expect(accounts.find((a) => a.sourcePurchaseId === f.id)?.isUnlimited).toBe(
+      true,
+    );
+    const eventAccounts = accounts.filter((a) => !a.sourcePurchaseId);
+    expect(eventAccounts).toHaveLength(1);
+    expect(eventAccounts[0].label).toContain(
+      'September 2026 VIP complimentary event credit',
+    );
+    expect(eventAccounts[0].entries.reduce((n, e) => n + e.quantity, 0)).toBe(
+      1,
+    );
+  });
+  it('preserves a legacy event grant when its old UTC boundary differs', async () => {
+    const f = await fixture();
+    const window = vipMonthlyBenefitWindowForDate(
+      new Date('2026-12-15T12:00Z'),
+    );
+    await db.creditAccount.create({
+      data: {
+        userId: f.id,
+        label: window.eventCreditLabel,
+        validFrom: new Date('2026-12-01T04:00Z'),
+        validUntil: new Date('2027-01-01T04:00Z'),
+        entries: {
+          create: {
+            type: 'GRANT',
+            quantity: 1,
+            reason: 'Legacy monthly benefit',
+          },
+        },
+      },
+    });
+    expect(await grantVipEventCredit(db, f.id, window)).toBe(false);
+    expect(
+      await db.creditAccount.count({
+        where: { userId: f.id, sourcePurchaseId: null },
+      }),
+    ).toBe(1);
+  });
+  it('does not submit a new-month charge when preview is not the exact full monthly amount', async () => {
+    const f = await fixture();
+    await expect(
+      quoteAdminPlanChange(
+        db,
+        f.stripe as unknown as Stripe,
+        { ...f.input, resetBillingCycle: true },
+        now,
+      ),
+    ).rejects.toThrow(/full monthly/);
+    expect(f.stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
+  it('reviews a legacy promotion and requires explicit replacement confirmation', async () => {
+    const f = await fixture();
+    const legacy = {
+      id: 'legacy',
+      name: 'RHYZE2026',
+      percent_off: 20,
+      amount_off: null,
+      currency: null,
+      duration: 'repeating',
+      duration_in_months: 2,
+      metadata: {},
+    };
+    (f.subscription.discounts as unknown[]) = [
+      { id: 'di_legacy', source: { coupon: 'legacy' }, start, end },
+    ];
+    const originalRetrieve = f.stripe.coupons.retrieve.getMockImplementation()!;
+    f.stripe.coupons.retrieve.mockImplementation(async (id) =>
+      id === 'legacy' ? legacy : originalRetrieve(id),
+    );
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      {
+        ...f.input,
+        monthlyPrice: '99',
+        discountDuration: 'forever',
+        discountReason: 'Owner lifetime offer',
+      },
+      now,
+    );
+    expect(q.quote).toMatchObject({
+      requiresDiscountReplacement: true,
+      existingDiscountLabel: 'RHYZE2026: 20% off for 2 months',
+    });
+    await expect(f.confirm(q.id)).rejects.toThrow(/confirm.*replac/i);
+    expect(
+      (await db.membershipPlanChange.findUniqueOrThrow({ where: { id: q.id } }))
+        .status,
+    ).toBe('QUOTED');
+    await confirmAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      {
+        quoteId: q.id,
+        userId: f.id,
+        actorId: f.id,
+        replaceExistingDiscount: true,
+      },
+      now,
+    );
+    expect(
+      (await db.membershipPlanChange.findUniqueOrThrow({ where: { id: q.id } }))
+        .status,
+    ).toBe('AWAITING_PAYMENT');
+    expect(
+      (await db.membership.findUniqueOrThrow({ where: { id: f.id } }))
+        .productId,
+    ).toBe(`${f.id}-old`);
+  });
+  it('refuses changed legacy discount terms after review before submitting payment', async () => {
+    const f = await fixture();
+    const legacy = {
+      id: 'legacy',
+      name: 'RHYZE2026',
+      percent_off: 20,
+      amount_off: null,
+      currency: null,
+      duration: 'repeating',
+      duration_in_months: 2,
+      metadata: {},
+    };
+    (f.subscription.discounts as unknown[]) = [
+      { id: 'di_legacy', source: { coupon: 'legacy' }, start, end },
+    ];
+    const originalRetrieve = f.stripe.coupons.retrieve.getMockImplementation()!;
+    f.stripe.coupons.retrieve.mockImplementation(async (id) =>
+      id === 'legacy' ? legacy : originalRetrieve(id),
+    );
+    const q = await quoteAdminPlanChange(
+      db,
+      f.stripe as unknown as Stripe,
+      {
+        ...f.input,
+        monthlyPrice: '99',
+        discountDuration: 'forever',
+        discountReason: 'Owner lifetime offer',
+      },
+      now,
+    );
+    legacy.percent_off = 30;
+    await expect(
+      confirmAdminPlanChange(
+        db,
+        f.stripe as unknown as Stripe,
+        {
+          quoteId: q.id,
+          userId: f.id,
+          actorId: f.id,
+          replaceExistingDiscount: true,
+        },
+        now,
+      ),
+    ).rejects.toThrow(/discount changed/i);
+    expect(
+      (await db.membershipPlanChange.findUniqueOrThrow({ where: { id: q.id } }))
+        .status,
+    ).toBe('QUOTED');
+    expect(f.stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
   it('reviews a timed client discount and applies the same coupon once without unpaid access', async () => {
     const f = await fixture();
     const q = await quoteAdminPlanChange(

@@ -21,6 +21,10 @@ const quoteInput = z.object({
   discountDuration: z.string().optional(),
   discountMonths: z.string().optional(),
   discountReason: z.string().optional(),
+  resetBillingCycle: z
+    .string()
+    .optional()
+    .transform((value) => value === 'true'),
 });
 export async function quoteMembershipChangeAction(
   data: FormData,
@@ -83,6 +87,7 @@ export async function confirmMembershipChangeAction(
     const record = await confirmAdminPlanChange(prisma, getStripe(), {
       ...parsed.data,
       actorId: actor.id,
+      replaceExistingDiscount: data.get('replaceExistingDiscount') === 'true',
     });
     revalidatePath(`/admin/members/${parsed.data.userId}`);
     revalidatePath('/member/membership');
@@ -98,7 +103,9 @@ export async function confirmMembershipChangeAction(
       status: record.status,
       message:
         record.status === 'APPLIED'
-          ? 'Membership updated. The renewal date is unchanged.'
+          ? (record.quote as { resetBillingCycle?: boolean }).resetBillingCycle
+            ? 'Membership updated. A new paid month starts today.'
+            : 'Membership updated. The renewal date is unchanged.'
           : record.status === 'SCHEDULED'
             ? 'Membership change scheduled in Stripe. The current plan remains active until the start date and successful payment.'
             : record.status === 'AWAITING_PAYMENT'

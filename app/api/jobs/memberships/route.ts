@@ -1,3 +1,4 @@
+import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
@@ -173,33 +174,8 @@ export async function POST(request: Request) {
       vipUnlimitedCreditsSynced += 1;
     }
 
-    const existingEventCredit = await prisma.creditAccount.findFirst({
-      where: {
-        userId: membership.userId,
-        label: vipWindow.eventCreditLabel,
-        validFrom: vipWindow.validFrom,
-        validUntil: vipWindow.validUntil,
-      },
-      select: { id: true },
-    });
-    if (!existingEventCredit) {
-      await prisma.creditAccount.create({
-        data: {
-          userId: membership.userId,
-          label: vipWindow.eventCreditLabel,
-          validFrom: vipWindow.validFrom,
-          validUntil: vipWindow.validUntil,
-          entries: {
-            create: {
-              type: 'GRANT',
-              quantity: 1,
-              reason: vipWindow.eventGrantReason,
-            },
-          },
-        },
-      });
+    if (await grantVipEventCredit(prisma, membership.userId, vipWindow))
       vipEventCreditsGranted += 1;
-    }
   }
 
   return NextResponse.json({

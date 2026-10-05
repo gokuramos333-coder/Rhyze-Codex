@@ -1,3 +1,4 @@
+import { zonedLocalDateTimeToDate } from '@/lib/domain/schedule/recurrence-service';
 import { EVENT_CREDIT_LABEL_PREFIX } from '@/lib/domain/bookings/booking-rules';
 
 export const VIP_MONTHLY_EVENT_CREDIT_POLICY =
@@ -33,11 +34,25 @@ function pad(value: number) {
   return String(value).padStart(2, '0');
 }
 
-export function vipMonthlyBenefitWindow(input: { year: number; monthIndex: number }): VipMonthlyBenefitWindow {
-  const { year, monthIndex } = input;
-  const validFrom = new Date(Date.UTC(year, monthIndex, 1, 4, 0, 0, 0));
-  const validUntil = new Date(Date.UTC(year, monthIndex + 1, 1, 4, 0, 0, 0));
-  const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0, 4, 0, 0, 0)).getUTCDate();
+export function vipMonthlyBenefitWindow(input: {
+  year: number;
+  monthIndex: number;
+}): VipMonthlyBenefitWindow {
+  const normalized = new Date(Date.UTC(input.year, input.monthIndex, 1));
+  const year = normalized.getUTCFullYear();
+  const monthIndex = normalized.getUTCMonth();
+  const next = new Date(Date.UTC(year, monthIndex + 1, 1));
+  const validFrom = zonedLocalDateTimeToDate(
+    `${year}-${pad(monthIndex + 1)}-01T00:00`,
+    'America/New_York',
+  );
+  const validUntil = zonedLocalDateTimeToDate(
+    `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-01T00:00`,
+    'America/New_York',
+  );
+  const lastDay = new Date(
+    Date.UTC(year, monthIndex + 1, 0, 4, 0, 0, 0),
+  ).getUTCDate();
   const monthNumber = monthIndex + 1;
   const monthLabel = `${MONTH_NAMES[monthIndex]} ${year}`;
   const expirationLabel = `${year}-${pad(monthNumber)}-${pad(lastDay)}`;
@@ -53,10 +68,26 @@ export function vipMonthlyBenefitWindow(input: { year: number; monthIndex: numbe
   };
 }
 
+function studioMonth(now: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+  }).formatToParts(now);
+  return {
+    year: Number(parts.find((p) => p.type === 'year')!.value),
+    monthIndex: Number(parts.find((p) => p.type === 'month')!.value) - 1,
+  };
+}
+
 export function vipMonthlyBenefitWindowForDate(now: Date) {
-  return vipMonthlyBenefitWindow({ year: now.getUTCFullYear(), monthIndex: now.getUTCMonth() });
+  return vipMonthlyBenefitWindow(studioMonth(now));
 }
 
 export function vipMonthlyBenefitWindowForNextMonth(now: Date) {
-  return vipMonthlyBenefitWindow({ year: now.getUTCFullYear(), monthIndex: now.getUTCMonth() + 1 });
+  const month = studioMonth(now);
+  return vipMonthlyBenefitWindow({
+    ...month,
+    monthIndex: month.monthIndex + 1,
+  });
 }

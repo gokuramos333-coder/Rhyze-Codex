@@ -32,9 +32,11 @@ export type PlanChangeInput = MemberPricingInput & {
   timing: string;
   date: string;
   actorId: string;
+  resetBillingCycle?: boolean;
 };
 
 type SavedQuote = {
+  resetBillingCycle?: boolean;
   date?: string;
   chargeCents: number;
   totalCents: number;
@@ -43,6 +45,9 @@ type SavedQuote = {
   pricingInput?: MemberPricingInput | null;
   couponId?: string | null;
   sourceDiscountIds?: string;
+  sourceDiscountReview?: string;
+  requiresDiscountReplacement?: boolean;
+  existingDiscountLabel?: string | null;
   stripeProductId?: string | null;
 };
 function inputPricing(input: MemberPricingInput): MemberPricingInput {
@@ -133,6 +138,13 @@ async function verifiedSource(
     input.monthlyPrice?.trim() ? '' : member.productId,
   );
   const pricing = parseMemberPricing(input, product.priceCents);
+  if (
+    input.resetBillingCycle &&
+    (input.timing !== 'NOW' || product.id === member.productId)
+  )
+    throw Error(
+      'A new paid month requires an immediate change to a different membership.',
+    );
   if (product.id === member.productId && input.timing !== 'NEXT_RENEWAL')
     throw Error(
       'Price-only changes to the current plan start at next renewal.',
@@ -172,6 +184,9 @@ async function verifiedSource(
       'Stripe paid period or price differs from Rhyze. Reconcile billing before changing plans.',
     );
   }
+  let sourceDiscountReview = '[]';
+  let existingDiscountLabel: string | null = null;
+  const requiresDiscountReplacement = subscription.discounts.length > 0;
   if (subscription.discounts.length) {
     if (!pricing || subscription.discounts.length !== 1)
       throw Error(
@@ -184,12 +199,36 @@ async function verifiedSource(
       if (!couponId) throw Error('Stripe discount details unavailable.');
       const coupon = await stripe.coupons.retrieve(couponId);
       if (
-        coupon.metadata?.source !== 'RHYZE_MEMBER_PRICING' ||
-        coupon.metadata.userId !== input.userId
+        !coupon ||
+        (coupon.amount_off != null && coupon.currency !== 'usd') ||
+        (coupon.percent_off == null && coupon.amount_off == null)
       )
-        throw Error(
-          'An external Stripe discount requires separate review; it will not be removed.',
-        );
+        throw Error('Existing Stripe discount terms need manual review.');
+      const terms = {
+        discountId: discount.id,
+        couponId,
+        name: coupon.name ?? null,
+        amountOff: coupon.amount_off,
+        percentOff: coupon.percent_off,
+        currency: coupon.currency ?? null,
+        duration: coupon.duration,
+        months: coupon.duration_in_months,
+        appliesTo: coupon.applies_to?.products ?? [],
+        start: discount.start,
+        end: discount.end,
+      };
+      sourceDiscountReview = JSON.stringify(terms);
+      const amount =
+        coupon.percent_off != null
+          ? `${coupon.percent_off}%`
+          : `$${(coupon.amount_off! / 100).toFixed(2)}`;
+      const duration =
+        coupon.duration === 'forever'
+          ? 'without an end date'
+          : coupon.duration === 'once'
+            ? 'once'
+            : `for ${coupon.duration_in_months} months`;
+      existingDiscountLabel = `${coupon.name || 'Stripe promotion'}: ${amount} off ${duration}`;
     }
   }
   // These configurations need a dedicated quote/preservation workflow, never silently drop them.
@@ -211,7 +250,16 @@ async function verifiedSource(
   verifyPrice(item.price, member.product.priceCents);
   const price = await stripe.prices.retrieve(product.stripePriceId!);
   verifyPrice(price, product.priceCents);
-  return { member, product, subscription, item, pricing };
+  return {
+    member,
+    product,
+    subscription,
+    item,
+    pricing,
+    sourceDiscountReview,
+    existingDiscountLabel,
+    requiresDiscountReplacement,
+  };
 }
 
 async function preview(
@@ -222,6 +270,7 @@ async function preview(
   effectiveAt: Date,
   periodEnd: Date,
   discounts?: Stripe.InvoiceCreatePreviewParams['discounts'],
+  resetBillingCycle = false,
 ) {
   const renewal = effectiveAt.getTime() === periodEnd.getTime();
   const invoice = await stripe.invoices.createPreview({
@@ -229,9 +278,10 @@ async function preview(
     ...(discounts !== undefined ? { discounts } : {}),
     subscription_details: {
       items: [{ id: itemId, price: priceId, quantity: 1 }],
-      billing_cycle_anchor: 'unchanged',
-      proration_behavior: renewal ? 'none' : 'always_invoice',
-      ...(!renewal
+      billing_cycle_anchor: resetBillingCycle ? 'now' : 'unchanged',
+      proration_behavior:
+        resetBillingCycle || renewal ? 'none' : 'always_invoice',
+      ...(!renewal && !resetBillingCycle
         ? { proration_date: Math.floor(effectiveAt.getTime() / 1000) }
         : {}),
     },
@@ -251,12 +301,16 @@ export async function quoteAdminPlanChange(
   input: PlanChangeInput,
   now = new Date(),
 ) {
-  const { member, product, subscription, item, pricing } = await verifiedSource(
-    db,
-    stripe,
-    input,
-    now,
-  );
+  const {
+    member,
+    product,
+    subscription,
+    item,
+    pricing,
+    sourceDiscountReview,
+    existingDiscountLabel,
+    requiresDiscountReplacement,
+  } = await verifiedSource(db, stripe, input, now);
   const effectiveAt = changeEffectiveAt(
     input.timing,
     input.date,
@@ -290,7 +344,16 @@ export async function quoteAdminPlanChange(
     effectiveAt,
     member.currentPeriodEnd!,
     discounts,
+    input.resetBillingCycle,
   );
+  if (
+    input.resetBillingCycle &&
+    (amounts.chargeCents !== (pricing?.monthlyCents ?? product.priceCents) ||
+      amounts.totalCents !== amounts.chargeCents)
+  )
+    throw Error(
+      'Stripe preview differs from the full monthly price. Review any pending items or billing balance before charging.',
+    );
   return db.membershipPlanChange.create({
     data: {
       membershipId: member.id,
@@ -309,6 +372,7 @@ export async function quoteAdminPlanChange(
       toPriceId: product.stripePriceId!,
       quote: {
         ...amounts,
+        resetBillingCycle: !!input.resetBillingCycle,
         monthlyCents: pricing?.monthlyCents ?? product.priceCents,
         pricing: pricing ? json(pricing) : null,
         pricingInput: pricing ? json(inputPricing(input)) : null,
@@ -316,6 +380,9 @@ export async function quoteAdminPlanChange(
         couponId,
         stripeProductId,
         sourceDiscountIds: JSON.stringify(subscription.discounts.map(id)),
+        sourceDiscountReview,
+        existingDiscountLabel,
+        requiresDiscountReplacement,
         fromName: member.product.name,
         toName: product.name,
         date: input.date,
@@ -327,7 +394,12 @@ export async function quoteAdminPlanChange(
 export async function confirmAdminPlanChange(
   db: PrismaClient,
   stripe: Stripe,
-  input: { quoteId: string; userId: string; actorId: string },
+  input: {
+    quoteId: string;
+    userId: string;
+    actorId: string;
+    replaceExistingDiscount?: boolean;
+  },
   now = new Date(),
 ) {
   const target = await db.membershipPlanChange.findFirst({
@@ -350,7 +422,12 @@ export async function confirmAdminPlanChange(
 async function confirmLockedPlanChange(
   db: PrismaClient,
   stripe: Stripe,
-  input: { quoteId: string; userId: string; actorId: string },
+  input: {
+    quoteId: string;
+    userId: string;
+    actorId: string;
+    replaceExistingDiscount?: boolean;
+  },
   now: Date,
 ) {
   const operation = await db.membershipPlanChange.findFirst({
@@ -379,6 +456,7 @@ async function confirmLockedPlanChange(
       timing: operation.timing,
       date: String(quote.date || ''),
       ...(quote.pricingInput || {}),
+      resetBillingCycle: quote.resetBillingCycle,
     },
     now,
   );
@@ -396,6 +474,14 @@ async function confirmLockedPlanChange(
     (quote.sourceDiscountIds || '[]')
   )
     throw Error('Stripe discount changed since this quote. Review again.');
+  if (source.requiresDiscountReplacement) {
+    if (source.sourceDiscountReview !== quote.sourceDiscountReview)
+      throw Error('Stripe discount changed since this quote. Review again.');
+    if (input.replaceExistingDiscount !== true)
+      throw Error(
+        'Confirm replacement of the displayed existing Stripe discount.',
+      );
+  }
   if (quote.couponId) {
     const coupon = await stripe.coupons.retrieve(quote.couponId);
     if (
@@ -425,6 +511,7 @@ async function confirmLockedPlanChange(
         ? [{ coupon: quote.couponId }]
         : []
       : undefined,
+    quote.resetBillingCycle,
   );
   if (
     amounts.chargeCents !== quote.chargeCents ||
@@ -557,6 +644,7 @@ async function executeSavedChange(
             operation.stripeItemId,
             operation.toPriceId,
             Math.floor(operation.effectiveAt.getTime() / 1000),
+            quote.resetBillingCycle,
           ),
           ...(discounts !== undefined ? { discounts } : {}),
         },

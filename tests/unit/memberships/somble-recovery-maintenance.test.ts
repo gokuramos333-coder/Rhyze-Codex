@@ -126,6 +126,11 @@ function fixture(person: {
       update: async ({ data }: any) => Object.assign(purchase, data),
     },
     creditAccount: {
+      upsert: async ({where,create,update}: any) => {
+        const existing=accounts.find(a=>a.id===where.id);
+        if(existing)return Object.assign(existing,update);
+        const created={...create};accounts.push(created);return created;
+      },
       findUnique: async ({ where }: any) =>
         accounts.find((a) => a.id === where.id) ?? null,
       findFirst: async ({ where }: any) =>
