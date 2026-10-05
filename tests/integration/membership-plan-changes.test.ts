@@ -200,7 +200,15 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
           coupons.set(coupon.id, coupon);
           return coupon;
         }),
-        retrieve: vi.fn(async (id: string) => coupons.get(id)),
+        retrieve: vi.fn(
+          async (id: string, params?: Stripe.CouponRetrieveParams) => {
+            const coupon = coupons.get(id);
+            // Stripe omits this product restriction unless explicitly expanded.
+            if (!coupon || params?.expand?.includes('applies_to'))
+              return coupon;
+            return { ...coupon, applies_to: undefined };
+          },
+        ),
       },
       subscriptions: {
         retrieve: vi.fn(async () => subscription),
@@ -548,8 +556,8 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
       { id: 'di_legacy', source: { coupon: 'legacy' }, start, end },
     ];
     const originalRetrieve = f.stripe.coupons.retrieve.getMockImplementation()!;
-    f.stripe.coupons.retrieve.mockImplementation(async (id) =>
-      id === 'legacy' ? legacy : originalRetrieve(id),
+    f.stripe.coupons.retrieve.mockImplementation(async (id, params) =>
+      id === 'legacy' ? legacy : originalRetrieve(id, params),
     );
     const q = await quoteAdminPlanChange(
       db,
@@ -607,8 +615,8 @@ describe.skipIf(!url)('Stripe-backed admin membership changes', () => {
       { id: 'di_legacy', source: { coupon: 'legacy' }, start, end },
     ];
     const originalRetrieve = f.stripe.coupons.retrieve.getMockImplementation()!;
-    f.stripe.coupons.retrieve.mockImplementation(async (id) =>
-      id === 'legacy' ? legacy : originalRetrieve(id),
+    f.stripe.coupons.retrieve.mockImplementation(async (id, params) =>
+      id === 'legacy' ? legacy : originalRetrieve(id, params),
     );
     const q = await quoteAdminPlanChange(
       db,

@@ -197,7 +197,9 @@ async function verifiedSource(
         throw Error('Stripe discount details unavailable.');
       const couponId = id(discount.source?.coupon);
       if (!couponId) throw Error('Stripe discount details unavailable.');
-      const coupon = await stripe.coupons.retrieve(couponId);
+      const coupon = await stripe.coupons.retrieve(couponId, {
+        expand: ['applies_to'],
+      });
       if (
         !coupon ||
         (coupon.amount_off != null && coupon.currency !== 'usd') ||
@@ -483,7 +485,9 @@ async function confirmLockedPlanChange(
       );
   }
   if (quote.couponId) {
-    const coupon = await stripe.coupons.retrieve(quote.couponId);
+    const coupon = await stripe.coupons.retrieve(quote.couponId, {
+      expand: ['applies_to'],
+    });
     if (
       !coupon.valid ||
       coupon.currency !== 'usd' ||
