@@ -1,3 +1,5 @@
+import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
+import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import { queuePaymentFailureEmail } from '@/lib/notifications/payment-failure';
 import { fulfillClassTicket } from '@/lib/payments/class-ticket-fulfillment';
 import { classTicketBinding, classTicketCreditTerms, classTicketFulfillment } from '@/lib/payments/class-ticket';
@@ -241,7 +243,9 @@ async function nativeVipEntitlementDecision(
   );
   const paidAt = Math.max(
     Number(state.paidAt || 0),
-    (purchase.paidAt?.getTime() ?? 0) / 1000,
+    // Checkout completion is later than invoice settlement and is not an
+    // entitlement watermark. Only an existing paid window may use this fallback.
+    paidEnd > 0 ? (purchase.paidAt?.getTime() ?? 0) / 1000 : 0,
   );
   const lifecycleAt = Number(state.lifecycleAt || 0);
   const restrictiveAt = Number(state.restrictiveAt || 0);
@@ -1065,6 +1069,9 @@ export async function processStripeEvent(
           },
         });
       }
+    }
+    if (nativeVip && entitlement?.apply) {
+      await grantVipEventCredit(tx, membership.userId, vipMonthlyBenefitWindowForDate(entitlement.periodStart ?? action.occurredAt));
     }
     await tx.paymentRecord.upsert({
       where: { stripeInvoiceId: action.invoiceId },

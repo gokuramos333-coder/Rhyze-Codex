@@ -19,6 +19,7 @@ describe.skipIf(!url)('native VIP overlapping PostgreSQL events', () => {
   const prefix = `vip-order-test-${randomUUID()}`;
   afterAll(async () => {
     await db.paymentRecord.deleteMany({ where: { userId: { startsWith: prefix } } });
+    await db.creditLedgerEntry.deleteMany({ where: { creditAccount: { userId: { startsWith: prefix } } } });
     await db.creditAccount.deleteMany({ where: { userId: { startsWith: prefix } } });
     await db.membership.deleteMany({ where: { userId: { startsWith: prefix } } });
     await db.purchase.deleteMany({ where: { userId: { startsWith: prefix } } });
@@ -46,6 +47,34 @@ describe.skipIf(!url)('native VIP overlapping PostgreSQL events', () => {
     ));
     return { id, invoice, event, paid, process };
   }
+  // Real Stripe invoices can be paid seconds before checkout.session.completed.
+  it.each([['VIP','checkout-first'],['VIP','invoice-first'],['VIP','concurrent'],['LIMITED_MEMBERSHIP','checkout-first'],['LIMITED_MEMBERSHIP','invoice-first'],['LIMITED_MEMBERSHIP','concurrent']] as const)('grants initial discounted %s access despite later checkout timestamp (%s)', async (kind,order) => {
+    const f = await fixture();
+    await db.creditAccount.deleteMany({ where: { sourcePurchaseId: f.id } });
+    await db.membership.delete({ where: { id: f.id } });
+    await db.purchase.update({ where: { id: f.id }, data: { status: 'PENDING', paidAt: null, amountCents: 19900 } });
+    if (kind === 'LIMITED_MEMBERSHIP') await db.product.update({ where: { id: f.id }, data: { kind, isUnlimited: false, includedCredits: 8 } });
+    const invoice = { ...f.invoice('initial', oct, nov), amount_paid: 19900, amount_due: 19900,
+      billing_reason: 'subscription_create', metadata: { purchaseId: f.id } };
+    const paid = f.event('invoice.paid', 'initial-event', oct + 11, invoice);
+    const checkout = f.event('checkout.session.completed', 'checkout', oct + 13, {
+      id: `${f.id}-checkout`, payment_status: 'paid', amount_total: 19900, currency: 'usd',
+      subscription: f.id, metadata: { purchaseId: f.id },
+    });
+    if (order === 'checkout-first') { await f.process(checkout); await f.process(paid); }
+    else if (order === 'invoice-first') { await f.process(paid); await f.process(checkout); }
+    else await Promise.all([f.process(checkout), f.process(paid)]);
+    await f.process(paid);
+    const membership = await db.membership.findUniqueOrThrow({ where: { purchaseId: f.id }, include: { purchase: { include: { creditAccount: true } } } });
+    expect(membership.currentPeriodEnd).toEqual(new Date(nov * 1000));
+    expect(membership.purchase?.creditAccount?.isUnlimited).toBe(kind === 'VIP');
+    expect(membership.purchase?.creditAccount?.validUntil).toEqual(new Date(nov * 1000));
+    expect(await db.paymentRecord.count({ where: { userId: f.id } })).toBe(1);
+    const events = await db.creditAccount.findMany({ where: { userId: f.id, label: { contains: 'VIP complimentary event credit' } }, include: { entries: true } });
+    expect(events).toHaveLength(kind === 'VIP' ? 1 : 0);
+    if (kind === 'VIP') expect(events[0].entries.reduce((n,e) => n + e.quantity,0)).toBe(1);
+    else expect((await db.creditLedgerEntry.findMany({ where: { creditAccount: { sourcePurchaseId: f.id } } })).reduce((n,e)=>n+e.quantity,0)).toBe(8);
+  }, 20000);
   it.each(['invoice.paid', 'invoice.payment_failed', 'customer.subscription.updated'])('rereads after a newer commit despite an overlapping stale %s pre-lock read', async type => {
     const f = await fixture();
     const stale = f.event(type, 'old-event', sep + 10, type === 'customer.subscription.updated'

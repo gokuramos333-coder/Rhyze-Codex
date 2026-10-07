@@ -20,7 +20,8 @@ describe('VIP paid renewal entitlement through real webhook processing', () => {
       $queryRaw: vi.fn(),
       purchase: { findUnique: async () => m.purchase, update: async ({ data }: any) => Object.assign(m.purchase, data) },
       membership: { findUnique: async () => m, update: async ({ data }: any) => Object.assign(m, data), updateMany: async ({ data }: any) => Object.assign(m, data) },
-      creditAccount: { upsert: async ({ update }: any) => Object.assign(account, update) },
+      // Monthly event credit already granted by maintenance in this renewal fixture.
+      creditAccount: { findFirst: async () => ({ id: 'existing-monthly-event-benefit' }), upsert: async ({ update }: any) => Object.assign(account, update) },
       paymentRecord: { findUnique: async ({ where }: any) => paymentRecords.get(where.stripeInvoiceId), upsert: async ({ where, create, update }: any) => paymentRecords.set(where.stripeInvoiceId, paymentRecords.has(where.stripeInvoiceId) ? update : create) },
       inAppNotification: { create: vi.fn() },
     };

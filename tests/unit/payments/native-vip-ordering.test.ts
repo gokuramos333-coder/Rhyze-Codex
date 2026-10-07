@@ -22,7 +22,9 @@ function fixture() {
     membership: { findUnique: async () => membership, update: async ({ data }: any) => Object.assign(membership, data),
       updateMany: async ({ data }: any) => Object.assign(membership, data), upsert: async ({ update }: any) => Object.assign(membership, update) },
     purchase: { findUnique: async () => purchase, update: async ({ data }: any) => Object.assign(purchase, data) },
-    creditAccount: { findUnique: async () => account, upsert: vi.fn(async ({ update }: any) => Object.assign(account, update)) },
+    // These ordering fixtures already have the calendar-month event benefit.
+    // Real creation/deduplication is covered by native-vip-ordering integration tests.
+    creditAccount: { findFirst: async () => ({ id: 'existing-monthly-event-benefit' }), findUnique: async () => account, upsert: vi.fn(async ({ update }: any) => Object.assign(account, update)) },
     paymentRecord: { findUnique: async ({ where }: any) => records.get(where.stripeInvoiceId) ?? null,
       upsert: async ({ where, create, update }: any) => { const value = records.get(where.stripeInvoiceId); records.set(where.stripeInvoiceId, value ? { ...value, ...update } : create); } },
     inAppNotification: { create: vi.fn() }, user: { update: vi.fn(), findMany: async () => [] },
