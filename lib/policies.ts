@@ -6,7 +6,7 @@ export type PolicySection = {
   list?: string[];
 };
 
-export const AGREEMENT_EFFECTIVE_LABEL = 'August 21, 2026';
+export const AGREEMENT_EFFECTIVE_LABEL = 'October 8, 2026';
 
 export const policySections: PolicySection[] = [
   {
@@ -24,9 +24,9 @@ export const policySections: PolicySection[] = [
       'More than 6 hours before a standard class: cancel with no fee. A reserved class credit is returned to the member account.',
       'More than 2 hours through 6 hours before class: OG Rhyze Tribe, Elevate, Ritual, class-pack, and single-class clients may reschedule to an eligible class within 14 days for a $5 transfer fee. The saved card is charged only after the new class is selected and confirmed.',
       'More than 2 hours through 6 hours before class: VIP clients may reschedule within 14 days with no transfer fee. Intro-trial clients receive a firm attendance reminder but no fee in this window.',
-      '2 hours or less before class: standard membership, class-pack, and single-class clients lose the reserved credit and are charged a $10 late-cancellation fee to the saved payment method.',
-      '2 hours or less before class: intro-trial and VIP clients are charged a $10 late-cancellation fee to the saved payment method.',
-      'No-shows are charged automatically to the saved payment method: $10 for standard clients, $10 for intro-trial clients, and $10 for VIP clients.',
+      '2 hours or less before class: standard membership, class-pack, and single-class clients lose the reserved credit. No late-cancellation fee applies to these bookings or VIP bookings.',
+      '2 hours or less before class: only $7 for 7 days intro-trial bookings incur a non-refundable $10 late-cancellation fee, charged to the card used for the trial.',
+      'Only $7 for 7 days intro-trial bookings incur an automatic, non-refundable $10 no-show fee, charged to the card used for the trial. Other memberships, packages, and single-class purchases have no no-show fee.',
       'Complimentary owner and staff bookings are never charged an automatic attendance fee.',
       'Specialty event cancellations made more than 6 hours before the event automatically receive one event-only booking credit. The credit can be used for any eligible event, regardless of price, for 30 days from the cancellation date. Event credits cannot be used for standard classes.',
     ],

@@ -2,14 +2,16 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TrialPurchaseConfirmation } from '@/components/memberships/TrialPurchaseConfirmation';
-import { cancellationPolicyDecision } from '@/lib/domain/bookings/cancellation-policy';
+import { accessTypeForProductKind, cancellationPolicyDecision } from '@/lib/domain/bookings/cancellation-policy';
 import { TrialPolicyConsent } from '@/components/memberships/TrialPolicyConsent';
 import { parseTrialPolicyConsent } from '@/lib/domain/memberships/trial-policy-consent';
 import { renderTransactionalEmail } from '@/lib/notifications/email-content';
 import { chargeAttendanceFeeWithGateway, type AttendanceFeeGateway } from '@/lib/payments/attendance-fee';
 
+import { noShowFeeDecision } from '@/lib/domain/bookings/booking-rules';
+
 const clause = 'I authorize Rhyze Fitness to retain my card on file and automatically bill a non-refundable $10 fee for any class reservation cancelled within 2 hours of start time or marked as a no-show.';
-const policy = "Studio spots are reserved exclusively for booked guests. Any cancellation made within 2 hours of class start time, or an unattended session, will result in an automatic, non-refundable $10 late fee charged to your card on file. Thank you for respecting our instructors' schedules and your fellow dancers' availability.";
+const policy = "Studio spots are reserved exclusively for booked guests. Any cancellation made within 2 hours of class start time, or an unattended session, will result in an automatic, non-refundable $10 late fee charged to your card on file. Thank you for respecting our instructors' schedules and your fellow Rhyze Tribe members' availability.";
 
 describe('trial attendance disclosure', () => {
   it('places the full disclosure immediately below the confirmation header', () => {
@@ -17,6 +19,8 @@ describe('trial attendance disclosure', () => {
     expect(html).toContain('YOUR TRIAL IS ACTIVE</h2><div');
     expect(html).toContain('Late Cancellation &amp; No-Show Policy');
     expect(html).toContain('automatic, non-refundable $10');
+    expect(html).toContain('fellow Rhyze Tribe members');
+    expect(html).not.toContain('dancers');
   });
   it.each([[120 * 60000 + 1, 0], [120 * 60000, 1000], [120 * 60000 - 1, 1000]])('applies the exact two-hour boundary (%s milliseconds)', (before, fee) => {
     const startAt=new Date('2026-10-11T17:00:00Z');
@@ -67,5 +71,31 @@ describe('trial attendance uses the original payment card', () => {
     const f=fake(null);
     expect((await chargeAttendanceFeeWithGateway(input,f.gateway)).status).toBe('FAILED');
     expect(f.requests).toHaveLength(0);
+  });
+});
+
+
+describe('attendance fees are exclusive to trial-funded bookings', () => {
+  it.each(['VIP', 'MONTHLY_UNLIMITED', 'MONTHLY_8', 'MONTHLY_12', 'CLASS_PACK', 'DROP_IN'])('never charges %s for late cancellations or no-shows', kind => {
+    const accessType = accessTypeForProductKind(kind);
+    for (const minutes of [120, 60, 0, -1]) {
+      expect(cancellationPolicyDecision({startAt:new Date('2026-10-11T17:00Z'),requestedAt:new Date(new Date('2026-10-11T17:00Z').getTime()-minutes*60000),accessType,isEvent:false,hasReservedCredit:true}).feeCents).toBe(0);
+    }
+    expect(noShowFeeDecision({activeMemberships:[{product:{kind,trialDays:null,priceCents:19900}}],previousNoShowCount:5,accessType}).amountCents).toBe(0);
+    // A separate trial on the account must not override the booked package/single-class access.
+    expect(noShowFeeDecision({activeMemberships:[{product:{kind:'INTRO_TRIAL',trialDays:7,priceCents:700}}],previousNoShowCount:5,accessType}).amountCents).toBe(0);
+  });
+  it.each(['LATE_CANCELLATION','NO_SHOW'] as const)('blocks non-trial %s even if a caller requests a fee', async feeType => {
+    let charges=0, records=0;
+    const gateway: AttendanceFeeGateway = {
+      resolveTrialPaymentSource: async () => null,
+      retrieveCustomer: async () => ({deleted:false,defaultPaymentMethodId:'pm_other'}),
+      listAttachedCardPaymentMethodIds: async () => ['pm_other'],
+      createPaymentIntent: async () => {charges++;return {id:'pi_wrong',status:'succeeded'};},
+      recordAttempt: async () => {records++;},
+    };
+    const result=await chargeAttendanceFeeWithGateway({bookingId:'booking',userId:'member',stripeCustomerId:'cus_other',feeType,amountCents:1000,idempotencyKey:'fee'},gateway);
+    expect(result).toMatchObject({status:'FAILED',reason:'INELIGIBLE_ACCESS'});
+    expect(charges).toBe(0);expect(records).toBe(0);
   });
 });

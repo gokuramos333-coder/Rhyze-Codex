@@ -68,8 +68,8 @@ export function SignUpForm({
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Cancel more than 6 hours before class to return the reserved credit with no fee.</li>
             <li>Between 2 and 6 hours, standard clients may reschedule for $5; VIP transfers are free.</li>
-            <li>Within 2 hours, standard clients lose the credit and all non-complimentary clients are charged $10.</li>
-            <li>No-shows are charged $10 for standard, intro-trial, and VIP clients.</li>
+            <li>Within 2 hours, standard clients lose the credit. Only $7 for 7 days intro-trial bookings incur a non-refundable $10 late-cancellation fee.</li>
+            <li>Only $7 for 7 days intro-trial bookings incur a non-refundable $10 no-show fee. Other memberships, packages, and single-class purchases have no late-cancellation or no-show fee.</li>
           </ul>
         </div>
       </div>

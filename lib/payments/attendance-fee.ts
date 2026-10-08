@@ -64,7 +64,7 @@ export type AttendanceFeeResult =
   | {
       status: 'FAILED';
       paymentIntentId: null;
-      reason: 'NO_SAVED_PAYMENT_METHOD' | 'PAYMENT_FAILED';
+      reason: 'NO_SAVED_PAYMENT_METHOD' | 'PAYMENT_FAILED' | 'INELIGIBLE_ACCESS';
     };
 
 function recordKind(feeType: AttendanceFeeType): PaymentRecordKind {
@@ -99,6 +99,10 @@ export async function chargeAttendanceFeeWithGateway(
   let paymentMethodId: string | null = null;
   try {
     const trial = await gateway.resolveTrialPaymentSource?.(input);
+    if (input.feeType !== 'TRANSFER' && !trial?.isTrial) {
+      // Defense in depth: stale callers cannot charge non-trial attendance fees.
+      return { status: 'FAILED', paymentIntentId: null, reason: 'INELIGIBLE_ACCESS' };
+    }
     if (trial?.isTrial) {
       // Missing/unusable original trial card fails closed, never falls back to another card.
       paymentMethodId = trial.paymentMethodId ?? null;

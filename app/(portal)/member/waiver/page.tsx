@@ -68,6 +68,9 @@ export default async function MemberWaiverPage(
               Booking is waiting on this step: review the waiver + cancellation policy, check the required agreement box below, then tap “Accept waiver and cancellation policy” to return to booking.
             </div>
           )}
+          <aside className="mt-6 border-l-4 border-rhyze-gold bg-amber-50 p-4 text-sm font-bold leading-6">
+            Attendance policy update — October 8, 2026: Only $7 for 7 days intro-trial bookings incur the non-refundable $10 late-cancellation (2 hours or less) or no-show fee. Other memberships, packages, and single-class purchases have no such fee. This update supersedes any broader $10 attendance-fee wording in the agreement below; the original agreement and signature remain on record. Existing credit-return and transfer rules still apply.
+          </aside>
           <div className="mt-6 max-h-96 overflow-y-auto whitespace-pre-wrap border border-rhyze-black/10 bg-[#f8f5ed] p-5 text-sm leading-7">
             {activeWaiver.body}
           </div>

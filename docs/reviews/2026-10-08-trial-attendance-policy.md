@@ -23,3 +23,14 @@ Production unchanged: deploy6ac5b6852d2f322cbf1cc388, sourceb6a6ae1bfb6eedff43bb
 Risk/limits: A saved card can still be declined or detached, or require authentication. Those cases produce a failed fee, not a claim of payment. A no-show fee is triggered when attendance is marked NO_SHOW; this change does not invent unattended-visit detection. Missing/ambiguous legacy consent/payment provenance requires staff review. Authorization evidence supports the disclosed use; it does not guarantee winning a card dispute. Production deployment requires separate approval and guarded release verification with fresh pins.
 
 Evidence: /Users/gokuramos/Inbox/rhyze-trial-policy/ (red.log, targeted-final.log, verification.json, tests.log, build.log, first-verification/, production-base.json, confirmation-desktop.png, confirmation-mobile.png, email-mobile.png).
+
+
+## Owner clarification and approved release — October 8
+
+Owner approved deployment after changing “dancers” to “Rhyze Tribe members” and restricting the $10 fee exclusively to intro-trial bookings. The prior preservation of nontrial $10 attendance fees is superseded by this clarification.
+
+- Removed $10 late-cancellation and no-show fees from VIP, other memberships, packages and single-class access. Credit forfeiture and existing $5 transfer rules are unchanged.
+- Added a payment-layer eligibility check so stale callers cannot charge nontrial attendance fees. Original trial-card provenance remains required.
+- Updated confirmation/email consent wording, public policy, signup/claim summaries and instructor guidance. The waiver screen displays a dated superseding attendance-policy notice alongside the preserved original signed agreement; no signature records are rewritten and members are not forced through a new waiver gate.
+- New regression demonstrated 11 failures before the correction. Targeted policy/card tests: 48 passed. Full guarded release results are recorded separately under `.releases/` and the task evidence directory.
+- Owner approval covers this release. No customer charge, refund, email or attendance mutation is authorized as a deployment test.

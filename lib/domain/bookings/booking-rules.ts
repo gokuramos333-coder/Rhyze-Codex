@@ -116,21 +116,7 @@ export function noShowFeeDecision(input: {
     return { amountCents: 1_000, courtesyApplied: false, reason: 'INTRO_TRIAL' as const };
   }
 
-  const hasVip = input.accessType
-    ? input.accessType === 'VIP'
-    : input.activeMemberships.some(
-      (membership) => membership.product.kind === 'VIP',
-    );
-  if (hasVip) {
-    return { amountCents: 1_000, courtesyApplied: false, reason: 'VIP' as const };
-  }
-
-  const hasMembership = input.activeMemberships.length > 0;
-  return {
-    amountCents: 1_000,
-    courtesyApplied: false,
-    reason: hasMembership ? ('MEMBERSHIP_REPEAT' as const) : ('STANDARD' as const),
-  };
+  return { amountCents: 0, courtesyApplied: false, reason: 'NON_TRIAL' as const };
 }
 
 function monthKeyInNewYork(value: Date) {

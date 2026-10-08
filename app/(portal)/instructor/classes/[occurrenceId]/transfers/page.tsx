@@ -33,7 +33,7 @@ export default async function TransferPage(
         <input type="hidden" name="bookingId" value={booking.id}/><input type="hidden" name="occurrenceId" value={booking.occurrenceId}/>
         <label className="grid gap-2"><span className="text-xs font-black uppercase tracking-widest">Destination class</span><select name="destinationId" required className="min-h-14 border px-3"><option value="">Choose an eligible class</option>{destinations.filter((item) => item._count.bookings + item.historicalSignupCount < item.capacity).map((item) => <option key={item.id} value={item.id}>{memberBookingDateTimeLabel(item)} · {item.template.name} · {item.instructor?.name || 'TBA'}</option>)}</select></label>
         <label className="grid gap-2"><span className="text-xs font-black uppercase tracking-widest">Member request / internal note</span><textarea name="reason" required rows={4} className="border p-3"/></label>
-        <p className="text-xs text-rhyze-black/55">More than 6 hours: free. Between 2 and 6 hours: $5 for standard clients and no fee for VIP, intro-trial, or complimentary bookings. At 2 hours or less, transfer is blocked and the applicable $10 late-cancellation policy applies.</p>
+        <p className="text-xs text-rhyze-black/55">More than 6 hours: free. Between 2 and 6 hours: $5 for standard clients and no fee for VIP, intro-trial, or complimentary bookings. At 2 hours or less, transfer is blocked and only $7 for 7 days intro-trial bookings incur a $10 late-cancellation fee.</p>
         <button className="min-h-14 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest">Confirm transfer</button>
       </form>
     </>

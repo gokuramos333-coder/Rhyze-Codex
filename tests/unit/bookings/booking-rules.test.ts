@@ -125,18 +125,18 @@ describe('booking rules', () => {
     expect(complimentaryStandardAccessCanBook({ customPlanType: null, isEvent: true, durationMinutes: 90 })).toBe(true);
   });
 
-  it('charges every non-complimentary no-show ten dollars', () => {
+  it('charges only trial-funded no-shows ten dollars', () => {
     const membership = { product: { kind: 'MONTHLY_UNLIMITED', trialDays: null, priceCents: 19900 } };
     const trial = { product: { kind: 'INTRO_TRIAL', trialDays: 7, priceCents: 700 } };
     const vip = { product: { kind: 'VIP', trialDays: null, priceCents: 19900 } };
 
-    expect(noShowFeeDecision({ activeMemberships: [membership], previousNoShowCount: 0 }).amountCents).toBe(1_000);
-    expect(noShowFeeDecision({ activeMemberships: [membership], previousNoShowCount: 1 }).amountCents).toBe(1_000);
+    expect(noShowFeeDecision({ activeMemberships: [membership], previousNoShowCount: 0 }).amountCents).toBe(0);
+    expect(noShowFeeDecision({ activeMemberships: [membership], previousNoShowCount: 1 }).amountCents).toBe(0);
     expect(noShowFeeDecision({ activeMemberships: [trial], previousNoShowCount: 0 }).amountCents).toBe(1000);
     expect(noShowFeeDecision({ activeMemberships: [vip], previousNoShowCount: 0 })).toEqual({
-      amountCents: 1_000,
+      amountCents: 0,
       courtesyApplied: false,
-      reason: 'VIP',
+      reason: 'NON_TRIAL',
     });
     expect(noShowFeeDecision({
       activeMemberships: [vip],
@@ -147,8 +147,8 @@ describe('booking rules', () => {
       activeMemberships: [trial],
       previousNoShowCount: 1,
       accessType: 'STANDARD',
-    }).amountCents).toBe(1_000);
-    expect(noShowFeeDecision({ activeMemberships: [], previousNoShowCount: 0 }).amountCents).toBe(1_000);
+    }).amountCents).toBe(0);
+    expect(noShowFeeDecision({ activeMemberships: [], previousNoShowCount: 0 }).amountCents).toBe(0);
     expect(noShowFeeDecision({
       activeMemberships: [vip],
       previousNoShowCount: 3,

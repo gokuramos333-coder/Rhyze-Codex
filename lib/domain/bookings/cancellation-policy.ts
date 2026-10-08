@@ -140,35 +140,16 @@ export function cancellationPolicyDecision(input: {
       confirmLabel: 'Cancel and charge $10',
     };
   }
-  if (input.accessType === 'VIP') {
-    return {
-      window,
-      action: 'CANCEL',
-      status: 'LATE_CANCELLED',
-      feeCents: 1_000,
-      restoreCredit: false,
-      message: 'This class starts within 2 hours. A $10 late-cancellation fee will be charged to your saved card if you cancel now.',
-      confirmLabel: 'Cancel and charge $10',
-    };
-  }
-  if (input.accessType === 'STANDARD') {
-    return {
-      window,
-      action: 'CANCEL',
-      status: 'LATE_CANCELLED',
-      feeCents: 1_000,
-      restoreCredit: false,
-      message: 'This class starts within 2 hours. If you cancel now, your class credit will not be returned and a $10 late-cancellation fee will be charged to your saved card.',
-      confirmLabel: 'Cancel and charge $10',
-    };
-  }
+
   return {
     window,
     action: 'CANCEL',
     status: 'LATE_CANCELLED',
     feeCents: 0,
     restoreCredit: false,
-    message: 'This class starts within 2 hours. If you cancel now, the booking will be marked as a late cancellation and the class credit will not be returned.',
+    message: input.accessType === 'VIP'
+      ? 'This class starts within 2 hours. No late-cancellation fee applies. Your VIP standard-class access is unlimited, so no credit needs to be returned.'
+      : 'This class starts within 2 hours. No late-cancellation fee applies, but the reserved class credit will not be returned.',
     confirmLabel: 'Cancel booking',
   };
 }

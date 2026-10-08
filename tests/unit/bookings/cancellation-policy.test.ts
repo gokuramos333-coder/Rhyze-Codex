@@ -54,7 +54,7 @@ describe('class cancellation policy', () => {
     });
   });
 
-  it('charges every paid access type ten dollars at exactly two hours', () => {
+  it('charges only trial access ten dollars at exactly two hours', () => {
     const requestedAt = new Date('2026-08-21T16:00:00.000Z');
     expect(cancellationPolicyDecision({
       startAt,
@@ -74,10 +74,10 @@ describe('class cancellation policy', () => {
       accessType: 'VIP',
       isEvent: false,
       hasReservedCredit: false,
-    })).toMatchObject({ feeCents: 1_000, status: 'LATE_CANCELLED' });
+    })).toMatchObject({ feeCents: 0, status: 'LATE_CANCELLED' });
   });
 
-  it('makes standard late cancels lose the credit and pay ten dollars', () => {
+  it('makes standard late cancels lose the credit without a fee', () => {
     expect(cancellationPolicyDecision({
       startAt,
       requestedAt: new Date('2026-08-21T17:00:00.000Z'),
@@ -87,9 +87,9 @@ describe('class cancellation policy', () => {
     })).toMatchObject({
       action: 'CANCEL',
       status: 'LATE_CANCELLED',
-      feeCents: 1_000,
+      feeCents: 0,
       restoreCredit: false,
-      confirmLabel: 'Cancel and charge $10',
+      confirmLabel: 'Cancel booking',
     });
   });
 

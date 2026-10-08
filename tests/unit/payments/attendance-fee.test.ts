@@ -15,6 +15,7 @@ function gateway(input?: {
   const requests: AttendanceFeePaymentRequest[] = [];
   const records: AttendanceFeeRecord[] = [];
   const implementation: AttendanceFeeGateway = {
+    resolveTrialPaymentSource: async () => ({ isTrial: true, customerId: 'cus_123', paymentMethodId: input?.defaultPaymentMethodId ?? undefined }),
     retrieveCustomer: async () => ({
       deleted: false,
       defaultPaymentMethodId: input?.defaultPaymentMethodId ?? null,
@@ -42,7 +43,7 @@ describe('attendance fee charging', () => {
     idempotencyKey: 'late-cancel-fee-booking_123',
   };
 
-  it('charges the default saved card with exact off-session terms and records revenue', async () => {
+  it('charges the verified original trial card with exact off-session terms and records revenue', async () => {
     const fake = gateway({ defaultPaymentMethodId: 'pm_default' });
 
     const result = await chargeAttendanceFeeWithGateway(lateCancel, fake.implementation);
@@ -76,10 +77,11 @@ describe('attendance fee charging', () => {
     }]);
   });
 
-  it('uses an attached card when the customer invoice default is empty', async () => {
+  it('preserves existing transfer-card handling when the invoice default is empty', async () => {
     const fake = gateway({ attachedPaymentMethodIds: ['pm_attached'] });
 
-    const result = await chargeAttendanceFeeWithGateway(lateCancel, fake.implementation);
+    fake.implementation.resolveTrialPaymentSource = async () => null;
+    const result = await chargeAttendanceFeeWithGateway({ ...lateCancel, feeType: 'TRANSFER', amountCents: 500 }, fake.implementation);
 
     expect(result.status).toBe('SUCCEEDED');
     expect(fake.requests[0]?.paymentMethod).toBe('pm_attached');
