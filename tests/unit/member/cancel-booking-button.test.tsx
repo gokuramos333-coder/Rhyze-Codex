@@ -48,7 +48,7 @@ describe('CancelBookingButton', () => {
     );
   });
 
-  it('states the exact trial and VIP late-cancellation charges', () => {
+  it('states the trial charge and confirms VIP cancellation has no fee', () => {
     const trial = cancellationPolicyDecision({
       startAt,
       requestedAt: new Date('2026-08-21T17:00:00.000Z'),
@@ -71,8 +71,9 @@ describe('CancelBookingButton', () => {
       hasReservedCredit: false,
     });
     rerender(<CancelBookingButton bookingId="vip_booking" decision={vip} action={vi.fn()} />);
-    expect(screen.getByText(/\$10 late-cancellation fee/i)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Cancel and charge $10' })).toBeVisible();
+    expect(screen.getByText(/No late-cancellation fee applies/i)).toBeVisible();
+    expect(screen.queryByText(/\$10 late-cancellation fee/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel booking' })).toBeVisible();
   });
 
   it('requires members to acknowledge the event cancellation rule before proceeding', () => {

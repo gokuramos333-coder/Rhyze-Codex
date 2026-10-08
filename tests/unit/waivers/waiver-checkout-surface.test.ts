@@ -37,7 +37,8 @@ describe('waiver gating for paid access', () => {
     expect(signUpForm).toContain('Cancellation policy');
     expect(signUpForm).toContain('6 hours before class');
     expect(signUpForm).toContain('Within 2 hours');
-    expect(signUpForm).toContain('No-shows are charged');
+    expect(signUpForm).toContain('Only $7 for 7 days intro-trial bookings incur a non-refundable $10 no-show fee.');
+    expect(signUpForm).toContain('Other memberships, packages, and single-class purchases have no late-cancellation or no-show fee.');
     expect(signUpForm).toContain('VIP transfers are free');
   });
 });

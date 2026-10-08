@@ -20,9 +20,10 @@ describe('studio policies', () => {
     expect(agreementSnapshot).toContain('$5 transfer fee');
     expect(agreementSnapshot).toContain('$10 late-cancellation fee');
     expect(agreementSnapshot).toContain('VIP clients may reschedule within 14 days with no transfer fee');
-    expect(agreementSnapshot).toContain('$10 for standard clients');
-    expect(agreementSnapshot).toContain('$10 for intro-trial clients');
-    expect(agreementSnapshot).toContain('$10 for VIP clients');
+    expect(agreementSnapshot).not.toContain('$10 for standard clients');
+    expect(agreementSnapshot).toContain('only $7 for 7 days intro-trial bookings incur');
+    expect(agreementSnapshot).toContain('Other memberships, packages, and single-class purchases have no no-show fee.');
+    expect(agreementSnapshot).not.toContain('$10 for VIP clients');
     expect(agreementSnapshot).not.toContain('VIP Access transfer fees are waived');
     expect(agreementSnapshot).toContain('more than 6 hours before the event');
     expect(agreementSnapshot).toContain('30 days from the cancellation date');
