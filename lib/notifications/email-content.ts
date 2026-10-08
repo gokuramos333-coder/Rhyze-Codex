@@ -10,6 +10,8 @@ import {
   parseEmailCopyOverride,
 } from '@/lib/notifications/email-template-overrides';
 
+import { TRIAL_POLICY_TITLE, TRIAL_POLICY_TEXT } from '@/lib/domain/memberships/trial-policy-consent';
+
 function escapeHtml(input: string) {
   return input.replace(/[&<>'"]/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;',
@@ -58,7 +60,7 @@ function renderText(subject: string, presentation: EmailPresentation) {
 function renderHtml(subject: string, presentation: EmailPresentation) {
   const paragraphs = presentation.paragraphs.map((paragraph) => `<p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#24211d">${escapeHtml(paragraph)}</p>`).join('');
   const facts = presentation.facts?.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:28px 0;border:1px solid #d7cdbd;border-radius:2px;background:#fffaf2">${presentation.facts.map((fact) => `<tr><td style="padding:13px 18px;border-bottom:1px solid #eadfce;font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#9b5f20;width:32%">${escapeHtml(fact.label)}</td><td style="padding:13px 18px;border-bottom:1px solid #eadfce;font-size:15px;font-weight:700;color:#171717">${escapeHtml(fact.value)}</td></tr>`).join('')}</table>` : '';
-  const callout = presentation.callout ? `<div style="margin:30px 0;padding:22px;border:1px solid #171717;background:#fffaf2"><p style="margin:0 0 8px;font-size:17px;font-weight:800;color:#171717">${escapeHtml(presentation.callout.title)}</p><p style="margin:0;font-size:14px;line-height:1.65;color:#4f4941">${escapeHtml(presentation.callout.body)}</p></div>` : '';
+  const callout = presentation.callout ? `<div style="margin:30px 0;padding:22px;border:1px solid #171717;background:#fffaf2"><p style="margin:0 0 8px;font-size:17px;font-weight:800;color:#171717">${escapeHtml(presentation.callout.title)}</p><p style="margin:0;font-size:14px;line-height:1.65;color:#4f4941;${presentation.callout.emphasis ? 'font-weight:700;' : ''}">${escapeHtml(presentation.callout.body)}</p></div>` : '';
   const cta = presentation.cta ? `<p style="margin:30px 0"><a href="${escapeHtml(absoluteUrl(presentation.cta.href))}" style="display:inline-block;background:#171717;color:#ffffff;padding:15px 24px;border-radius:3px;text-decoration:none;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase">${escapeHtml(presentation.cta.label)}</a></p>` : '';
 
   const logoUrl = absoluteUrl('/brand/rhyze-logo-header.png');
@@ -77,6 +79,11 @@ export function renderTransactionalEmail(input: {
   const copyOverride = parseEmailCopyOverride(input.copyOverride);
   const subject = applyEmailSubjectOverride(input.subject, input.payload, copyOverride);
   const presentation = applyEmailCopyOverride(basePresentation, input.payload, copyOverride);
+  // Required transactional disclosure must survive editable marketing copy.
+  if (input.payload.productKind === 'INTRO_TRIAL' &&
+      ['MEMBERSHIP_PURCHASE_CONFIRMATION', 'PAYMENT_RECEIPT'].includes(input.template)) {
+    presentation.callout = { title: TRIAL_POLICY_TITLE, body: TRIAL_POLICY_TEXT, emphasis: true };
+  }
   return {
     subject,
     text: renderText(subject, presentation),

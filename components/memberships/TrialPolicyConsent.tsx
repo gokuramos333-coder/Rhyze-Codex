@@ -1,4 +1,5 @@
 import React from 'react';
+import { TRIAL_CARD_AUTHORIZATION } from '@/lib/domain/memberships/trial-policy-consent';
 
 export function TrialPolicyConsent() {
   return (
@@ -29,9 +30,8 @@ export function TrialPolicyConsent() {
           cancellation policy
         </a>
         . I understand the trial covers standard classes only; cancelling within
-        2 hours incurs a $10 late-cancellation fee, and a no-show incurs a $10
-        no-show fee. My payment method will be saved, and I authorize Rhyze to
-        charge the saved payment method for these disclosed attendance fees.
+        2 hours incurs a non-refundable $10 late-cancellation fee, and a no-show incurs a non-refundable $10
+        no-show fee. {TRIAL_CARD_AUTHORIZATION}
       </span>
     </label>
   );

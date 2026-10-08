@@ -28,6 +28,7 @@ import {
   canAccessPrivateMembership,
 } from '@/lib/catalog/private-membership';
 import { giftedVipAccessNote } from '@/lib/domain/memberships/gifted-vip';
+import { TrialPurchaseConfirmation } from '@/components/memberships/TrialPurchaseConfirmation';
 import { TrialPolicyConsent } from '@/components/memberships/TrialPolicyConsent';
 import { productCheckoutCadence } from '@/lib/catalog/product-cadence';
 import { publicMembershipDescription } from '@/lib/catalog/membership-copy';
@@ -66,10 +67,18 @@ function date(value: Date | null) {
     : 'Ongoing';
 }
 
-export default async function MemberMembershipPage(props: { searchParams: Promise<{ result?: string; plan?: string; privatePlan?: string; recovery?: string }> }) {
+export default async function MemberMembershipPage(props: { searchParams: Promise<{ result?: string; plan?: string; privatePlan?: string; recovery?: string; session_id?: string }> }) {
   const searchParams = await props.searchParams;
   const user = await requireArea('member');
   const now = new Date();
+  // A URL success flag alone must not claim payment/activation succeeded.
+  const confirmedTrial = searchParams.result === 'success' && searchParams.session_id
+    ? await prisma.purchase.findFirst({
+        where: { userId: user.id, stripeCheckoutSessionId: searchParams.session_id, status: 'PAID',
+          product: { kind: 'INTRO_TRIAL' }, membership: { status: 'TRIALING' } },
+        select: { id: true },
+      })
+    : null;
   const [products, memberships, credits, firstTrialBooking] = await Promise.all([
     prisma.product.findMany({
       where: {
@@ -208,12 +217,13 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
     <>
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Access & credits</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">MY MEMBERSHIP</h1>
+      {confirmedTrial && <TrialPurchaseConfirmation />}
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <div className="border-t-4 border-rhyze-gold bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Available class credits</p><p className={`mt-2 font-display ${creditBalances.hasUnlimitedClassAccess ? 'text-3xl leading-tight' : 'text-6xl'}`}>{classCreditLabel}</p>{trialCreditNote && <p className="mt-3 text-sm font-black text-rhyze-coral">{trialCreditNote}</p>}</div>
         <div className="border-t-4 border-rhyze-orange bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Available event credits</p><p className="mt-2 font-display text-6xl">{creditBalances.eventCredits}</p></div>
         <div className="border-t-4 border-rhyze-coral bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Active plans</p><p className="mt-2 font-display text-6xl">{displayMemberships.filter((item) => ['ACTIVE','TRIALING'].includes(item.status)).length}</p></div>
       </div>
-      {searchParams.result && <p className="mt-6 border-l-4 border-rhyze-coral bg-white p-4 font-bold">{resultMessages[searchParams.result] || 'Membership updated.'}</p>}
+      {searchParams.result && !confirmedTrial && <p className="mt-6 border-l-4 border-rhyze-coral bg-white p-4 font-bold">{resultMessages[searchParams.result] || 'Membership updated.'}</p>}
       {!requestedRecoveryMatches && <p className="mt-6 bg-white p-4">Sign in to the account that received this recovery invitation, or contact the studio.</p>}
       {recovery && requestedRecoveryMatches && <SombleRecoveryPanel recovery={recovery} action={startSombleRecoveryAction} />}
       {!recovery && recoveryForUser(user.id) && memberships.some((m) => m.id === recoveryForUser(user.id)?.membershipId && !m.purchaseId) && <p id="billing-recovery" className="mt-6 bg-white p-4">Your founding-member billing recovery requires studio review. Do not start a replacement membership; contact us so your existing history and anniversary stay connected.</p>}

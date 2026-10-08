@@ -1,3 +1,4 @@
+import { resolveTrialAttendancePaymentSource, type TrialPaymentSource } from '@/lib/payments/trial-attendance-card';
 import type { PaymentRecordKind, PaymentRecordStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
@@ -36,6 +37,7 @@ export type AttendanceFeeRecord = {
 };
 
 export type AttendanceFeeGateway = {
+  resolveTrialPaymentSource?(input: { bookingId: string; userId: string }): Promise<TrialPaymentSource>;
   retrieveCustomer(customerId: string): Promise<{
     deleted: boolean;
     defaultPaymentMethodId: string | null;
@@ -94,24 +96,20 @@ export async function chargeAttendanceFeeWithGateway(
   input: AttendanceFeeInput,
   gateway: AttendanceFeeGateway,
 ): Promise<AttendanceFeeResult> {
-  if (!input.stripeCustomerId) {
-    await gateway.recordAttempt(failedRecord(input));
-    return {
-      status: 'FAILED',
-      paymentIntentId: null,
-      reason: 'NO_SAVED_PAYMENT_METHOD',
-    };
-  }
-
   let paymentMethodId: string | null = null;
   try {
-    const customer = await gateway.retrieveCustomer(input.stripeCustomerId);
-    if (!customer.deleted) {
-      paymentMethodId = customer.defaultPaymentMethodId;
-      if (!paymentMethodId) {
-        paymentMethodId = (
-          await gateway.listAttachedCardPaymentMethodIds(input.stripeCustomerId)
-        )[0] ?? null;
+    const trial = await gateway.resolveTrialPaymentSource?.(input);
+    if (trial?.isTrial) {
+      // Missing/unusable original trial card fails closed, never falls back to another card.
+      paymentMethodId = trial.paymentMethodId ?? null;
+      input = { ...input, stripeCustomerId: trial.customerId ?? null };
+    } else if (input.stripeCustomerId) {
+      const customer = await gateway.retrieveCustomer(input.stripeCustomerId);
+      if (!customer.deleted) {
+        paymentMethodId = customer.defaultPaymentMethodId;
+        if (!paymentMethodId) {
+          paymentMethodId = (await gateway.listAttachedCardPaymentMethodIds(input.stripeCustomerId))[0] ?? null;
+        }
       }
     }
   } catch {
@@ -119,7 +117,7 @@ export async function chargeAttendanceFeeWithGateway(
     return { status: 'FAILED', paymentIntentId: null, reason: 'PAYMENT_FAILED' };
   }
 
-  if (!paymentMethodId) {
+  if (!paymentMethodId || !input.stripeCustomerId) {
     await gateway.recordAttempt(failedRecord(input));
     return {
       status: 'FAILED',
@@ -167,6 +165,7 @@ export async function chargeAttendanceFeeWithGateway(
 }
 
 const productionGateway: AttendanceFeeGateway = {
+  resolveTrialPaymentSource: resolveTrialAttendancePaymentSource,
   async retrieveCustomer(customerId) {
     if (!stripeIsConfigured()) {
       return { deleted: true, defaultPaymentMethodId: null };

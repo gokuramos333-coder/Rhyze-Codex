@@ -5,6 +5,8 @@ import { TrialPolicyConsent } from '@/components/memberships/TrialPolicyConsent'
 import {
   parseTrialPolicyConsent,
   TRIAL_POLICY_VERSION,
+  TRIAL_CARD_AUTHORIZATION,
+  TRIAL_POLICY_TEXT,
 } from '@/lib/domain/memberships/trial-policy-consent';
 
 describe('intro-trial attendance policy consent', () => {
@@ -28,6 +30,9 @@ describe('intro-trial attendance policy consent', () => {
         lateCancellationFeeCents: 1_000,
         noShowFeeCents: 1_000,
         savedPaymentMethodConsent: true,
+        nonRefundable: true,
+        authorizationText: TRIAL_CARD_AUTHORIZATION,
+        policyText: TRIAL_POLICY_TEXT,
       },
     });
   });
@@ -39,7 +44,7 @@ describe('intro-trial attendance policy consent', () => {
     expect(html).toContain('required=""');
     expect(html).toContain('$10 late-cancellation fee');
     expect(html).toContain('$10 no-show fee');
-    expect(html).toContain('saved payment method');
+    expect(html).toContain('retain my card on file');
     expect(html).toContain('/policies#waiver');
     expect(html).toContain('/policies#cancellation');
   });

@@ -8,7 +8,7 @@ export type EmailPresentation = {
   greeting?: string;
   paragraphs: string[];
   facts?: Array<{ label: string; value: string }>;
-  callout?: { title: string; body: string };
+  callout?: { title: string; body: string; emphasis?: boolean };
   cta?: { label: string; href: string };
   closing?: string;
 };

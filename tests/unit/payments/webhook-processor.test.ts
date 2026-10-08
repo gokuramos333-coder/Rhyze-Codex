@@ -303,6 +303,12 @@ describe('Stripe webhook event interpretation', () => {
     });
     expect(calls.paymentRecordUpsert).toHaveLength(0);
     expect(calls.emailUpsert).toHaveLength(3);
+    expect(calls.emailUpsert[0]).toMatchObject({create: {
+      template: 'MEMBERSHIP_PURCHASE_CONFIRMATION', payload: {productKind: 'INTRO_TRIAL', amount: 700},
+    }});
+    expect(calls.emailUpsert[1]).toMatchObject({create: {
+      template: 'PAYMENT_RECEIPT', payload: {productKind: 'INTRO_TRIAL', amount: 700},
+    }});
   });
 
   it('updates an existing checkout payment record instead of creating a duplicate with the same session id', async () => {

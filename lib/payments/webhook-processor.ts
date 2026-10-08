@@ -637,6 +637,7 @@ async function fulfillProductPurchase(
     payload: {
       name: purchase.user.name || 'Rhyzer',
       planName: purchase.product.name,
+      productKind: purchase.product.kind,
       itemName: purchasedItemName,
       amount: purchase.amountCents,
       billingSchedule:
@@ -655,6 +656,7 @@ async function fulfillProductPurchase(
     template: 'PAYMENT_RECEIPT',
     payload: {
       name: purchase.user.name || 'Rhyzer',
+      productKind: purchase.product.kind,
       itemName: purchasedItemName,
       amount: purchase.amountCents,
       paidAt: action.occurredAt.toLocaleDateString('en-US'),
