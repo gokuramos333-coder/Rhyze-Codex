@@ -11,7 +11,7 @@ describe('admin events surface', () => {
     expect(source).toContain('frequencyLabels');
     expect(source).toContain('from={searchParams.from} to={searchParams.to}');
     expect(source).toContain('ALL EVENTS');
-    expect(source).toContain('template: { isEvent: true }');
+    expect(source).toContain('template: publicEventClassificationWhere()');
   });
 
   it('separates upcoming and past event occurrences with reconciled event receipts', () => {

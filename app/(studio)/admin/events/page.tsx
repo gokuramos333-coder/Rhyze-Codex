@@ -13,6 +13,7 @@ import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
 import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { EventReceiptSummary } from '@/components/admin/EventReceiptSummary';
 import type { EventReceiptSummary as ReceiptSummary } from '@/lib/admin/event-receipts';
+import { isMemberClassEvent, MEMBER_CLASS_EVENT_SLUG, publicEventClassificationWhere } from '@/lib/catalog/member-class-event';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -25,9 +26,9 @@ export default async function AdminEventsPage(
   const occurrenceRange = range;
   const report = await loadFinancialReport({ ...searchParams, kind: 'event' });
   const now = new Date();
-  const [eventRows, categories, scheduledOccurrences] = await Promise.all([
+  const [eventRows, categories, scheduledOccurrences, nextMemberEvent] = await Promise.all([
     prisma.classTemplate.findMany({
-      where: { isEvent: true },
+      where: publicEventClassificationWhere(),
       include: {
         occurrences: {
           orderBy: { startAt: 'asc' },
@@ -46,7 +47,7 @@ export default async function AdminEventsPage(
       where: {
         status: 'SCHEDULED',
         startAt: { gte: occurrenceRange.start, lte: occurrenceRange.end },
-        template: { isEvent: true },
+        template: publicEventClassificationWhere(),
       },
       include: {
         template: { include: { category: true } },
@@ -55,8 +56,23 @@ export default async function AdminEventsPage(
       },
       orderBy: { startAt: 'asc' },
     }),
+    // Rachel shares a template with historical regular classes. Show her next
+    // event's date/price without rewriting that history or its admission rules.
+    prisma.classOccurrence.findFirst({
+      where: {
+        template: { slug: MEMBER_CLASS_EVENT_SLUG, isEvent: false },
+        status: 'SCHEDULED', startAt: { gte: now },
+      },
+      orderBy: { startAt: 'asc' },
+      include: {
+        instructor: { include: { instructorProfile: true } },
+        _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
+      },
+    }),
   ]);
-  const events = sortCatalogByNextOccurrence(eventRows);
+  const events = sortCatalogByNextOccurrence(eventRows.map(event => isMemberClassEvent(event)
+    ? { ...event, occurrences: nextMemberEvent ? [nextMemberEvent] : [] }
+    : event));
   const upcomingOccurrences = scheduledOccurrences.filter((occurrence) => occurrence.startAt >= now);
   const pastOccurrences = scheduledOccurrences.filter((occurrence) => occurrence.startAt < now);
   return (
@@ -96,6 +112,8 @@ export default async function AdminEventsPage(
       <div className="mt-8 grid gap-3">
         {events.map((event) => {
           const occurrence = event.occurrences[0];
+          const memberClassEvent = isMemberClassEvent(event);
+          const priceCents = memberClassEvent ? occurrence?.priceCents ?? event.dropInPriceCents : event.dropInPriceCents;
           const signups = occurrence ? occurrence._count.bookings + occurrence.historicalSignupCount : 0;
           return (
           <article key={event.id} className="grid gap-3 border-l-4 border-rhyze-gold bg-white p-5 md:grid-cols-[1fr_auto] md:items-center">
@@ -110,8 +128,9 @@ export default async function AdminEventsPage(
                 />
               <div>
               <h2 className="font-display text-3xl tracking-wider">{event.name}</h2>
-              <p className="mt-2 text-sm">${((event.dropInPriceCents || 0) / 100).toFixed(2)} · {event.durationMinutes} minutes · {event._count.occurrences} dates · {signups} signups</p>
-              <p className="mt-2 text-xs font-black uppercase text-rhyze-coral">{occurrence ? occurrence.startAt.toLocaleString('en-US', { timeZone: occurrenceLocalTimeZone(), dateStyle: 'medium', timeStyle: 'short' }) : 'Date not scheduled'}</p>
+              <p className="mt-2 text-sm">${((priceCents || 0) / 100).toFixed(2)} · {event.durationMinutes} minutes · {event._count.occurrences} dates · {signups} signups</p>
+              {memberClassEvent && <p className="mt-2 text-sm font-bold">Class credits, active 7-day trial and VIP unlimited access accepted.</p>}
+              <p className="mt-2 text-xs font-black uppercase text-rhyze-coral">{occurrence ? occurrence.startAt.toLocaleString('en-US', { timeZone: occurrenceLocalTimeZone(), dateStyle: 'medium', timeStyle: 'short' }) : memberClassEvent ? 'No upcoming date' : 'Date not scheduled'}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -128,13 +147,14 @@ export default async function AdminEventsPage(
     </>
   );
 }
-function EventOccurrenceSection({ title, occurrences, past = false, eventSummaries }: { eventSummaries: ReceiptSummary[]; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { name: string; category: { name: string } }; instructor: { name: string | null } | null; _count: { bookings: number } }>; past?: boolean }) {
+function EventOccurrenceSection({ title, occurrences, past = false, eventSummaries }: { eventSummaries: ReceiptSummary[]; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { id: string; slug: string; isEvent: boolean; name: string; category: { name: string } }; instructor: { name: string | null } | null; _count: { bookings: number } }>; past?: boolean }) {
   if (!occurrences.length) return null;
   return (
     <section>
       <h3 className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-black/45">{title}</h3>
       <div className="mt-3 grid gap-3">
         {occurrences.map((occurrence) => {
+          const memberClassEvent = isMemberClassEvent(occurrence.template);
           const eventSummary = eventSummaries.find(item => item.occurrenceId === occurrence.id);
           const entriesQuery = financialReportQuery({ range: 'custom', from: eventSummary?.from, to: eventSummary?.to, occurrence: occurrence.id });
           return (
@@ -143,11 +163,12 @@ function EventOccurrenceSection({ title, occurrences, past = false, eventSummari
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.template.category.name}</p>
                 <h3 className="mt-1 font-display text-3xl tracking-wider">{occurrence.template.name}</h3>
                 <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups</p>
-                <EventReceiptSummary summary={eventSummary} />
+                {memberClassEvent ? <p className="mt-2 text-sm">Class credits, active 7-day trial and VIP unlimited access accepted. Paid tickets are listed in Sales under class purchases.</p> : <EventReceiptSummary summary={eventSummary} />}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link href={`/admin/payments?${entriesQuery}`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest">Financial entries</Link>
                 <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Manage</Link>
+                {memberClassEvent && <Link href={`/admin/classes/${occurrence.template.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Edit photo &amp; description</Link>}
                 <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Duplicate / choose date</Link>
                 <Link href={`/admin/schedule/${occurrence.id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>
               </div>
