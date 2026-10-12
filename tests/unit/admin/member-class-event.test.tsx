@@ -54,7 +54,7 @@ describe('Rachel management under Admin Events', () => {
   });
   it('shows Rachel’s next $15 event in the catalog instead of the old August class and $25 template price', async () => {
     render(await AdminEventsPage({ searchParams: Promise.resolve({}) }));
-    const card = screen.getByRole('link', { name: 'Edit', exact: true }).closest('article')!;
+    const card = screen.getByRole('link', { name: 'Edit' }).closest('article')!;
     expect(card.textContent).toContain('$15.00');
     expect(card.textContent).toContain('Oct 16, 2026');
     expect(card.textContent).not.toContain('Aug 4');
@@ -63,7 +63,7 @@ describe('Rachel management under Admin Events', () => {
   });
   it('links scheduled event editing to the existing template and date, and does not label class-ticket revenue as missing', async () => {
     render(await AdminEventsPage({ searchParams: Promise.resolve({}) }));
-    const manage = screen.getByRole('link', { name: 'Manage', exact: true });
+    const manage = screen.getByRole('link', { name: 'Manage' });
     const row = manage.closest('article')!;
     expect(manage.getAttribute('href')).toBe('/admin/schedule/rachel-oct16');
     expect(within(row).getByRole('link', { name: 'Edit photo & description' }).getAttribute('href')).toBe('/admin/classes/rachel');
