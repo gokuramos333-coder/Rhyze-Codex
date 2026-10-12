@@ -752,6 +752,15 @@ export function buildFinancialReport(
     raw.providerEvents,
   );
   providerLedger.rows = providerLedger.rows.map(confirmHistoricalEventRow);
+  // Public event display can include member-credit events without rewriting
+  // the ledger's class-purchase classification or counting bookings as cash.
+  const eventSummaries = summarizeEventReceipts(providerLedger.rows,
+    new Set((raw.eventOccurrences || []).map(event => event.id)));
+  const matchingEventIds = new Set(providerLedger.rows.filter(row =>
+    !params.offering || row.offeringKey === params.offering).map(row => row.occurrenceId));
+  const eventOccurrences = (raw.eventOccurrences || []).filter(event =>
+    (!params.occurrence || event.id === params.occurrence) &&
+    (!params.offering || financialOfferingKey(event.template.name) === params.offering || matchingEventIds.has(event.id)));
   const rows = providerLedger.rows
     .filter(matches)
     .filter(
@@ -799,10 +808,10 @@ export function buildFinancialReport(
     pageCount,
     pageSize,
     totals: totalRows(rows),
-    eventSummaries: summarizeEventReceipts(providerLedger.rows),
+    eventSummaries,
     eventOccurrenceGroups: summarizeEventOccurrenceReceipts(
-      summarizeEventReceipts(providerLedger.rows.filter(matches)),
-      raw.eventOccurrences || [],
+      eventSummaries,
+      eventOccurrences,
       range,
       now,
     ),
@@ -901,6 +910,7 @@ export function formatReportMoney(cents: number, currency: string) {
 export async function loadFinancialReport(
   params: FinancialReportParams,
   now = new Date(),
+  additionalEventOccurrences: EventOccurrence[] = [],
 ) {
   const { prisma } = await import('@/lib/db/prisma');
   // Reconcile the complete source set before date filtering: a September refund can refer to an August payment.
@@ -970,7 +980,7 @@ export async function loadFinancialReport(
       commerceRefunds,
       providerEvents,
       importedBookings,
-      eventOccurrences,
+      eventOccurrences: [...new Map([...eventOccurrences, ...additionalEventOccurrences].map(event => [event.id, event])).values()],
     },
     params,
     now,

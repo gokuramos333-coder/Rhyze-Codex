@@ -14,10 +14,11 @@ vi.mock('@/lib/admin/financial-report', () => ({
   financialReportQuery: (input: { occurrence: string }) => `occurrence=${input.occurrence}`,
   formatReportMoney: vi.fn(),
 }));
-vi.mock('@/components/admin/FinancialReportView', () => ({ FinancialReportView: () => null }));
+vi.mock('@/components/admin/FinancialReportView', () => ({ FinancialReportView: () => <section aria-label="Financial report" /> }));
 vi.mock('@/components/admin/AnalyticsRangeControls', () => ({ AnalyticsRangeControls: () => null }));
 vi.mock('@/app/(studio)/admin/classes/actions', () => ({ createClassTemplateAction: vi.fn(), deleteClassTemplateAction: vi.fn() }));
 import AdminEventsPage from '@/app/(studio)/admin/events/page';
+import { loadFinancialReport } from '@/lib/admin/financial-report';
 
 const template = {
   id: 'rachel', slug: 'soul-line-dancing-rachel', name: 'Soul Line Dancing with Rachel',
@@ -47,6 +48,7 @@ describe('Rachel management under Admin Events', () => {
     await AdminEventsPage({ searchParams: Promise.resolve({}) });
     const classification = { OR: [{ isEvent: true }, { isEvent: false, slug: template.slug }] };
     expect(db.classTemplate.findMany.mock.calls[0][0].where).toEqual(classification);
+    expect(loadFinancialReport).toHaveBeenCalledWith({ kind: 'event' }, new Date(), [upcoming]);
     expect(db.classOccurrence.findMany.mock.calls[0][0].where).toMatchObject({
       template: classification, status: 'SCHEDULED',
       startAt: { gte: new Date('2026-10-01T04:00Z'), lte: new Date('2026-11-01T03:59:59.999Z') },
@@ -71,4 +73,12 @@ describe('Rachel management under Admin Events', () => {
     expect(row.textContent).toContain('Paid tickets are listed in Sales under class purchases.');
     expect(row.textContent).not.toContain('no matched payment records');
   });
+});
+
+it('puts event management before the financial report so Rachel is visible without scrolling through receipts', async () => {
+  const { container } = render(await AdminEventsPage({ searchParams: Promise.resolve({}) }));
+  const scheduled = screen.getByRole('heading', { name: /ALL EVENTS/ });
+  const financial = screen.getByRole('region', { name: 'Financial report' });
+  expect(scheduled.compareDocumentPosition(financial) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(container.textContent).toContain('Edit photo & description');
 });

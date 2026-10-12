@@ -24,7 +24,6 @@ export default async function AdminEventsPage(
   const searchParams = await props.searchParams;
   const range = resolveAnalyticsRange(searchParams);
   const occurrenceRange = range;
-  const report = await loadFinancialReport({ ...searchParams, kind: 'event' });
   const now = new Date();
   const [eventRows, categories, scheduledOccurrences, nextMemberEvent] = await Promise.all([
     prisma.classTemplate.findMany({
@@ -70,6 +69,8 @@ export default async function AdminEventsPage(
       },
     }),
   ]);
+  const report = await loadFinancialReport({ ...searchParams, kind: 'event' }, now,
+    scheduledOccurrences.filter(occurrence => isMemberClassEvent(occurrence.template)));
   const events = sortCatalogByNextOccurrence(eventRows.map(event => isMemberClassEvent(event)
     ? { ...event, occurrences: nextMemberEvent ? [nextMemberEvent] : [] }
     : event));
@@ -80,10 +81,9 @@ export default async function AdminEventsPage(
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Special experiences</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">EVENTS</h1>
       <p className="mt-3 max-w-2xl text-rhyze-black/55">Events remain part of the public schedule but are managed separately from recurring studio classes.</p>
-      <FinancialReportView report={report} basePath="/admin/events" preservedParams={{ kind: 'event' }} />
       {searchParams.saved && <p className="mt-5 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">Event added. Schedule its date and instructor next.</p>}
       <section className="mt-8 border-t-4 border-rhyze-black bg-white p-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Scheduled events</p>
             <h2 className="mt-2 font-display text-4xl tracking-wider">ALL EVENTS · {occurrenceRange.label}</h2>
@@ -97,6 +97,7 @@ export default async function AdminEventsPage(
           {!scheduledOccurrences.length && <p className="border border-black/10 p-5 text-sm font-bold text-rhyze-black/50">No scheduled events in this range.</p>}
         </div>
       </section>
+      <FinancialReportView report={report} basePath="/admin/events" preservedParams={{ kind: 'event' }} />
       <form action={createClassTemplateAction} className="mt-8 grid gap-4 border-t-4 border-rhyze-gold bg-white p-6 md:grid-cols-2">
         <input type="hidden" name="isEvent" value="on" />
         <Field name="name" label="Event name" />
@@ -158,12 +159,13 @@ function EventOccurrenceSection({ title, occurrences, past = false, eventSummari
           const eventSummary = eventSummaries.find(item => item.occurrenceId === occurrence.id);
           const entriesQuery = financialReportQuery({ range: 'custom', from: eventSummary?.from, to: eventSummary?.to, occurrence: occurrence.id });
           return (
-            <article key={occurrence.id} className={`grid gap-3 border border-black/10 p-4 ${memberClassEvent ? '' : 'md:grid-cols-[1fr_auto] md:items-center'} ${past ? 'bg-rhyze-black/5' : 'bg-white'}`}>
+            <article key={occurrence.id} className={`grid gap-3 border border-black/10 p-4 ${past ? 'bg-rhyze-black/5' : 'bg-white'}`}>
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.template.category.name}</p>
                 <h3 className="mt-1 font-display text-3xl tracking-wider">{occurrence.template.name}</h3>
                 <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups</p>
-                {memberClassEvent ? <p className="mt-2 text-sm">Class credits, active 7-day trial and VIP unlimited access accepted. Paid tickets are listed in Sales under class purchases.</p> : <EventReceiptSummary summary={eventSummary} />}
+                {memberClassEvent && <p className="mt-2 text-sm">Class credits, active 7-day trial and VIP unlimited access accepted. Paid tickets are listed in Sales under class purchases.</p>}
+                <EventReceiptSummary summary={eventSummary} />
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link href={`/admin/payments?${entriesQuery}`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest">Financial entries</Link>

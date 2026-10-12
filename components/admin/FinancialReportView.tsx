@@ -61,7 +61,7 @@ export function FinancialReportView({
                 EVENT RECEIPTS BY EVENT DATE · {report.range.label}
               </h2>
               <p className="text-sm text-rhyze-black/60">
-                Events whose scheduled date falls in this period. Includes all
+                All events whose scheduled date falls in this period, including events with no payment receipts. Includes all
                 recorded payment dates and refunds, before fees and instructor
                 pay. Completed means the scheduled end time has passed. These
                 receipts overlap cash reporting; the ledger below filters by
@@ -144,6 +144,7 @@ export function FinancialReportView({
                                     year: 'numeric',
                                   })}
                                 </Link>
+                                <Link href={`/admin/schedule/${event.occurrenceId}`} className="ml-4 text-sm font-bold underline">Manage event</Link>
                                 <EventReceiptSummary summary={event} />
                               </li>
                             ))}

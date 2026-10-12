@@ -227,3 +227,38 @@ describe('event-date reporting', () => {
     expect(result[0].upcoming.totals[0].netCents).toBe(3000);
   });
 });
+
+
+describe('scheduled events without payment records', () => {
+  const now = new Date('2026-10-12T06:00Z');
+  const occurrences = [
+    ['rachel', 'Soul Line Dancing with Rachel', '2026-10-16'],
+    ['mommy', 'Mommy & Me', '2026-10-24'],
+    ['nicole', 'Hypnotic Heels with Nicole', '2026-10-29'],
+    ['november', 'November event', '2026-11-05'],
+  ].map(([id, name, date]) => ({ id, template: { name }, status: 'SCHEDULED',
+    startAt: new Date(`${date}T23:00Z`), endAt: new Date(`${date}T23:50Z`) }));
+  function report(extra = {}) {
+    return buildFinancialReport({ purchases: [], commerceOrders: [], paymentRecords: [],
+      sombleTransactions: [], purchaseRefunds: [], commerceRefunds: [], providerEvents: [],
+      eventOccurrences: occurrences,
+    }, { range: 'month', kind: 'event', ...extra }, now);
+  }
+  it('lists every scheduled event in the selected month without fabricating verified zero receipts', () => {
+    const result = report();
+    expect(result.eventOccurrenceGroups.map(g => g.name).sort()).toEqual(
+      ['Soul Line Dancing with Rachel', 'Mommy & Me', 'Hypnotic Heels with Nicole'].sort());
+    expect(result.rows).toEqual([]);
+    for (const group of result.eventOccurrenceGroups) {
+      expect(group.upcoming.events).toHaveLength(1);
+      expect(group.upcoming.totals).toEqual([]);
+    }
+    const html = renderToStaticMarkup(<FinancialReportView report={result} basePath="/admin/events" />);
+    expect(html).toContain('No payment receipts recorded');
+    expect(html).toContain('/admin/schedule/rachel');
+  });
+  it('keeps offering and occurrence filters effective when events have no receipts', () => {
+    expect(report({ occurrence: 'mommy' }).eventOccurrenceGroups.map(g => g.name)).toEqual(['Mommy & Me']);
+    expect(report({ offering: 'hypnotic heels with nicole' }).eventOccurrenceGroups.map(g => g.name)).toEqual(['Hypnotic Heels with Nicole']);
+  });
+});

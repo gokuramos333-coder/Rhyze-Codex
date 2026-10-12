@@ -544,3 +544,25 @@ it('excludes exact provider-confirmed historical TEST records without hiding an 
   data.paymentRecords[0].currency = 'eur';
   expect(buildFinancialReport(data, range).rows).toHaveLength(1);
 });
+
+it('shows a member-credit event’s actual ticket receipts without rewriting class sales or adding booking value', () => {
+  const data = sources();
+  data.purchases = [{
+    id: 'rachel-ticket', userId: 'member', amountCents: 1500, currency: 'usd', status: 'PAID',
+    paidAt: at, createdAt: at, stripePaymentIntentId: 'pi_rachel', product: { name: 'Single Class' },
+    policyAcceptance: { classTicket: { occurrenceId: 'rachel-oct16', name: 'Soul Line Dancing',
+      startAt: '2026-10-16T23:30:00.000Z', endAt: '2026-10-17T00:30:00.000Z', amountCents: 1500 } },
+  }];
+  data.providerEvents = [receipt('rachel', { amount: 1500, amount_captured: 1500 })];
+  const original = buildFinancialReport(data, range);
+  data.eventOccurrences = [{ id: 'rachel-oct16', startAt: new Date('2026-10-16T23:30Z'),
+    endAt: new Date('2026-10-17T00:30Z'), status: 'SCHEDULED', template: { name: 'Soul Line Dancing with Rachel' } }];
+  const allSales = buildFinancialReport(data, range);
+  expect(financialReportCsvRows(allSales)).toEqual(financialReportCsvRows(original));
+  expect(allSales.totals).toEqual(original.totals);
+  expect(allSales.rows.find(r => r.entryType === 'COLLECTION')).toMatchObject({ isEvent: false, amountCents: 1500 });
+  const events = buildFinancialReport(data, { range: 'month', kind: 'event' }, new Date('2026-10-12T06:00Z'));
+  expect(events.rows).toEqual([]); // August class-ticket payment, not a new October collection.
+  expect(events.eventOccurrenceGroups[0].upcoming.totals).toMatchObject([{ verifiedNetCents: 1500, netCents: 1500 }]);
+  expect(events.eventOccurrenceGroups[0].upcoming.events[0]).toMatchObject({ from: '2026-08-15', to: '2026-08-15' });
+});

@@ -15,10 +15,13 @@ function localDate(date: Date) {
 
 // Input is the reconciled ledger, after exact-reference deduplication.
 // Event totals span all payment dates, independently of the report's cash period.
-export function summarizeEventReceipts(rows: FinancialReportRow[]) {
+export function summarizeEventReceipts(
+  rows: FinancialReportRow[],
+  publicOccurrenceIds: ReadonlySet<string> = new Set(),
+) {
   const events = new Map<string, FinancialReportRow[]>();
   for (const row of rows) {
-    if (!row.isEvent || !row.occurrenceId) continue;
+    if (!row.occurrenceId || (!row.isEvent && !publicOccurrenceIds.has(row.occurrenceId))) continue;
     events.set(row.occurrenceId, [...(events.get(row.occurrenceId) || []), row]);
   }
   return [...events].map(([occurrenceId, entries]) => {
@@ -40,7 +43,7 @@ export function summarizeEventReceipts(rows: FinancialReportRow[]) {
       currencies.set(row.currency, total);
     }
     const dates = entries.flatMap(row => row.occurredAt ? [localDate(row.occurredAt)] : []).sort();
-    return { occurrenceId, currencies: [...currencies.values()], from: dates[0], to: dates.at(-1) };
+    return { occurrenceId, currencies: [...currencies.values()], from: dates.at(0), to: dates.at(-1) };
   });
 }
 
@@ -82,8 +85,11 @@ export function summarizeEventOccurrenceReceipts(
   )) {
     if (occurrence.startAt < range.start || occurrence.startAt > range.end)
       continue;
-    const summary = receipts.get(occurrence.id);
-    if (!summary) continue;
+    // A scheduled event remains visible even before the first cash receipt.
+    // Empty currencies mean no matched evidence, not a verified zero balance.
+    const summary = receipts.get(occurrence.id) ?? {
+      occurrenceId: occurrence.id, currencies: [], from: undefined, to: undefined,
+    };
     const name = occurrence.template.name;
     const key = financialOfferingKey(name);
     const group = groups.get(key) || {

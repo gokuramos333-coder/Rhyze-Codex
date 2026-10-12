@@ -4,7 +4,7 @@ import type { EventReceiptSummary as Summary } from '@/lib/admin/event-receipts'
 
 export function EventReceiptSummary({ summary }: { summary?: Summary }) {
   if (!summary || !summary.currencies.length)
-    return <p className="mt-2 text-sm">Event revenue: no matched payment records.</p>;
+    return <p className="mt-2 text-sm">No payment receipts recorded for this event. Membership or credit bookings do not create a separate event payment.</p>;
   return <div className="mt-2 text-sm">
     {summary.currencies.map(total => <div key={total.currency}>
       {total.currency !== 'UNKNOWN' && <>
