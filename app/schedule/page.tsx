@@ -1,3 +1,4 @@
+export const metadata = { alternates: { canonical: '/schedule' } };
 import Link from 'next/link';
 import { WeeklyCalendar } from '@/components/sections/WeeklyCalendar';
 import {

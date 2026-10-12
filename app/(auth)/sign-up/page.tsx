@@ -1,3 +1,4 @@
+export const metadata = { alternates: { canonical: '/sign-up' }, robots: { index: false, follow: true } };
 import Link from 'next/link';
 import { AuthFrame } from '@/components/domain/accounts/AuthFrame';
 import { SignUpForm } from '@/components/domain/accounts/SignUpForm';

@@ -1,3 +1,4 @@
+import { birthdayReminderExpired } from '@/lib/domain/birthdays/birthday-delivery';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { runNewsletterBatch } from '@/lib/newsletters/delivery';
@@ -50,6 +51,13 @@ export async function POST(request: Request) {
     take: 50,
     include: { attachments: true },
   });
+  // A delayed birthday reminder's relative date is misleading. Expire before
+  // approval filtering so unapproved notices cannot accumulate indefinitely.
+  const expiredBirthdayIds = due.filter(message => birthdayReminderExpired(message)).map(message => message.id);
+  const expired = expiredBirthdayIds.length ? await prisma.emailMessage.updateMany({
+    where: { id: { in: expiredBirthdayIds }, status: 'QUEUED', providerId: null, sentAt: null },
+    data: { status: 'CANCELLED', lastError: 'Birthday reminder expired after 24 hours; not sent.' },
+  }) : { count: 0 };
   const reviewedTemplates = await prisma.emailTemplateReview.findMany({
     where: {
       revision: EMAIL_TEMPLATE_REVISION,
@@ -60,12 +68,12 @@ export async function POST(request: Request) {
   const approvedTemplates = new Set(reviewedTemplates.map((review) => review.template));
   const reviewByTemplate = new Map(reviewedTemplates.map((review) => [review.template, review]));
   const deliverable = due.filter((message) =>
-    isEmailTemplateKey(message.template) && approvedTemplates.has(message.template),
+    !birthdayReminderExpired(message) && isEmailTemplateKey(message.template) && approvedTemplates.has(message.template),
   );
   const resend = new Resend(apiKey);
   let delivered = 0;
   let failed = 0;
-  let cancelled = 0;
+  let cancelled = expired.count;
   for (const message of deliverable) {
     if (message.dedupeKey?.startsWith(CALLBACK_EMAIL_PREFIX)) {
       const outcome = await deliverCallbackEmail(prisma, message.id).catch(() => 'failed' as const);
@@ -180,7 +188,7 @@ export async function POST(request: Request) {
   }
   return NextResponse.json({
     queued: due.length,
-    pendingApproval: due.length - deliverable.length,
+    pendingApproval: due.length - expiredBirthdayIds.length - deliverable.length,
     newsletters,
     delivered,
     failed,

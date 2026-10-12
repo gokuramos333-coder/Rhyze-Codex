@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { EventsPreview } from '@/components/sections/EventsPreview';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/events' },
   title: 'Events',
   description:
     'Upcoming Rhyze Fitness specialty classes, workshops, and event booking.',

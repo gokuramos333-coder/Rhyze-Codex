@@ -5,6 +5,7 @@ import {
 } from '@/components/sections/InstagramFeed';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/gallery' },
   title: 'Gallery',
   description:
     'A peek inside Rhyze Fitness, classes, community, and the studio. Live from @rhyze.fitness on Instagram.',

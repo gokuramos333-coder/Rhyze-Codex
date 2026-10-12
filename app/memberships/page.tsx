@@ -1,3 +1,4 @@
+export const metadata = { alternates: { canonical: '/memberships' } };
 import Link from 'next/link';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/db/prisma';

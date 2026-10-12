@@ -1,3 +1,4 @@
+export const metadata = { alternates: { canonical: '/' } };
 import { Hero } from '@/components/sections/Hero';
 import { WelcomeCopy } from '@/components/sections/WelcomeCopy';
 import { ThreePillars } from '@/components/sections/ThreePillars';

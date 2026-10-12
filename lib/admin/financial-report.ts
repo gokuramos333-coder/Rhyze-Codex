@@ -1,3 +1,4 @@
+import { isConfirmedTestPayment } from './confirmed-test-payments';
 import { financialOfferingKey } from './financial-offering';
 export { financialOfferingKey } from './financial-offering';
 import {
@@ -509,12 +510,14 @@ export function buildFinancialReport(
   }
   const eligible = (
     item: Details & {
+      amountCents?: number;
       stripeEventId?: string;
       stripePaymentIntentId?: string | null;
     },
   ) =>
     (!item.status || paidStatuses.has(item.status)) &&
     item.livemode !== false &&
+    !isConfirmedTestPayment(item) &&
     !testReferences.has(item.stripeEventId || '') &&
     !testReferences.has(item.stripePaymentIntentId || '');
   const data = {

@@ -8,6 +8,7 @@ import type { Instructor } from '@/lib/instructors';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/instructors' },
   title: 'Instructors',
   description:
     'Meet the dance, yoga, strength, and fitness instructors of Rhyze Fitness in Lafayette, NJ.',

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { ParallaxImage } from '@/components/sections/ParallaxImage';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/about' },
   title: 'About',
   description:
     'The mission, the vibe, and the story behind Rhyze Fitness, Sussex County’s boutique dance, yoga, and HIIT studio.',

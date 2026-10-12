@@ -3,6 +3,7 @@ import { products } from '@/lib/products';
 import { ProductCard } from '@/components/sections/ProductCard';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/shop' },
   title: 'Shop',
   description: 'Rhyze-branded gear for the floor and the street.',
 };

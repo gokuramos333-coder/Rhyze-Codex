@@ -1,3 +1,4 @@
+import { confirmedTestPayments } from '@/lib/admin/confirmed-test-payments';
 import { describe, expect, it } from 'vitest';
 import {
   buildFinancialReport,
@@ -530,4 +531,16 @@ it('warns when the first provider receipt is pending and its amount and charge d
   const report = buildFinancialReport(data, range);
   expect(report.staleProviderReceipts).toEqual([expect.objectContaining({ chargeId: 'ch_new', chargeCreatedAt: null })]);
   expect(report.providerReceiptCount).toBe(0);
+});
+
+it('excludes exact provider-confirmed historical TEST records without hiding an amount/currency mismatch', () => {
+  const proof = confirmedTestPayments[0];
+  const data = sources();
+  data.paymentRecords = [payment('confirmed-test', {stripePaymentIntentId:proof.id,amountCents:proof.amountCents,currency:proof.currency})];
+  expect(buildFinancialReport(data, range).rows).toHaveLength(0);
+  data.paymentRecords[0].amountCents += 1;
+  expect(buildFinancialReport(data, range).rows).toHaveLength(1);
+  data.paymentRecords[0].amountCents = proof.amountCents;
+  data.paymentRecords[0].currency = 'eur';
+  expect(buildFinancialReport(data, range).rows).toHaveLength(1);
 });

@@ -7,6 +7,7 @@ import { LocationBlock } from '@/components/sections/LocationBlock';
 import { site } from '@/lib/site';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/contact' },
   title: 'Contact',
   description:
     'Reach out to Rhyze Fitness, Lafayette, NJ. Membership questions, private events, press, or just to say hi.',

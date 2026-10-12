@@ -121,3 +121,12 @@ describe('callback recovery in the existing email job', () => {
     expect(mocks.callback).not.toHaveBeenCalled();
   });
 });
+
+it('expires an old unapproved birthday notice without sending it or blocking fresh messages', async () => {
+  mocks.due.mockResolvedValue([{id:'expired-birthday',template:'BIRTHDAY_WEEK_AHEAD',scheduledFor:new Date('2020-01-01')}]);
+  mocks.review.mockResolvedValue([]);
+  const response = await POST(request());
+  expect(await response.json()).toMatchObject({cancelled:1,pendingApproval:0,delivered:0});
+  expect(mocks.send).not.toHaveBeenCalled();
+  expect(mocks.claim).toHaveBeenCalledWith(expect.objectContaining({where:{id:{in:['expired-birthday']},status:'QUEUED',providerId:null,sentAt:null},data:expect.objectContaining({status:'CANCELLED'})}));
+});

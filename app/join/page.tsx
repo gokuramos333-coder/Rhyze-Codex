@@ -5,6 +5,7 @@ import { MembershipFreedomStrip } from '@/components/sections/MembershipFreedomS
 import { PricingCards } from '@/components/sections/PricingCards';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/join' },
   title: 'Join Now',
   description:
     'Choose your Rhyze Fitness membership, create your Rhyze account, and get ready for your first day in studio.',

@@ -2,6 +2,15 @@
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   reactStrictMode: true,
+  async headers() {
+    return [{ source: '/:path*', headers: [
+      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      // Narrow protections that preserve Stripe, analytics, fonts and inline
+      // Next.js scripts. A nonce-based script policy is separate work.
+      { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'" },
+    ] }];
+  },
   serverExternalPackages: ['@node-rs/argon2', 'heic-convert'],
   outputFileTracingIncludes: {
     '/*': [

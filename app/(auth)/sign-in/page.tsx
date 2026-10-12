@@ -1,3 +1,4 @@
+export const metadata = { alternates: { canonical: '/sign-in' }, robots: { index: false, follow: true } };
 import Link from 'next/link';
 import { AuthField, AuthFrame } from '@/components/domain/accounts/AuthFrame';
 import { PasswordField } from '@/components/domain/accounts/PasswordField';

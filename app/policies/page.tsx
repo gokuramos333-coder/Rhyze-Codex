@@ -5,6 +5,7 @@ import {
 } from '@/lib/policies';
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/policies' },
   title: 'Studio Policies',
   description:
     'Waiver, cancellation, refund, late booking, age, and health policies for Rhyze Fitness.',
