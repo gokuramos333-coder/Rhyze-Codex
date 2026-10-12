@@ -158,7 +158,7 @@ function EventOccurrenceSection({ title, occurrences, past = false, eventSummari
           const eventSummary = eventSummaries.find(item => item.occurrenceId === occurrence.id);
           const entriesQuery = financialReportQuery({ range: 'custom', from: eventSummary?.from, to: eventSummary?.to, occurrence: occurrence.id });
           return (
-            <article key={occurrence.id} className={`grid gap-3 border border-black/10 p-4 md:grid-cols-[1fr_auto] md:items-center ${past ? 'bg-rhyze-black/5' : 'bg-white'}`}>
+            <article key={occurrence.id} className={`grid gap-3 border border-black/10 p-4 ${memberClassEvent ? '' : 'md:grid-cols-[1fr_auto] md:items-center'} ${past ? 'bg-rhyze-black/5' : 'bg-white'}`}>
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.template.category.name}</p>
                 <h3 className="mt-1 font-display text-3xl tracking-wider">{occurrence.template.name}</h3>
