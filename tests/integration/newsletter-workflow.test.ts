@@ -17,7 +17,12 @@ import {
   unsubscribe,
 } from '@/lib/newsletters/delivery';
 import { sendNewsletterTest } from '@/lib/newsletters/test-delivery';
-import { defaultAudience, eligibility } from '@/lib/newsletters/domain';
+import {
+  blockSchema,
+  documentSchema,
+  defaultAudience,
+  eligibility,
+} from '@/lib/newsletters/domain';
 // Validate before application imports instantiate Prisma; this file has its own
 // disposable database, independent of the other release integration suites.
 vi.hoisted(() => {
@@ -143,6 +148,73 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 describe('Newsletter and outreach persistence — isolated PostgreSQL', () => {
+  it('persists video sections, requires retained thumbnail assets and stores a future schedule', async () => {
+    await customer();
+    const c = await draft();
+    const thumbnailUrl = '/api/media/newsletters/' + randomUUID() + '.jpg';
+    const document = documentSchema.parse(c.document);
+    document.blocks.push(
+      blockSchema.parse({
+        id: 'video',
+        type: 'video',
+        url: 'https://vimeo.com/123',
+        thumbnailUrl,
+        alt: 'Sample class preview',
+        text: 'Watch video',
+      }),
+    );
+    const saved = await saveCampaign(actor.id, {
+      id: c.id,
+      version: c.version,
+      name: c.name,
+      subject: c.subject,
+      previewText: '',
+      document,
+      audience: c.audience,
+      targetWeek: c.targetWeek!,
+      scheduleMode: 'AUTO',
+    });
+    const sendAt = new Date(Date.now() + 86400000);
+    expect((await campaignReview(c.id, sendAt)).errors).toContain(
+      'Use uploaded newsletter-library images so the approved image is retained with the campaign.',
+    );
+    const asset = await prisma.newsletterAsset.create({
+      data: {
+        url: thumbnailUrl,
+        name: 'Synthetic thumbnail',
+        alt: 'Sample class preview',
+        createdById: actor.id,
+      },
+    });
+    try {
+      const review = await campaignReview(c.id, sendAt);
+      expect(review.errors).toEqual([]);
+      expect(review.snapshot.document.blocks.at(-1)).toMatchObject({
+        type: 'video',
+        thumbnailUrl,
+      });
+      await approveCampaign(
+        actor.id,
+        c.id,
+        saved.version,
+        review.hash,
+        sendAt,
+        'America/New_York',
+      );
+      const stored = await prisma.emailCampaign.findUniqueOrThrow({
+        where: { id: c.id },
+      });
+      expect(stored.scheduledFor).toEqual(sendAt);
+      expect(stored.timezone).toBe('America/New_York');
+      expect(stored.status).toBe('SCHEDULED');
+      expect(
+        await prisma.newsletterRecipient.count({ where: { campaignId: c.id } }),
+      ).toBe(0);
+    } finally {
+      await prisma.newsletterAsset.delete({ where: { id: asset.id } });
+    }
+  });
+
   it.each(['ACTIVE', 'INVITED'] as const)(
     'automatically includes a new %s profile without writing opt-in evidence',
     async (status) => {

@@ -65,6 +65,7 @@ export const blockSchema = z.object({
     'heading',
     'text',
     'image',
+    'video',
     'button',
     'divider',
     'columns',
@@ -76,6 +77,7 @@ export const blockSchema = z.object({
   secondary: z.string().max(8000).default(''),
   url: z.string().max(2000).default(''),
   alt: z.string().max(300).default(''),
+  thumbnailUrl: z.string().max(2000).optional(),
   occurrenceId: z.string().max(100).optional(),
   fontSize: z.number().int().min(12).max(48).default(16),
   weight: z.enum(['normal', 'bold']).default('normal'),
@@ -363,6 +365,13 @@ export function validateContent(input: {
       errors.push(
         `Add a valid ${b.type === 'button' ? 'button link' : 'image URL'}.`,
       );
+    if (b.type === 'video') {
+      if (!b.url.startsWith('https://') || !safeLink(b.url))
+        errors.push('Add a valid HTTPS video link.');
+      if (!b.thumbnailUrl || !safeLink(b.thumbnailUrl))
+        errors.push('Upload or choose a video thumbnail.');
+      if (!b.alt.trim()) errors.push('Describe the video thumbnail.');
+    }
     if (b.type === 'image' && !b.alt.trim()) errors.push('Add image alt text.');
     if (['event', 'class'].includes(b.type)) {
       const x = input.schedule.find((x) => x.id === b.occurrenceId);

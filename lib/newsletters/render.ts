@@ -155,6 +155,15 @@ export function renderNewsletter(input: {
               ? `<img src="${url(b.url)}" width="560" alt="${e(b.alt)}" style="display:block;max-width:100%;width:100%;height:auto;border:0">`
               : '<p>Add an approved image</p>';
           break;
+        case 'video':
+          html =
+            b.url.startsWith('https://') &&
+            safeLink(b.url) &&
+            b.thumbnailUrl &&
+            safeLink(b.thumbnailUrl)
+              ? `<a href="${url(b.url)}"><img src="${url(b.thumbnailUrl)}" width="560" alt="${e(b.alt)}" style="display:block;max-width:100%;width:100%;height:auto;border:0"></a>${button(b.text || 'Watch video', b.url)}`
+              : '<p>Add a video link and upload a thumbnail.</p>';
+          break;
         case 'divider':
           html = '<hr style="border:0;border-top:1px solid #ded8cd">';
           break;
@@ -179,7 +188,13 @@ export function renderNewsletter(input: {
     html,
     text: [
       personalize(input.subject),
-      ...input.document.blocks.map((b) => personalize(b.text)),
+      ...input.document.blocks.map(
+        (b) =>
+          personalize(b.text) +
+          (b.type === 'video' && safeLink(b.url)
+            ? '\n' + new URL(b.url, input.origin).href
+            : ''),
+      ),
       ...input.schedule.map(
         (s) =>
           `${formatScheduleDate(s.startAt)} ${s.title} ${s.status} ${new URL(s.href, input.origin)}`,

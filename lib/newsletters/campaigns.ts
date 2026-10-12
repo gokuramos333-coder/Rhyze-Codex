@@ -56,9 +56,13 @@ export async function campaignReview(id: string, sendAt?: Date) {
     googleReviewUrl: config.googleReviewUrl,
     now: new Date(Math.max(Date.now(), planned.getTime())),
   });
-  const imageUrls = document.blocks
-    .filter((b) => b.type === 'image' && b.url)
-    .map((b) => b.url);
+  const imageUrls = document.blocks.flatMap((b) =>
+    b.type === 'image' && b.url
+      ? [b.url]
+      : b.type === 'video' && b.thumbnailUrl
+        ? [b.thumbnailUrl]
+        : [],
+  );
   if (imageUrls.length) {
     const approvedAssets = await prisma.newsletterAsset.findMany({
       where: { url: { in: imageUrls } },

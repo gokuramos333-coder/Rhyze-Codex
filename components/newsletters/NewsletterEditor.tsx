@@ -63,6 +63,23 @@ export function NewsletterEditor({
     [testEmail, setTestEmail] = useState('preview@example.test'),
     [uploading, setUploading] = useState(false),
     [assets, setAssets] = useState(bundle.assets);
+  const [expanded, setExpanded] = useState<string[]>(
+    campaign.document!.blocks.slice(0, 2).map((b) => b.id),
+  );
+  const [addedId, setAddedId] = useState('');
+  const blocksRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!addedId) return;
+    const section = blocksRef.current?.querySelector(
+      `[data-block-id="${addedId}"]`,
+    );
+    section?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    (
+      section?.querySelector(
+        'input, textarea, select, summary',
+      ) as HTMLElement | null
+    )?.focus();
+  }, [addedId, tab]);
   const previewContainer = useRef<HTMLDivElement>(null);
   const [previewWidth, setPreviewWidth] = useState(680);
   useEffect(() => {
@@ -298,9 +315,43 @@ export function NewsletterEditor({
       setBusy(false);
     }
   }
-  async function upload(event: React.FormEvent<HTMLFormElement>) {
+  function addSection(type: Block['type']) {
+    if (doc.blocks.length >= 40) {
+      setError(
+        'A newsletter can contain up to 40 sections. Remove a section first.',
+      );
+      return;
+    }
+    const text =
+      (
+        {
+          heading: 'Your heading',
+          text: 'Write your message here.',
+          button: 'Learn more',
+          columns: 'First column',
+          video: 'Watch video',
+        } as Partial<Record<Block['type'], string>>
+      )[type] || '';
+    const added = blockSchema.parse({ id: crypto.randomUUID(), type, text });
+    changeDoc({ blocks: [...doc.blocks, added] });
+    setExpanded((ids) => [...ids, added.id]);
+    setAddedId(added.id);
+    setNotice(
+      `${label(type)} section added below. Add your content, then review the preview.`,
+    );
+  }
+  async function upload(
+    event: React.FormEvent<HTMLFormElement>,
+    targetId?: string,
+  ) {
     event.preventDefault();
     setUploading(true);
+    setError('');
+    if (!targetId && doc.blocks.length >= 40) {
+      setError('Remove a section before adding another image.');
+      setUploading(false);
+      return;
+    }
     try {
       const r = await fetch('/api/admin/newsletters/assets', {
         method: 'POST',
@@ -309,20 +360,39 @@ export function NewsletterEditor({
       const x = await r.json();
       if (!r.ok) throw Error(x.error);
       setAssets((a) => [x.asset, ...a]);
-      changeDoc({
-        blocks: [
-          ...doc.blocks,
-          blockSchema.parse({
-            id: crypto.randomUUID(),
-            type: 'image',
-            url: x.asset.url,
-            alt: x.asset.alt,
-          }),
-        ],
+      const added = blockSchema.parse({
+        id: crypto.randomUUID(),
+        type: 'image',
+        url: x.asset.url,
+        alt: x.asset.alt,
       });
-      setNotice(
-        'Photo uploaded and added. Original campaign assets remain unchanged.',
-      );
+      // Apply to the latest draft: uploads may finish after another edit or autosave.
+      revision.current++;
+      setDraft((current) => ({
+        ...current,
+        document: {
+          ...current.document!,
+          blocks: targetId
+            ? current.document!.blocks.map((b) =>
+                b.id === targetId
+                  ? {
+                      ...b,
+                      ...(b.type === 'video'
+                        ? { thumbnailUrl: x.asset.url }
+                        : { url: x.asset.url }),
+                      alt: x.asset.alt,
+                    }
+                  : b,
+              )
+            : [...current.document!.blocks, added],
+        },
+      }));
+      setDirty(true);
+      setReview(null);
+      const id = targetId || added.id;
+      setExpanded((ids) => [...ids, id]);
+      setAddedId(id);
+      setNotice('Image uploaded and added. Save your draft to keep it.');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -361,10 +431,21 @@ export function NewsletterEditor({
           </button>
           {!master && (
             <button
-              className="nl-primary coral"
-              onClick={() => setTab('Review & send')}
+              className="nl-button"
+              onClick={() => {
+                setSendMode('SCHEDULE');
+                setTab('Schedule & send');
+              }}
             >
-              Review & send →
+              Schedule email
+            </button>
+          )}
+          {!master && (
+            <button
+              className="nl-primary coral"
+              onClick={() => setTab('Schedule & send')}
+            >
+              Schedule & send →
             </button>
           )}
         </div>
@@ -387,7 +468,7 @@ export function NewsletterEditor({
       <div className="nl-tabs">
         {(master
           ? ['Content', 'Design & photos']
-          : ['Content', 'Design & photos', 'Audience', 'Review & send']
+          : ['Content', 'Design & photos', 'Audience', 'Schedule & send']
         ).map((t) => (
           <button
             key={t}
@@ -486,22 +567,42 @@ export function NewsletterEditor({
                   </label>
                 )}
               </div>
-              <div className="nl-panel">
+              <div className="nl-panel" ref={blocksRef}>
                 <div className="nl-heading-row">
                   <h3>Email sections</h3>
                   <span className="nl-kicker">{doc.blocks.length} blocks</span>
                 </div>
                 {doc.blocks.map((b, index) => (
-                  <div className="nl-editor-block" key={b.id}>
-                    <details open={index < 2}>
+                  <div
+                    className="nl-editor-block"
+                    key={b.id}
+                    data-block-id={b.id}
+                  >
+                    <details
+                      open={expanded.includes(b.id)}
+                      onToggle={(e) => {
+                        const open = e.currentTarget.open;
+                        setExpanded((ids) =>
+                          open
+                            ? ids.includes(b.id)
+                              ? ids
+                              : [...ids, b.id]
+                            : ids.filter((id) => id !== b.id),
+                        );
+                      }}
+                    >
                       <summary>
                         {index + 1}. {label(b.type)}
                         {b.text ? ' · ' + b.text.slice(0, 22) : ''}
                       </summary>
                       <div className="nl-block-fields nl-form">
-                        {['heading', 'text', 'button', 'columns'].includes(
-                          b.type,
-                        ) && (
+                        {[
+                          'heading',
+                          'text',
+                          'button',
+                          'columns',
+                          'video',
+                        ].includes(b.type) && (
                           <label>
                             Copy
                             <textarea
@@ -525,11 +626,13 @@ export function NewsletterEditor({
                             />
                           </label>
                         )}
-                        {['button', 'image'].includes(b.type) && (
+                        {['button', 'image', 'video'].includes(b.type) && (
                           <label>
                             {b.type === 'button'
                               ? 'Destination link'
-                              : 'Image URL'}
+                              : b.type === 'video'
+                                ? 'Video link (YouTube, Vimeo or your hosted video)'
+                                : 'Image URL'}
                             <input
                               value={b.url}
                               onChange={(e) =>
@@ -538,7 +641,7 @@ export function NewsletterEditor({
                             />
                           </label>
                         )}
-                        {b.type === 'image' && (
+                        {['image', 'video'].includes(b.type) && (
                           <label>
                             Image alt text
                             <input
@@ -548,6 +651,85 @@ export function NewsletterEditor({
                               }
                             />
                           </label>
+                        )}
+                        {['image', 'video'].includes(b.type) && (
+                          <>
+                            {b.type === 'video' && (
+                              <p className="nl-muted">
+                                Readers click the thumbnail to watch. The video
+                                opens from the email; it does not autoplay.
+                              </p>
+                            )}
+                            <label>
+                              Choose a library image
+                              <select
+                                value={
+                                  b.type === 'video'
+                                    ? b.thumbnailUrl || ''
+                                    : b.url
+                                }
+                                onChange={(e) => {
+                                  const asset = assets.find(
+                                    (a) => a.url === e.target.value,
+                                  );
+                                  if (asset)
+                                    block(b.id, {
+                                      ...(b.type === 'video'
+                                        ? { thumbnailUrl: asset.url }
+                                        : { url: asset.url }),
+                                      alt: asset.alt,
+                                    });
+                                }}
+                              >
+                                <option value="">
+                                  Choose an uploaded image…
+                                </option>
+                                {assets.map((a) => (
+                                  <option key={a.id} value={a.url}>
+                                    {a.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <form
+                              className="nl-form"
+                              onSubmit={(event) => upload(event, b.id)}
+                            >
+                              <label>
+                                Image or flyer file
+                                <input
+                                  name="file"
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  required
+                                />
+                              </label>
+                              <label>
+                                Describe the image
+                                <input
+                                  name="alt"
+                                  required
+                                  maxLength={300}
+                                  defaultValue={b.alt}
+                                />
+                              </label>
+                              <small>
+                                JPG, PNG or WebP, up to 8 MB. Export PDF flyers
+                                as an image. Uploaded images are public.
+                              </small>
+                              <button
+                                type="submit"
+                                className="nl-button"
+                                disabled={uploading}
+                              >
+                                {uploading
+                                  ? 'Uploading…'
+                                  : b.type === 'video'
+                                    ? 'Upload video thumbnail'
+                                    : 'Upload image or flyer'}
+                              </button>
+                            </form>
+                          </>
                         )}
                         {['class', 'event'].includes(b.type) && (
                           <label>
@@ -694,7 +876,7 @@ export function NewsletterEditor({
                       </button>
                       <button
                         className="nl-button"
-                        disabled={doc.blocks.length <= 1}
+                        disabled={uploading || doc.blocks.length <= 1}
                         onClick={() =>
                           changeDoc({
                             blocks: doc.blocks.filter((x) => x.id !== b.id),
@@ -710,21 +892,10 @@ export function NewsletterEditor({
                   Add a section
                   <select
                     value=""
+                    disabled={doc.blocks.length >= 40}
                     onChange={(e) => {
                       if (e.target.value)
-                        changeDoc({
-                          blocks: [
-                            ...doc.blocks,
-                            blockSchema.parse({
-                              id: crypto.randomUUID(),
-                              type: e.target.value,
-                              text:
-                                e.target.value === 'text'
-                                  ? 'Write your message here.'
-                                  : '',
-                            }),
-                          ],
-                        });
+                        addSection(e.target.value as Block['type']);
                     }}
                   >
                     <option value="">Choose block…</option>
@@ -732,6 +903,7 @@ export function NewsletterEditor({
                       'heading',
                       'text',
                       'image',
+                      'video',
                       'button',
                       'columns',
                       'divider',
@@ -739,7 +911,9 @@ export function NewsletterEditor({
                       'class',
                       'event',
                     ].map((t) => (
-                      <option key={t}>{t}</option>
+                      <option key={t} value={t}>
+                        {t === 'image' ? 'Image / flyer' : label(t)}
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -851,19 +1025,20 @@ export function NewsletterEditor({
                     key={a.id}
                     className="nl-button"
                     style={{ margin: 6 }}
-                    onClick={() =>
-                      changeDoc({
-                        blocks: [
-                          ...doc.blocks,
-                          blockSchema.parse({
-                            id: crypto.randomUUID(),
-                            type: 'image',
-                            url: a.url,
-                            alt: a.alt,
-                          }),
-                        ],
-                      })
-                    }
+                    disabled={doc.blocks.length >= 40}
+                    onClick={() => {
+                      const added = blockSchema.parse({
+                        id: crypto.randomUUID(),
+                        type: 'image',
+                        url: a.url,
+                        alt: a.alt,
+                      });
+                      changeDoc({ blocks: [...doc.blocks, added] });
+                      setExpanded((ids) => [...ids, added.id]);
+                      setAddedId(added.id);
+                      setTab('Content');
+                      setNotice('Library image added. Review it below.');
+                    }}
                   >
                     {a.name} ＋
                   </button>
@@ -995,10 +1170,10 @@ export function NewsletterEditor({
               </div>
             </>
           )}
-          {tab === 'Review & send' && (
+          {tab === 'Schedule & send' && (
             <>
               <div className="nl-panel nl-form">
-                <h3>Preview, then confirm</h3>
+                <h3>Schedule your email</h3>
                 <p className="nl-muted">
                   Saving a draft never sends. Scheduled sends run server-side
                   and do not need this browser open.
@@ -1018,18 +1193,40 @@ export function NewsletterEditor({
                 </label>
                 {sendMode === 'SCHEDULE' && (
                   <>
-                    <label>
-                      Local send date/time
-                      <input
-                        type="datetime-local"
-                        value={localTime}
-                        onChange={(e) => {
-                          setLocalTime(e.target.value);
-                          setChosenUtc('');
-                          setReview(null);
-                        }}
-                      />
-                    </label>
+                    <div className="nl-inline-fields">
+                      <label>
+                        Send date
+                        <input
+                          type="date"
+                          value={localTime.split('T')[0] || ''}
+                          onChange={(e) => {
+                            setLocalTime(
+                              `${e.target.value}T${localTime.split('T')[1] || '09:00'}`,
+                            );
+                            setChosenUtc('');
+                            setReview(null);
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Send time
+                        <input
+                          type="time"
+                          value={localTime.split('T')[1] || ''}
+                          onChange={(e) => {
+                            setLocalTime(
+                              `${localTime.split('T')[0] || ''}T${e.target.value}`,
+                            );
+                            setChosenUtc('');
+                            setReview(null);
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <small>
+                      Choose the day and time, then review and confirm to
+                      schedule. Until confirmation, this is only a draft.
+                    </small>
                     <label>
                       Time zone
                       <select
@@ -1037,6 +1234,7 @@ export function NewsletterEditor({
                         onChange={(e) => {
                           setZone(e.target.value);
                           setChosenUtc('');
+                          setReview(null);
                         }}
                       >
                         {[
@@ -1060,7 +1258,10 @@ export function NewsletterEditor({
                         This time occurs twice — choose one
                         <select
                           value={chosenUtc}
-                          onChange={(e) => setChosenUtc(e.target.value)}
+                          onChange={(e) => {
+                            setChosenUtc(e.target.value);
+                            setReview(null);
+                          }}
                         >
                           <option value="">Choose offset</option>
                           {candidates.map((c) => (
