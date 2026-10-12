@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import type { ClassCategory } from '@/lib/classes';
 import { loadPublicScheduleSlots } from '@/lib/domain/schedule/public-schedule-query';
 import { loadClassGalleryImages } from '@/lib/classes/class-gallery';
+import { isPublicEvent } from '@/lib/catalog/member-class-event';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ export default async function ClassesPage() {
   const catalog = templates.map((item) => ({
     slug: item.slug,
     name: item.name,
+    isEvent: isPublicEvent(item),
     category: (['dance', 'yoga', 'strength'].includes(item.category.slug) ? item.category.slug : 'dance') as ClassCategory,
     duration: item.durationMinutes,
     tagline: item.description.split(/[.!?]/)[0] || item.name,

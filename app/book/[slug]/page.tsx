@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
-import { isMemberClassEvent, MEMBER_CLASS_EVENT_COPY } from '@/lib/catalog/member-class-event';
+import { isMemberClassEvent, isPublicEvent, MEMBER_CLASS_EVENT_COPY } from '@/lib/catalog/member-class-event';
+import { EventBadge } from '@/components/catalog/EventBadge';
 import {
   ArrowLeft,
   Calendar,
@@ -295,8 +296,9 @@ export default async function BookingPage(
                 <p className="mt-3 text-lg italic text-rhyze-gold">
                   {cls.tagline}
                 </p>
-                <p className="mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-rhyze-cream/65">
+                <p className="mt-4 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-widest text-rhyze-cream/65">
                   {categoryLabel[cls.category]}
+                  {isPublicEvent({ slug: params.slug, isEvent: occurrence?.template.isEvent ?? false }) && <EventBadge />}
                   <span aria-hidden>·</span>
                   <Clock className="h-3.5 w-3.5" aria-hidden />
                   {occurrence?.template.durationMinutes ?? cls.duration} min

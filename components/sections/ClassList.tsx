@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/cn';
 import { categoryLabel, classes, type ClassCategory } from '@/lib/classes';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
+import { EventBadge } from '@/components/catalog/EventBadge';
 
 export type PublicClassData = {
   slug: string;
@@ -16,6 +17,7 @@ export type PublicClassData = {
   tagline: string;
   description: string;
   whatToExpect: string[];
+  isEvent?: boolean;
 };
 
 type CatFilter = 'all' | ClassCategory;
@@ -100,6 +102,7 @@ export function ClassList({ catalog = classes }: { catalog?: PublicClassData[] }
                 {c.duration} min
               </Badge>
               <NewProgramBadge slug={c.slug} />
+              {c.isEvent && <EventBadge />}
             </div>
             <h3 className="mb-2 text-2xl font-black leading-tight tracking-normal text-rhyze-cream">
               {c.name}

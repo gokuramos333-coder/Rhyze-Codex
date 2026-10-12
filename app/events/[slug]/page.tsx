@@ -14,6 +14,7 @@ import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
 import { isMemberClassEvent, MEMBER_CLASS_EVENT_COPY, publicEventClassificationWhere } from '@/lib/catalog/member-class-event';
+import { EventBadge } from '@/components/catalog/EventBadge';
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -67,7 +68,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
             <CalendarDays className="h-4 w-4" aria-hidden />
             {occurrence ? occurrence.startAt.toLocaleString('en-US', { timeZone: occurrenceLocalTimeZone(), weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Date and time coming soon'}
           </p>
-          <NewProgramBadge slug={event.slug} />
+          <div className="mb-3 flex flex-wrap items-center gap-2"><EventBadge /><NewProgramBadge slug={event.slug} /></div>
           <h1 className="font-display text-6xl leading-none tracking-wider md:text-8xl">{event.name.toUpperCase()}</h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-rhyze-cream/75">{event.description}</p>
           {memberClassEvent && <p className="mt-6 rounded-2xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-5 font-bold text-rhyze-gold">{MEMBER_CLASS_EVENT_COPY}</p>}

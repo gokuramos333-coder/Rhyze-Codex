@@ -4,7 +4,8 @@ import { bookOccurrenceAction } from '../actions';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { requireArea } from '@/lib/auth/session';
 import { bookingWaiverDestination } from '@/lib/domain/waivers/acceptance';
-import { isMemberClassEvent, MEMBER_CLASS_EVENT_COPY } from '@/lib/catalog/member-class-event';
+import { isMemberClassEvent, isPublicEvent, MEMBER_CLASS_EVENT_COPY } from '@/lib/catalog/member-class-event';
+import { EventBadge } from '@/components/catalog/EventBadge';
 
 export default async function NewBookingPage(
   props: {
@@ -41,7 +42,7 @@ export default async function NewBookingPage(
 
   return (
     <>
-      <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Confirm booking</p>
+      <p className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Confirm booking {isPublicEvent(occurrence.template) && <EventBadge />}</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
       <div className="mt-8 border-t-4 border-rhyze-gold bg-white p-6">
         <p className="font-bold">{memberBookingDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'}</p>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const db = vi.hoisted(() => ({
   classTemplate: { findFirst: vi.fn(), findMany: vi.fn() },
@@ -45,6 +46,7 @@ describe('Rachel public event to class-credit booking flow', () => {
     expect(props.some(p => p.label === 'Price' && p.value === '$15.00')).toBe(true);
     expect(props.some(p => p.href === `/book/${slug}?occurrence=${occurrence.id}`)).toBe(true);
     expect(textIn(page)).toContain('VIP unlimited access does not use your monthly event credit');
+    expect(renderToStaticMarkup(page)).toMatch(/>Event<\/span>/);
     expect(db.classTemplate.findFirst.mock.calls[0][0].where).toMatchObject({ slug, isActive: true, archivedAt: null, OR: [{ isEvent: true }, { isEvent: false, slug }] });
   });
   it('displays $15 on the Events list instead of the old $25 template price', async () => {
@@ -57,6 +59,7 @@ describe('Rachel public event to class-credit booking flow', () => {
     const page = await BookingPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve({ occurrence: occurrence.id }) });
     const text = textIn(page);
     expect(text).toContain('Event Booking');
+    expect(renderToStaticMarkup(page)).toMatch(/>Event<\/span>/);
     expect(text).toMatch(/60\s+min/);
     expect(text).toContain('Use Membership Credit');
     expect(text).not.toContain('Weekly recurring class');

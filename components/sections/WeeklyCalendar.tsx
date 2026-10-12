@@ -15,6 +15,7 @@ import {
 } from '@/lib/domain/schedule/public-calendar';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
+import { EventBadge as ScheduleEventBadge } from '@/components/catalog/EventBadge';
 
 type Props = {
   slots: PublicCalendarSlot[];
@@ -400,8 +401,4 @@ function CustomerScheduleCard({
       )}
     </article>
   );
-}
-
-function ScheduleEventBadge() {
-  return <span className="inline-flex rounded-sm border border-rhyze-gold bg-rhyze-gold px-1.5 py-0.5 text-[0.6rem] font-black uppercase tracking-wider text-rhyze-black">Event</span>;
 }

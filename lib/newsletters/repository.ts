@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { publicScheduleDetailHref } from '@/lib/domain/schedule/public-calendar';
 import { resolvePublicInstructorPhoto } from '@/lib/domain/schedule/public-instructor-photo';
 import { prisma } from '@/lib/db/prisma';
@@ -277,7 +278,7 @@ export async function loadSchedule(
     category: x.template.category.name,
     description: x.publicNotes || x.template.description,
     image: x.imageUrl || x.template.imageUrl || '',
-    isEvent: x.template.isEvent,
+    isEvent: isPublicEvent(x.template),
     status: x.status,
     available: Math.max(
       0,
@@ -286,7 +287,7 @@ export async function loadSchedule(
     href: publicScheduleDetailHref({
       occurrenceId: x.id,
       templateSlug: x.template.slug,
-      isEvent: x.template.isEvent,
+      isEvent: isPublicEvent(x.template),
     }),
   }));
 }
