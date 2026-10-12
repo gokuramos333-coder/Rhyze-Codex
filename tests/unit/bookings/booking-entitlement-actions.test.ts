@@ -45,6 +45,39 @@ import { afterEach } from 'vitest';
 afterEach(() => vi.useRealTimers());
 
 describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]] as const)('%s booking entitlement', (_label, action) => {
+  it('prefers paid VIP unlimited access over an older event credit for Rachel only', async () => {
+    const f = fixture(false, 'MEMBER');
+    f.occurrence.template.slug = 'soul-line-dancing-rachel';
+    f.occurrence.template.durationMinutes = 60;
+    f.user.memberships.push(f.membership);
+    f.accounts.splice(0, f.accounts.length,
+      { id: 'monthly-event', label: 'Event credit — VIP complimentary', isUnlimited: false, entries: [{ quantity: 1 }], sourcePurchase: null },
+      { id: 'vip-unlimited', label: 'VIP', isUnlimited: true, entries: [], sourcePurchase: { product: { kind: 'VIP' }, membership: { id: 'vip', status: 'ACTIVE' } } });
+    await expect(action(f.form)).rejects.toThrow(/confirmed|member-added/);
+    const saved = _label === 'self' ? mocks.tx.booking.create.mock.calls[0][0].data : mocks.tx.booking.upsert.mock.calls[0][0].create;
+    expect(saved.policySnapshot.creditAccountId).toBe('vip-unlimited');
+    expect(saved.policySnapshot.accessType).toBe('VIP');
+    expect(mocks.tx.creditLedgerEntry.create).not.toHaveBeenCalled();
+    expect(mocks.charge).not.toHaveBeenCalled();
+  });
+  it.each(['LIMITED_MEMBERSHIP', 'MONTHLY_UNLIMITED', 'CLASS_PACK'])('Rachel accepts a valid %s account and debits finite access once', async kind => {
+    const f = fixture(false, 'MEMBER');
+    f.occurrence.template.slug = 'soul-line-dancing-rachel';
+    f.occurrence.template.durationMinutes = 60;
+    f.accounts.splice(0, f.accounts.length, { id: 'class-access', label: 'Plan credits', isUnlimited: kind === 'MONTHLY_UNLIMITED', entries: [{ quantity: 2 }], sourcePurchase: { product: { kind, includedCredits: 8 }, membership: { id: 'plan', status: 'ACTIVE' } } });
+    await expect(action(f.form)).rejects.toThrow(/confirmed|member-added/);
+    if (kind === 'MONTHLY_UNLIMITED') expect(mocks.tx.creditLedgerEntry.create).not.toHaveBeenCalled();
+    else expect(mocks.tx.creditLedgerEntry.create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ data: expect.objectContaining({ creditAccountId: 'class-access', quantity: -1 }) }));
+    expect(mocks.charge).not.toHaveBeenCalled();
+  });
+  it('does not extend Rachel unlimited access to another specialty event', async () => {
+    const f = fixture(true, 'MEMBER');
+    f.user.memberships.push(f.membership);
+    f.accounts.splice(0, f.accounts.length, { id: 'vip-unlimited', label: 'VIP', isUnlimited: true, entries: [], sourcePurchase: { product: { kind: 'VIP' }, membership: { id: 'vip', status: 'ACTIVE' } } });
+    await expect(action(f.form)).rejects.toThrow(/access|member-no-credit/);
+    expect(mocks.tx.booking.create).not.toHaveBeenCalled();
+    expect(mocks.tx.booking.upsert).not.toHaveBeenCalled();
+  });
   it.each(['within', 'end', 'before-start'])('enforces the selected class date for a corrected manual assignment: %s', async position => {
     const f = fixture(false, 'MEMBER');
     const giftEnd = new Date('2027-02-02T04:59:59.999Z');

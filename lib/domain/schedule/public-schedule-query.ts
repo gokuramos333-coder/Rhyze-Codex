@@ -1,4 +1,5 @@
 import 'server-only';
+import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { prisma } from '@/lib/db/prisma';
 import { resolveClassArtwork } from './class-artwork';
 import {
@@ -114,7 +115,7 @@ export async function loadPublicScheduleSlots(
       category: occurrence.template.category.name,
       instructor: instructorName,
       photo: resolveClassArtwork(occurrence, instructorName),
-      isEvent: occurrence.template.isEvent,
+      isEvent: isPublicEvent(occurrence.template),
       isSubstitute: occurrence.isSubstitute || isIgniteSub,
       room: occurrence.room?.name || 'Rhyze Floor',
       duration: `${occurrence.template.durationMinutes} min`,
@@ -126,7 +127,7 @@ export async function loadPublicScheduleSlots(
       bookingHref: publicScheduleDetailHref({
         occurrenceId: occurrence.id,
         templateSlug: occurrence.template.slug,
-        isEvent: occurrence.template.isEvent,
+        isEvent: isPublicEvent(occurrence.template),
       }),
     };
   });

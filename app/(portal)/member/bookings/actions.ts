@@ -1,6 +1,7 @@
 'use server';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
+import { prioritizeMemberEventCredits } from '@/lib/domain/bookings/member-event-credits';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 
 import { revalidatePath } from 'next/cache';
@@ -218,7 +219,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       },
       orderBy: { createdAt: 'asc' },
     });
-    const account = accounts.find(
+    const account = prioritizeMemberEventCredits(accounts, occurrence.template).find(
       (item) => {
         const productKind = currentCreditProduct(item)?.kind ?? null;
         const isEventCredit = eventCreditCanBook({

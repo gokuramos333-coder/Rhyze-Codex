@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
+import { isMemberClassEvent, MEMBER_CLASS_EVENT_COPY } from '@/lib/catalog/member-class-event';
 import {
   ArrowLeft,
   Calendar,
@@ -122,6 +123,7 @@ export default async function BookingPage(
   ]);
   const activeMembership = currentUser?.memberships.find(m =>
     ['ACTIVE', 'TRIALING'].includes(m.status) && (!m.currentPeriodEnd || m.currentPeriodEnd > now));
+  const memberClassEvent = isMemberClassEvent({ slug: params.slug, isEvent: occurrence?.template.isEvent ?? false });
   const trial = currentUser?.memberships.find(m => m.product.kind === 'INTRO_TRIAL' && ['ACTIVE', 'TRIALING'].includes(m.status));
   const trialAccess = trial && occurrence ? evaluateIntroTrialBooking({ activatedAt: trial.activatedAt, occurrenceStartsAt: occurrence.startAt, now, isEvent: occurrence.template.isEvent }).allowed : false;
   const eligibleCreditAccounts = occurrence
@@ -267,7 +269,7 @@ export default async function BookingPage(
               )}
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">
-                  Class Booking
+                  {memberClassEvent ? 'Event Booking' : 'Class Booking'}
                 </p>
                 <h1 className="mt-3 font-display text-5xl leading-none tracking-wider md:text-6xl">
                   {bookingTitle.toUpperCase()}
@@ -297,7 +299,7 @@ export default async function BookingPage(
                   {categoryLabel[cls.category]}
                   <span aria-hidden>·</span>
                   <Clock className="h-3.5 w-3.5" aria-hidden />
-                  {cls.duration} min
+                  {occurrence?.template.durationMinutes ?? cls.duration} min
                 </p>
               </div>
             </div>
@@ -364,7 +366,7 @@ export default async function BookingPage(
                     <Tag className="h-4 w-4 text-rhyze-gold" aria-hidden />
                     ${((occurrence.priceCents || 2500) / 100).toFixed(0)}
                   </p>
-                  {isWeekly && (
+                  {isWeekly && !memberClassEvent && (
                     <p className="flex items-center gap-2 font-semibold text-rhyze-gold">
                       <Calendar className="h-4 w-4" aria-hidden />
                       Weekly recurring class
@@ -419,6 +421,7 @@ export default async function BookingPage(
         </div>
 
         <aside className="h-fit rounded-3xl border border-white/10 bg-rhyze-charcoal p-6 lg:sticky lg:top-28">
+          {memberClassEvent && <p className="mb-5 rounded-2xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-4 text-sm leading-relaxed text-rhyze-gold">{MEMBER_CLASS_EVENT_COPY}</p>}
           <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-gold">
             Choose How To Book
           </p>
@@ -463,7 +466,7 @@ export default async function BookingPage(
               </div>
             )}
 
-            {!activeMembership && <Link
+            {!activeMembership && !memberClassEvent && <Link
               href={purchaseHref(introProduct?.id)}
               className="focus-ring block rounded-2xl border border-rhyze-gold/45 bg-rhyze-gold/10 p-4 transition hover:border-rhyze-gold hover:bg-rhyze-gold/20"
             >
@@ -485,7 +488,7 @@ export default async function BookingPage(
               </div>
             </Link>}
 
-            {!activeMembership && <Link
+            {(!activeMembership || memberClassEvent) && <Link
               href={occurrenceTicketDestination
                 ? session?.user ? occurrenceTicketDestination : `/sign-in?callbackUrl=${encodeURIComponent(occurrenceTicketDestination)}`
                 : purchaseHref(singleClassProduct?.id)}
@@ -497,7 +500,7 @@ export default async function BookingPage(
               <div className="mt-1 flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-display text-2xl tracking-wider">
-                    Single Class
+                    {memberClassEvent ? 'Pay for this event' : 'Single Class'}
                   </h3>
                   <p className="mt-1 text-sm text-rhyze-cream/60">
                     {occurrenceTicketDestination

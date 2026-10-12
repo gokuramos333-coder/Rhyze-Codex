@@ -13,10 +13,11 @@ import {
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
+import { isMemberClassEvent, MEMBER_CLASS_EVENT_COPY, publicEventClassificationWhere } from '@/lib/catalog/member-class-event';
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params;
-  const event = await prisma.classTemplate.findFirst({ where: { slug: params.slug, isEvent: true, isActive: true } });
+  const event = await prisma.classTemplate.findFirst({ where: { ...publicEventClassificationWhere(), slug: params.slug, isActive: true, archivedAt: null } });
   return event ? { title: event.name, description: event.description } : { title: 'Event not found' };
 }
 
@@ -24,7 +25,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
   const params = await props.params;
   const searchParams = await props.searchParams;
   const event = await prisma.classTemplate.findFirst({
-    where: { slug: params.slug, isEvent: true, isActive: true, archivedAt: null },
+    where: { ...publicEventClassificationWhere(), slug: params.slug, isActive: true, archivedAt: null },
     include: {
       occurrences: {
         where: { status: 'SCHEDULED', startAt: { gte: new Date() }, ...(searchParams?.occurrence ? { id: searchParams.occurrence } : {}) },
@@ -43,6 +44,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
   });
   if (!event) notFound();
   const occurrence = event.occurrences[0];
+  const memberClassEvent = isMemberClassEvent(event);
   if (searchParams?.occurrence && !occurrence) notFound();
   const artwork = resolveClassArtwork({ ...occurrence, template: event });
   const fallback = getOwnedEvent(event.slug);
@@ -68,6 +70,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
           <NewProgramBadge slug={event.slug} />
           <h1 className="font-display text-6xl leading-none tracking-wider md:text-8xl">{event.name.toUpperCase()}</h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-rhyze-cream/75">{event.description}</p>
+          {memberClassEvent && <p className="mt-6 rounded-2xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-5 font-bold text-rhyze-gold">{MEMBER_CLASS_EVENT_COPY}</p>}
           <ul className="mt-8 grid gap-3 text-sm font-bold text-rhyze-cream/80">
             {(fallback?.bullets || details).map((bullet) => (
               <li key={bullet} className="flex gap-3 border-l-2 border-rhyze-gold bg-rhyze-charcoal/70 p-4">
@@ -82,12 +85,12 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
           </div>
           <dl className="divide-y divide-white/10 p-6 text-sm">
             <EventDetail label="Instructor" value={occurrence?.instructor?.name || 'To be announced'} />
-            <EventDetail label="Price" value={`$${((event.dropInPriceCents || 0) / 100).toFixed(2)}`} />
+            <EventDetail label="Price" value={`$${((occurrence?.priceCents ?? event.dropInPriceCents ?? 0) / 100).toFixed(2)}`} />
             <EventDetail label="Duration" value={`${event.durationMinutes} minutes`} />
             {bookingLabel && <EventDetail label="Booked" value={bookingLabel.replace(' booked', '')} />}
           </dl>
           <div className="px-6 pb-6">
-            <Button href={occurrence ? `/book/event/${event.slug}?occurrence=${occurrence.id}` : '/events'} size="lg" className="w-full">Claim Your Spot</Button>
+            <Button href={occurrence ? memberClassEvent ? `/book/${event.slug}?occurrence=${occurrence.id}` : `/book/event/${event.slug}?occurrence=${occurrence.id}` : '/events'} size="lg" className="w-full">Claim Your Spot</Button>
           </div>
         </aside>
       </section>

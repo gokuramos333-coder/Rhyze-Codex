@@ -19,6 +19,15 @@ describe('public schedule event eligibility', () => {
     expect(slots).toHaveLength(181);
     expect(slots.at(-1)).toMatchObject({ isEvent: true, bookingHref: '/events/mommy?occurrence=date-180' });
   });
+  it('labels Rachel as an event without changing the stored standard-class admission policy', async () => {
+    const row = occurrence(1);
+    row.template.slug = 'soul-line-dancing-rachel';
+    row.template.durationMinutes = 60;
+    row.priceCents = 1500;
+    db.findMany.mockResolvedValue([row]);
+    expect(await loadPublicScheduleSlots(from)).toMatchObject([{ isEvent: true, duration: '60 min', price: '$15', bookingHref: '/events/soul-line-dancing-rachel?occurrence=date-1' }]);
+    expect(row.template.isEvent).toBe(false);
+  });
   it('retains future scheduled, active, non-archived restrictions without excluding event templates', async () => {
     db.findMany.mockResolvedValue([]);
     await loadPublicScheduleSlots(from);

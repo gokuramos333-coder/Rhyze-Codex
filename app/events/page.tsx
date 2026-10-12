@@ -21,8 +21,9 @@ export default function EventsPage() {
           EVENTS
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/70">
-          Special events are separate from standard memberships unless they are
-          listed as an eligible VIP monthly choice.
+          Check each event for pricing and member access. Rachel’s Soul Line
+          Dancing accepts eligible class credits and VIP unlimited access.
+          Other events keep their specialty pricing and eligible event-credit rules.
         </p>
       </section>
 

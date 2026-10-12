@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { publicEventClassificationWhere } from './member-class-event';
 
 export function upcomingEventOccurrenceWhere(now: Date) {
   return {
@@ -9,7 +10,7 @@ export function upcomingEventOccurrenceWhere(now: Date) {
 
 export function upcomingEventTemplateWhere(now: Date) {
   return {
-    isEvent: true,
+    ...publicEventClassificationWhere(),
     isActive: true,
     archivedAt: null,
     occurrences: { some: upcomingEventOccurrenceWhere(now) },

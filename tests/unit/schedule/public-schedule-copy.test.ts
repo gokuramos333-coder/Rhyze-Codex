@@ -29,6 +29,6 @@ describe('public schedule copy', () => {
     );
 
     expect(calendarSource).toContain('isEvent: boolean');
-    expect(querySource).toContain('isEvent: occurrence.template.isEvent');
+    expect(querySource).toContain('isEvent: isPublicEvent(occurrence.template)');
   });
 });

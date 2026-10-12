@@ -7,6 +7,7 @@ import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
 import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
+import { isMemberClassEvent } from '@/lib/catalog/member-class-event';
 import {
   upcomingEventOccurrenceWhere,
   upcomingEventTemplateWhere,
@@ -131,9 +132,10 @@ export async function EventsPreview({
                     {event.description}
                   </p>
                   <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-sm font-black">
-                    <span className="text-rhyze-gold">${((event.dropInPriceCents || 0) / 100).toFixed(0)}</span>
+                    <span className="text-rhyze-gold">${((occurrence.priceCents ?? event.dropInPriceCents ?? 0) / 100).toFixed(0)}</span>
                     <span className="text-rhyze-cream/70">{bookingLabel}</span>
                   </div>
+                  {isMemberClassEvent(event) && <p className="mt-3 text-sm font-bold text-rhyze-gold">Class credits &amp; VIP unlimited welcome</p>}
                 </div>
               </>
             );

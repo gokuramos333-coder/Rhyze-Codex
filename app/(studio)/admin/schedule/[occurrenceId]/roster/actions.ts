@@ -1,6 +1,7 @@
 'use server';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
+import { prioritizeMemberEventCredits } from '@/lib/domain/bookings/member-event-credits';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 
 import { revalidatePath } from 'next/cache';
@@ -107,7 +108,7 @@ export async function addMemberToClassAction(formData: FormData) {
       },
       orderBy: { createdAt: 'asc' },
     });
-    const creditAccount = accounts.find((account) => {
+    const creditAccount = prioritizeMemberEventCredits(accounts, occurrence.template).find((account) => {
       const productKind = currentCreditProduct(account)?.kind ?? null;
       const isEventCredit = eventCreditCanBook({
         label: account.label,

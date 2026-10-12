@@ -4,6 +4,7 @@ import { bookOccurrenceAction } from '../actions';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { requireArea } from '@/lib/auth/session';
 import { bookingWaiverDestination } from '@/lib/domain/waivers/acceptance';
+import { isMemberClassEvent, MEMBER_CLASS_EVENT_COPY } from '@/lib/catalog/member-class-event';
 
 export default async function NewBookingPage(
   props: {
@@ -45,6 +46,7 @@ export default async function NewBookingPage(
       <div className="mt-8 border-t-4 border-rhyze-gold bg-white p-6">
         <p className="font-bold">{memberBookingDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'}</p>
         <p className="mt-2 text-sm text-rhyze-black/55">{occurrence.room?.name || 'Room TBA'} · {occurrence.capacity} spots</p>
+        {isMemberClassEvent(occurrence.template) && <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">{MEMBER_CLASS_EVENT_COPY}</p>}
         {occurrence.template.isEvent && (
           <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">
             Event credits can be used for specialty events or standard classes and expire 30 days after the cancellation that issued them.
