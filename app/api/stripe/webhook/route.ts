@@ -10,6 +10,19 @@ import { retrySerializableTransaction } from '@/lib/payments/transaction-retry';
 import { assertReceiptEventScope, eventNeedsReceipt, invalidateKnownStripeEventReceipts, refreshStripeEventReceipt } from '@/lib/payments/stripe-receipt-refresh';
 import { requiresLiveStripe } from '@/lib/payments/stripe-mode';
 
+// Do not log provider messages, payloads, keys, addresses or arbitrary error codes.
+// Runtime logs preserve the failure stage after a successful retry clears the DB error.
+function logFailure(event: Stripe.Event, phase: string, error: unknown) {
+  const safeCodes = new Set([
+    'RECEIPT_REFRESH_SUPERSEDED', 'P2002', 'P2024', 'P2028', 'P2034',
+    'ECONNRESET', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT',
+    'StripeAPIError', 'StripeConnectionError', 'StripeRateLimitError', 'StripeAuthenticationError',
+  ]);
+  const details = error && typeof error === 'object' ? error as { code?: unknown; type?: unknown } : {};
+  const code = [details.code, details.type].find(value => typeof value === 'string' && safeCodes.has(value));
+  console.error('stripe-webhook failure', { eventId: event.id, eventType: event.type, phase, code: code || 'UNCLASSIFIED' });
+}
+
 export async function POST(request: Request) {
   const signature = request.headers.get('stripe-signature');
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -33,7 +46,8 @@ export async function POST(request: Request) {
   if (eventNeedsReceipt(event) || event.account) {
     try {
       account = (await stripe.accounts.retrieve()).id;
-    } catch {
+    } catch (cause) {
+      logFailure(event, 'account-verification', cause);
       // Keep signed adjustment evidence visible to the report during provider outages.
       const error = 'Stripe account verification unavailable; retry required.';
       await prisma.stripeEvent.upsert({ where: { id: event.id }, update: { error }, create: { id: event.id, type: event.type, payload: JSON.parse(rawBody), error } });
@@ -54,10 +68,12 @@ export async function POST(request: Request) {
     update: {},
     create: { id: event.id, type: event.type, payload: JSON.parse(rawBody) },
   });
+  let phase = 'event-hydration';
   try {
     const hydratedEvent = await hydrateInvoiceEvent(event, stripe.invoices);
     if (account) assertReceiptEventScope(hydratedEvent, account);
     if ((hydratedEvent.data.object as { id?: string }).id !== (event.data.object as { id?: string }).id) throw new Error('Hydrated Stripe object identity mismatch.');
+    phase = 'fulfillment';
     if (!duplicate) await retrySerializableTransaction(() =>
       prisma.$transaction(
         async (tx) => {
@@ -71,10 +87,12 @@ export async function POST(request: Request) {
       ),
     );
     if (account && eventNeedsReceipt(event)) {
+      phase = 'receipt-refresh';
       await refreshStripeEventReceipt(prisma, stripe, hydratedEvent, account);
       await prisma.stripeEvent.update({ where: { id: event.id }, data: { error: null } });
     }
   } catch (error) {
+    logFailure(event, phase, error);
     await prisma.stripeEvent.update({
       where: { id: event.id },
       data: { error: error instanceof Error ? error.message : 'Unknown error' },

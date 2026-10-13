@@ -176,54 +176,65 @@ export async function refreshStripeEventReceipt(
     );
   }
   const refreshCharge = async (id: string, expectedIntent: string | null) => {
-    const receiptId = `rhyze-payment-reconciled-${account}-${id}`;
-    const token = randomUUID();
-    // Persist invalidation before a provider read. A failed read keeps prior amounts visible
-    // as stale evidence instead of silently retaining their old verification status.
-    const pending = await prisma.stripeEvent.upsert({
-      where: { id: receiptId },
-      create: {
-        id: receiptId,
-        type: pendingType,
-        error: token,
-        payload: {
-          account,
-          livemode: event.livemode,
-          data: { object: { id, payment_intent: expectedIntent } },
+    // Different signed events for one payment commonly overlap. Retry only the
+    // receipt CAS conflict, never fulfillment or an ambiguous provider failure.
+    // Every attempt invalidates first and obtains NEW provider evidence.
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const receiptId = `rhyze-payment-reconciled-${account}-${id}`;
+      const token = randomUUID();
+      // Persist invalidation before a provider read. A failed read keeps prior amounts visible
+      // as stale evidence instead of silently retaining their old verification status.
+      const pending = await prisma.stripeEvent.upsert({
+        where: { id: receiptId },
+        create: {
+          id: receiptId,
+          type: pendingType,
+          error: token,
+          payload: {
+            account,
+            livemode: event.livemode,
+            data: { object: { id, payment_intent: expectedIntent } },
+          },
         },
-      },
-      update: { type: pendingType, error: token },
-    });
-    const charge = await stripe.charges.retrieve(id, {
-      expand: ['balance_transaction'],
-    });
-    assertMode(charge, event.livemode);
-    if (
-      charge.id !== id ||
-      (expectedIntent && idOf(charge.payment_intent) !== expectedIntent)
-    )
-      throw new Error(
-        'Provider charge identity does not match the signed event.',
+        update: { type: pendingType, error: token },
+      });
+      const charge = await stripe.charges.retrieve(id, {
+        expand: ['balance_transaction'],
+      });
+      assertMode(charge, event.livemode);
+      if (
+        charge.id !== id ||
+        (expectedIntent && idOf(charge.payment_intent) !== expectedIntent)
+      )
+        throw new Error(
+          'Provider charge identity does not match the signed event.',
+        );
+      const receipt = await financialReceipt(
+        stripe,
+        account,
+        charge,
+        event.livemode,
       );
-    const receipt = await financialReceipt(
-      stripe,
-      account,
-      charge,
-      event.livemode,
-    );
-    const prior = pending.payload as { acknowledgedEventIds?: string[] } | null;
-    receipt.payload.acknowledgedEventIds = [
-      ...new Set([...(prior?.acknowledgedEventIds || []), event.id]),
-    ].slice(-100);
-    // A slower concurrent refresh must not overwrite the result of a newer provider read.
-    const saved = await prisma.stripeEvent.updateMany({
-      where: { id: receiptId, type: pendingType, error: token },
-      data: { ...receipt, error: null },
-    });
-    if (saved.count !== 1)
-      throw new Error(
-        'Receipt refresh was superseded; retry the signed event.',
-      );
+      const prior = pending.payload as { acknowledgedEventIds?: string[] } | null;
+      receipt.payload.acknowledgedEventIds = [
+        ...new Set([...(prior?.acknowledgedEventIds || []), event.id]),
+      ].slice(-100);
+      // A slower concurrent refresh must not overwrite the result of a newer provider read.
+      const saved = await prisma.stripeEvent.updateMany({
+        where: { id: receiptId, type: pendingType, error: token },
+        data: { ...receipt, error: null },
+      });
+      if (saved.count === 1) return;
+      if (attempt === 5) {
+        throw Object.assign(new Error('Receipt refresh was superseded; retry the signed event.'), {
+          code: 'RECEIPT_REFRESH_SUPERSEDED',
+        });
+      }
+      // A tight retry loop lets competing webhooks invalidate each other again.
+      // Bounded exponential jitter separates only proven CAS conflicts; never
+      // replay payment processing, provider errors or an uncertain financial write.
+      await new Promise(resolve => setTimeout(resolve, 25 * 2 ** (attempt - 1) + Math.floor(Math.random() * 50)));
+    }
   };
   if (chargeId) {
     await refreshCharge(chargeId, intentId);

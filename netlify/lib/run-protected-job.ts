@@ -1,3 +1,9 @@
+const DIAGNOSTIC_CODES = new Set([
+  'UND_ERR_CONNECT_TIMEOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN',
+  'UND_ERR_SOCKET', 'ECONNRESET', 'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT', 'ETIMEDOUT', 'CERT_HAS_EXPIRED',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
 const PRE_CONNECTION_ERRORS = new Set(['UND_ERR_CONNECT_TIMEOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
 
 export async function runProtectedJob(
@@ -10,8 +16,8 @@ export async function runProtectedJob(
   if (!siteUrl || !jobSecret) {
     throw new Error('URL and JOB_SECRET are required for scheduled jobs.');
   }
-  if (options.retryConnectFailures && path !== '/api/jobs/stripe-sync') {
-    throw new Error('Connection retries are only enabled for Stripe safety sync.');
+  if (options.retryConnectFailures && !['/api/jobs/stripe-sync', '/api/jobs/email'].includes(path)) {
+    throw new Error('Connection retries are only enabled for Stripe safety sync and the email worker.');
   }
   // One shared deadline leaves headroom under Netlify's 30-second scheduled limit.
   const controller = options.retryConnectFailures ? new AbortController() : undefined;
@@ -41,7 +47,10 @@ export async function runProtectedJob(
           await new Promise((resolve) => setTimeout(resolve, 500));
           continue;
         }
-        throw new Error(`${path} transport failed${controller?.signal.aborted ? ' (deadline exceeded)' : ''}`);
+        const reason = controller?.signal.aborted ? 'deadline exceeded'
+          : typeof code === 'string' && DIAGNOSTIC_CODES.has(code) ? code : 'UNKNOWN_TRANSPORT';
+        // Retain only allowlisted codes; cause/message can contain URLs, keys or customer data.
+        throw new Error(`${path} transport failed (${reason}; attempt ${attempt})`);
       }
       if (!response.ok) {
         // Response bodies can contain provider diagnostics or private data.

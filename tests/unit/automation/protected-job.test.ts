@@ -50,7 +50,7 @@ describe('scheduled job transport', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
   it('refuses to enable retry for a different job', async () => {
-    await expect(runProtectedJob('/api/jobs/email', undefined, options)).rejects.toThrow('only enabled for Stripe safety sync');
+    await expect(runProtectedJob('/api/jobs/memberships', undefined, options)).rejects.toThrow('Connection retries are only enabled');
     expect(fetch).not.toHaveBeenCalled();
   });
   it('keeps authenticated POST/body behavior intact', async () => {
@@ -85,4 +85,24 @@ describe('scheduled job transport', () => {
     await expect(runProtectedJob('/api/jobs/stripe-sync', undefined, options)).rejects.toThrow('incomplete or invalid response');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it('email worker recovers a connection refusal before any request was sent', async () => {
+    fetch.mockRejectedValueOnce(new TypeError('private host', { cause: { code: 'ECONNREFUSED' } }))
+      .mockResolvedValueOnce(Response.json({ delivered: 1 }));
+    const worker = (await import('../../../netlify/functions/email-worker')).default;
+    const result = worker();
+    const assertion = expect(result.then(r => r.json())).resolves.toEqual({ delivered: 1 });
+    await Promise.all([assertion, vi.runAllTimersAsync()]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1].redirect).toBe('error');
+  });
+  it.each(['ECONNRESET', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET', 'PRIVATE_SECRET_VALUE'])('email worker never resends an ambiguous request (%s)', async code => {
+    fetch.mockRejectedValue(new TypeError('private customer details', { cause: { code } }));
+    const worker = (await import('../../../netlify/functions/email-worker')).default;
+    const error = await worker().catch(error => error);
+    expect(error.message).toContain(code === 'PRIVATE_SECRET_VALUE' ? 'UNKNOWN_TRANSPORT' : code);
+    expect(error.message).not.toContain('private customer details');
+    expect(error.message).not.toContain('PRIVATE_SECRET_VALUE');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
 });

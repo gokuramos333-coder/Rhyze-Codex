@@ -285,7 +285,9 @@ it('cannot overwrite a later refund receipt when concurrent provider reads finis
   } as any);
   await f.refresh(event('charge.refunded', charge(), { id: 'evt_refund' }));
   complete(charge());
-  await expect(oldRead).rejects.toThrow('superseded');
+  await expect(oldRead).resolves.toBeUndefined();
+  expect(f.stripe.charges.retrieve).toHaveBeenCalledTimes(3);
+  expect(f.rows.get('rhyze-payment-reconciled-acct_site-ch_sale').payload.acknowledgedEventIds).toEqual(['evt_refund', 'evt_sale']);
   expect(
     f.rows.get('rhyze-payment-reconciled-acct_site-ch_sale').payload.data.object
       .amount_refunded,
@@ -399,4 +401,20 @@ it.each(['tr_somble', { id: 'tr_somble' }])('retains the exact source transfer a
   const f = fixtures(); f.stripe.charges.retrieve.mockResolvedValue(charge({ source_transfer }));
   await f.refresh();
   expect(f.rows.get('rhyze-payment-reconciled-acct_site-ch_sale').payload.data.object.source_transfer).toBe('tr_somble');
+});
+
+it('bounds persistent receipt contention without accepting an unverified result', async () => {
+  const f = fixtures();
+  f.db.stripeEvent.updateMany.mockResolvedValue({ count: 0 });
+  await expect(f.refresh()).rejects.toMatchObject({ code: 'RECEIPT_REFRESH_SUPERSEDED' });
+  expect(f.stripe.charges.retrieve).toHaveBeenCalledTimes(5);
+  expect(f.rows.get('rhyze-payment-reconciled-acct_site-ch_sale').type).toBe('rhyze.payment.reconciliation-pending');
+});
+it('does not retry a provider failure while recovering from receipt contention', async () => {
+  const f = fixtures();
+  f.db.stripeEvent.updateMany.mockResolvedValueOnce({ count: 0 });
+  f.stripe.charges.retrieve.mockResolvedValueOnce(charge()).mockRejectedValueOnce(new Error('Provider unavailable'));
+  await expect(f.refresh()).rejects.toThrow('Provider unavailable');
+  expect(f.stripe.charges.retrieve).toHaveBeenCalledTimes(2);
+  expect(f.rows.get('rhyze-payment-reconciled-acct_site-ch_sale').type).toBe('rhyze.payment.reconciliation-pending');
 });

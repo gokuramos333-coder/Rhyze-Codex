@@ -125,3 +125,22 @@ it('retains signed adjustment evidence and returns retryable failure when accoun
   expect(mocks.process).not.toHaveBeenCalled();
   expect(mocks.refresh).not.toHaveBeenCalled();
 });
+it('retains sanitized failure stage in logs even after a duplicate delivery recovers', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  mocks.refresh.mockRejectedValueOnce(Object.assign(new Error('private customer and key'), { code: 'RECEIPT_REFRESH_SUPERSEDED' }));
+  expect((await send()).status).toBe(500);
+  expect((await send()).status).toBe(200);
+  expect(log).toHaveBeenCalledWith('stripe-webhook failure', {
+    eventId: 'evt_sale', eventType: 'charge.succeeded', phase: 'receipt-refresh', code: 'RECEIPT_REFRESH_SUPERSEDED',
+  });
+  expect(JSON.stringify(log.mock.calls)).not.toContain('private customer');
+  expect(mocks.process).toHaveBeenCalledTimes(1);
+});
+it('logs account lookup failure without exposing provider messages or arbitrary error codes', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  mocks.account.mockRejectedValueOnce(Object.assign(new Error('private account'), { code: 'PRIVATE_CODE_VALUE' }));
+  expect((await send()).status).toBe(500);
+  expect(log).toHaveBeenCalledWith('stripe-webhook failure', {
+    eventId: 'evt_sale', eventType: 'charge.succeeded', phase: 'account-verification', code: 'UNCLASSIFIED',
+  });
+});
