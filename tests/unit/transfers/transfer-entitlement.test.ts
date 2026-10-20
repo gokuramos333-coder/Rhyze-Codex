@@ -52,3 +52,41 @@ describe('transfers cannot bypass the original entitlement', () => {
     expect(transferEntitlementAllowed({ ...input, user: { ...user, role: 'MEMBER', instructorProfile: null } })).toBe(false);
   });
 });
+
+describe('intro trial transfer window', () => {
+  const start = new Date('2026-10-17T15:00:00Z');
+  const end = new Date('2026-10-24T15:00:00Z');
+  const trial = { id: 'trial', userId: 'member', purchaseId: 'trial-purchase', status: 'TRIALING', activatedAt: start, currentPeriodStart: start, currentPeriodEnd: end,
+    product: { kind: 'INTRO_TRIAL' }, purchase: { status: 'PAID', paidAt: new Date('2026-10-14T14:58Z'), creditAccount: { id: 'trial-credit', isUnlimited: true, validFrom: start, validUntil: end } } };
+  const input = { accessType: 'INTRO_TRIAL', creditAccountId: null, user: { role: 'MEMBER', status: 'ACTIVE', instructorProfile: null, memberships: [trial] },
+    sourceIsEvent: false, destinationIsEvent: false, destinationStartsAt: new Date('2026-10-21T15:00Z'), now: new Date('2026-10-19T01:21Z') };
+  it('rejects the reported October 26 self-transfer without a reserved credit account', () => {
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt: new Date('2026-10-26T22:10Z') })).toBe(false);
+  });
+  it('allows only destinations inside the original window, including before activation', () => {
+    expect(transferEntitlementAllowed(input)).toBe(true);
+    expect(transferEntitlementAllowed({ ...input, now: new Date('2026-10-15T12:00Z') })).toBe(true);
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt: start })).toBe(true);
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt: new Date(end.getTime() - 1) })).toBe(true);
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt: end })).toBe(false);
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt: new Date(start.getTime() - 1) })).toBe(false);
+  });
+  it('fails closed for expired, unpaid, cancelled or unanchored trial access', () => {
+    expect(transferEntitlementAllowed({ ...input, now: end })).toBe(false);
+    for (const change of [{status:'EXPIRED'}, {status:'CANCELLED'}, {activatedAt:null}, {purchase:{...trial.purchase,status:'REFUNDED'}}]) {
+      expect(transferEntitlementAllowed({ ...input, user:{...input.user,memberships:[{...trial,...change}]} })).toBe(false);
+    }
+    expect(transferEntitlementAllowed({ ...input, user:{...input.user,memberships:[]} })).toBe(false);
+    expect(transferEntitlementAllowed({ ...input, creditAccountId: 'different-credit' })).toBe(false);
+  });
+  it('respects a shorter saved end and never extends a trial beyond seven days', () => {
+    for (const change of [{currentPeriodEnd:new Date('2026-10-20T15:00Z')}, {purchase:{...trial.purchase,creditAccount:{...trial.purchase.creditAccount,validUntil:new Date('2026-10-20T15:00Z')}}}]) {
+      expect(transferEntitlementAllowed({ ...input, user:{...input.user,memberships:[{...trial,...change}]} })).toBe(false);
+    }
+    expect(transferEntitlementAllowed({...input,destinationStartsAt:new Date('2026-10-26T22:10Z'),user:{...input.user,memberships:[{...trial,currentPeriodEnd:new Date('2026-11-01T15:00Z'),purchase:{...trial.purchase,creditAccount:{...trial.purchase.creditAccount,validUntil:new Date('2026-11-01T15:00Z')}}}]}})).toBe(false);
+  });
+  it('does not turn an existing trial booking into a purchased membership credit or an event', () => {
+    expect(transferEntitlementAllowed({ ...input, sourceIsEvent:true, destinationIsEvent:true })).toBe(false);
+    expect(transferEntitlementAllowed({ ...input, destinationStartsAt:end, user:{...input.user,memberships:[trial,{...trial,id:'paid',product:{kind:'LIMITED_MEMBERSHIP'}}]} })).toBe(false);
+  });
+});

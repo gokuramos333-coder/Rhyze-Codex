@@ -2,6 +2,7 @@ import { instructorStandardClassAccess } from '@/lib/domain/bookings/booking-rul
 import { giftedVipThrough, vipCreditBenefit, vipMembershipPaidThrough, type VipEntitlementMembership } from '@/lib/domain/credits/vip-access';
 import { bookingAccessType } from '@/lib/domain/bookings/booking-access';
 import { isAdminAssignment, manualAssignmentWindowAllows } from '@/lib/domain/credits/manual-assignment-access';
+import { evaluateIntroTrialBooking } from '@/lib/domain/bookings/intro-trial-rules';
 
 export function transferBookingAccessType(input: {
   policySnapshot: unknown;
@@ -26,13 +27,33 @@ export function transferBookingAccessType(input: {
 export function transferEntitlementAllowed(input: {
   accessType: string;
   creditAccountId?: string | null;
-  user: { role: string; status: string; instructorProfile: { isActive: boolean } | null; memberships: VipEntitlementMembership[] };
+  user: { role: string; status: string; instructorProfile: { isActive: boolean } | null; memberships: (VipEntitlementMembership & { activatedAt?: Date | null })[] };
   sourceIsEvent: boolean;
   destinationIsEvent: boolean;
   destinationStartsAt: Date;
   now: Date;
 }) {
   if (input.user.status !== 'ACTIVE' || input.sourceIsEvent !== input.destinationIsEvent) return false;
+  // Trial bookings often have no RESERVE entry or creditAccountId: unlimited
+  // access still has a fixed window. A transfer must never activate a new week
+  // or silently consume a different membership instead of its original trial.
+  if (input.accessType === 'INTRO_TRIAL') return input.user.memberships.some(m => {
+    const account = m.purchase?.creditAccount;
+    if (m.product.kind !== 'INTRO_TRIAL' || !['TRIALING', 'ACTIVE'].includes(m.status) ||
+      !m.activatedAt || !m.currentPeriodEnd || !m.purchase?.paidAt ||
+      !['PAID', 'PARTIALLY_REFUNDED'].includes(m.purchase.status) ||
+      !account?.validUntil || !account.isUnlimited ||
+      (input.creditAccountId && account.id !== input.creditAccountId)) return false;
+    const end = Math.min(m.currentPeriodEnd.getTime(), account.validUntil.getTime());
+    return input.now.getTime() < end && input.destinationStartsAt.getTime() < end &&
+      input.destinationStartsAt >= account.validFrom &&
+      evaluateIntroTrialBooking({
+        activatedAt: m.activatedAt,
+        occurrenceStartsAt: input.destinationStartsAt,
+        now: input.now,
+        isEvent: input.destinationIsEvent,
+      }).allowed;
+  });
   const assigned = input.creditAccountId && input.user.memberships.find(m =>
     m.purchase?.creditAccount?.id === input.creditAccountId && isAdminAssignment(m.purchase?.policyAcceptance));
   if (assigned) {

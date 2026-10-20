@@ -37,7 +37,7 @@ export function evaluateIntroTrialBooking(
   if (input.now >= expiresAt) {
     return { allowed: false, reason: 'expired' };
   }
-  if (input.occurrenceStartsAt >= expiresAt) {
+  if (input.occurrenceStartsAt < activatesAt || input.occurrenceStartsAt >= expiresAt) {
     return { allowed: false, reason: 'outside-window' };
   }
   return { allowed: true, activatesAt, expiresAt };

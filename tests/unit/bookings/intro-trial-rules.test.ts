@@ -58,6 +58,10 @@ describe('intro trial booking rules', () => {
     ).toEqual({ allowed: false, reason: 'outside-window' });
   });
 
+  it('rejects classes before the already established trial start', () => {
+    expect(evaluateIntroTrialBooking({ activatedAt: new Date('2026-10-17T15:00Z'), occurrenceStartsAt: new Date('2026-10-16T15:00Z'), now: new Date('2026-10-14T15:00Z'), isEvent: false })).toEqual({ allowed: false, reason: 'outside-window' });
+  });
+
   it('treats the exact expiration instant as outside the trial', () => {
     const activatedAt = new Date('2026-08-01T12:00:00.000Z');
     expect(

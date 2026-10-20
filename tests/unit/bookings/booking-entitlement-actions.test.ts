@@ -243,3 +243,24 @@ describe.each([['member', rescheduleMemberBookingAction], ['instructor', transfe
     expect(mocks.tx.booking.update).not.toHaveBeenCalled();
   });
 });
+
+describe.each([['member', rescheduleMemberBookingAction], ['instructor', transferBookingAction]] as const)('%s trial transfer expiry regression', (_role, transfer) => {
+  it.each([false,true])('rejects an out-of-window trial before writes (changed during request: %s)', async (changed) => {
+    vi.setSystemTime(new Date('2026-10-19T01:21Z'));
+    const f=fixture(false,'MEMBER');
+    const trial={...f.membership,id:'trial',status:'TRIALING',activatedAt:new Date('2026-10-17T15:00Z'),currentPeriodEnd:new Date('2026-10-24T15:00Z'),product:{kind:'INTRO_TRIAL'},purchase:{status:'PAID',paidAt:new Date('2026-10-14T15:00Z'),creditAccount:{isUnlimited:true,validFrom:new Date('2026-10-17T15:00Z'),validUntil:new Date('2026-10-24T15:00Z')}}};
+    f.user.memberships.push(trial);
+    const booking={id:'booking',userId:mocks.actor.id,occurrenceId:'source',status:'CONFIRMED',source:'MEMBER',user:f.user,policySnapshot:{accessType:'INTRO_TRIAL',creditAccountId:null,accessProductKind:null},occurrence:{...f.occurrence,instructorId:mocks.actor.id,startAt:new Date('2026-10-19T22:10Z')}};
+    mocks.tx.booking.findUnique.mockResolvedValue(booking);
+    mocks.tx.booking.findFirst.mockResolvedValueOnce(booking).mockResolvedValue(null);
+    mocks.tx.creditLedgerEntry.findFirst.mockResolvedValue(null);
+    const destination={...f.occurrence,id:'destination',startAt:new Date(changed?'2026-10-21T22:10Z':'2026-10-26T22:10Z'),endAt:new Date('2026-10-26T23:00Z')};
+    mocks.tx.classOccurrence.findFirst.mockResolvedValue(destination);
+    if(changed) {
+      mocks.tx.user.findUnique.mockResolvedValueOnce(f.user).mockResolvedValue({...f.user,memberships:[{...trial,status:'EXPIRED'}]});
+    }
+    const form=new FormData();form.set('bookingId','booking');form.set('destinationId','destination');
+    await expect(transfer(form)).rejects.toThrow(/destination/);
+    expect(mocks.charge).not.toHaveBeenCalled();expect(mocks.tx.booking.update).not.toHaveBeenCalled();expect(mocks.tx.bookingTransfer.create).not.toHaveBeenCalled();expect(mocks.queue).not.toHaveBeenCalled();
+  });
+});

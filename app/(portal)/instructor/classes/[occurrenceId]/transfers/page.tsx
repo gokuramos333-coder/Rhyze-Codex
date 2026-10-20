@@ -4,6 +4,8 @@ import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
+import { vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
+import { transferBookingAccessType, transferEntitlementAllowed } from '@/lib/domain/transfers/transfer-entitlement';
 import { transferBookingAction } from './actions';
 
 export default async function TransferPage(
@@ -14,10 +16,12 @@ export default async function TransferPage(
   const instructor = await requireArea('instructor');
   const booking = await prisma.booking.findFirst({
     where: { id: searchParams.booking, occurrenceId: params.occurrenceId, occurrence: { instructorId: instructor.id } },
-    include: { user: true, occurrence: { include: { template: true } } },
+    include: { user: { include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } }, occurrence: { include: { template: true } } },
   });
   if (!booking) notFound();
   if (!classTicketCanTransfer(booking.policySnapshot)) return <p className="border-l-4 border-rhyze-gold bg-white p-5 font-bold">This ticket is valid only for its original class and date. Contact the studio if you need help with this booking.</p>;
+  const reservation = await prisma.creditLedgerEntry.findFirst({ where: { bookingId: booking.id, type: 'RESERVE' }, include: { creditAccount: { include: { sourcePurchase: { select: { product: { select: { kind: true } } } } } } } });
+  const accessType = transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: booking.user.memberships });
   const destinations = await prisma.classOccurrence.findMany({
     where: { id: { not: booking.occurrenceId }, status: 'SCHEDULED', startAt: { gte: new Date(), lte: new Date(booking.occurrence.startAt.getTime() + 14 * 24 * 60 * 60_000) } },
     include: { template: true, instructor: true, _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } } },
@@ -31,7 +35,7 @@ export default async function TransferPage(
       {searchParams.error && <p className="mt-5 border-l-4 border-rhyze-coral bg-white p-4 font-bold text-rhyze-coral">{searchParams.error === 'payment' ? 'The applicable transfer fee could not be charged. The original booking was not moved.' : 'That destination is no longer eligible or available.'}</p>}
       <form action={transferBookingAction} className="mt-8 grid gap-4 border-t-4 border-rhyze-gold bg-white p-6">
         <input type="hidden" name="bookingId" value={booking.id}/><input type="hidden" name="occurrenceId" value={booking.occurrenceId}/>
-        <label className="grid gap-2"><span className="text-xs font-black uppercase tracking-widest">Destination class</span><select name="destinationId" required className="min-h-14 border px-3"><option value="">Choose an eligible class</option>{destinations.filter((item) => item._count.bookings + item.historicalSignupCount < item.capacity).map((item) => <option key={item.id} value={item.id}>{memberBookingDateTimeLabel(item)} · {item.template.name} · {item.instructor?.name || 'TBA'}</option>)}</select></label>
+        <label className="grid gap-2"><span className="text-xs font-black uppercase tracking-widest">Destination class</span><select name="destinationId" required className="min-h-14 border px-3"><option value="">Choose an eligible class</option>{destinations.filter((item) => item._count.bookings + item.historicalSignupCount < item.capacity && transferEntitlementAllowed({ accessType, creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id, user: booking.user, sourceIsEvent: booking.occurrence.template.isEvent, destinationIsEvent: item.template.isEvent, destinationStartsAt: item.startAt, now: new Date() })).map((item) => <option key={item.id} value={item.id}>{memberBookingDateTimeLabel(item)} · {item.template.name} · {item.instructor?.name || 'TBA'}</option>)}</select></label>
         <label className="grid gap-2"><span className="text-xs font-black uppercase tracking-widest">Member request / internal note</span><textarea name="reason" required rows={4} className="border p-3"/></label>
         <p className="text-xs text-rhyze-black/55">More than 6 hours: free. Between 2 and 6 hours: $5 for standard clients and no fee for VIP, intro-trial, or complimentary bookings. At 2 hours or less, transfer is blocked and only $7 for 7 days intro-trial bookings incur a $10 late-cancellation fee.</p>
         <button className="min-h-14 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest">Confirm transfer</button>

@@ -8,6 +8,8 @@ import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-dis
 import { RescheduleClassPicker } from '@/components/member/RescheduleClassPicker';
 import { rescheduleMemberBookingAction } from './actions';
 import { bookingAccessType } from '@/lib/domain/bookings/booking-access';
+import { vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
+import { transferEntitlementAllowed } from '@/lib/domain/transfers/transfer-entitlement';
 
 export default async function MemberReschedulePage(
   props: { searchParams: Promise<{ booking?: string }> },
@@ -16,7 +18,7 @@ export default async function MemberReschedulePage(
   const user = await requireArea('member');
   const booking = await prisma.booking.findFirst({
     where: { id: searchParams.booking, userId: user.id, status: 'CONFIRMED' },
-    include: { occurrence: { include: { template: true, instructor: true } } },
+    include: { occurrence: { include: { template: true, instructor: true } }, user: { include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } } },
   });
   if (!booking) redirect('/member/bookings?result=reschedule-select-booking');
   if (!classTicketCanTransfer(booking.policySnapshot)) return <p className="border-l-4 border-rhyze-gold bg-white p-5 font-bold">This ticket is valid only for its original class and date. Contact the studio if you need help with this booking.</p>;
@@ -63,7 +65,13 @@ export default async function MemberReschedulePage(
     orderBy: { startAt: 'asc' },
   });
   const openDestinations = destinations.filter(
-    (item) => item._count.bookings + item.historicalSignupCount < item.capacity,
+    (item) => item._count.bookings + item.historicalSignupCount < item.capacity &&
+      transferEntitlementAllowed({
+        accessType,
+        creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
+        user: booking.user, sourceIsEvent: booking.occurrence.template.isEvent,
+        destinationIsEvent: item.template.isEvent, destinationStartsAt: item.startAt, now: new Date(),
+      }),
   );
 
   return (
@@ -71,7 +79,7 @@ export default async function MemberReschedulePage(
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Reschedule class</p>
       <h1 className="mt-3 break-words font-display text-4xl leading-none tracking-wider sm:text-5xl lg:text-6xl">Choose the class using this credit</h1>
       <p className="mt-3 break-words text-rhyze-black/55">
-        Moving from {booking.occurrence.template.name} · {memberBookingDateTimeLabel(booking.occurrence)}. You must choose a class within two weeks now for the credit to roll over.
+        Moving from {booking.occurrence.template.name} · {memberBookingDateTimeLabel(booking.occurrence)}. {accessType === 'INTRO_TRIAL' ? 'Choose a standard class within your original 7-day trial window. Rescheduling does not extend your trial.' : 'You must choose an eligible class within two weeks now for the credit to roll over.'}
       </p>
       {policy === 'FEE_500' && (
         <p className="mt-5 border-l-4 border-rhyze-gold bg-orange-50 p-4 font-bold">
