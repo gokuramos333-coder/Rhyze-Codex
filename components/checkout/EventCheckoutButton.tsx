@@ -33,12 +33,13 @@ export function EventCheckoutButton({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         slug,
+        occurrenceId,
         ...(familyPricing ? { childCount } : {}),
       }),
     });
     const result = await response.json() as { url?: string; error?: string };
     if (response.status === 401) {
-      window.location.assign(`/sign-in?callbackUrl=${encodeURIComponent(`/book/event/${slug}`)}`);
+      window.location.assign(`/sign-in?callbackUrl=${encodeURIComponent(`/book/event/${slug}${occurrenceId ? `?occurrence=${encodeURIComponent(occurrenceId)}` : ''}`)}`);
       return;
     }
     if (!response.ok || !result.url) {
@@ -76,11 +77,11 @@ export function EventCheckoutButton({
       <button
         type="button"
         onClick={beginCheckout}
-        disabled={loading || waitlistFull}
+        disabled={loading || (soldOut && waitlistFull)}
         className="focus-ring flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-rhyze-gradient px-6 text-sm font-black uppercase tracking-widest text-rhyze-black disabled:opacity-60"
       >
         {loading ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <CheckCircle2 className="h-5 w-5" aria-hidden />}
-        {waitlistFull ? 'Waitlist Full' : loading ? 'Connecting securely…' : soldOut ? 'Join Waiting List' : 'Confirm Event Booking'}
+        {soldOut && waitlistFull ? 'Waitlist Full' : loading ? 'Connecting securely…' : soldOut ? 'Join Waiting List' : 'Confirm Event Booking'}
       </button>
       {error && <p className="mt-3 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-3 text-sm">{error}</p>}
     </div>

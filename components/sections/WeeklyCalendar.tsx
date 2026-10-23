@@ -1,4 +1,5 @@
 'use client';
+import { bookingAvailability } from '@/lib/catalog/booking-availability';
 
 import React from 'react';
 import Image from 'next/image';
@@ -332,7 +333,7 @@ function CustomerScheduleCard({
   slot: PublicCalendarSlot;
   compact?: boolean;
 }) {
-  const full = slot.booked >= slot.capacity;
+  const { soldOut: full, label: availabilityLabel } = bookingAvailability(slot.booked, slot.capacity, slot.waitlist);
   const bookingLabel = publicBookingCountLabel(slot.booked, slot.capacity);
 
   return (
@@ -378,6 +379,7 @@ function CustomerScheduleCard({
               </span>
             )}
           </p>
+          {full && <p className="mt-2 text-xs font-black uppercase tracking-wider text-rhyze-gold">{availabilityLabel}</p>}
           {bookingLabel && (
             <p className="mt-1 text-xs uppercase tracking-widest text-rhyze-gold">
               {bookingLabel}{full && slot.waitlist ? ` · ${slot.waitlist} waitlist` : ''}

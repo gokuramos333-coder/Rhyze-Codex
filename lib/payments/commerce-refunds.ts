@@ -1,3 +1,4 @@
+import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { eventCancellationCreditKey } from '@/lib/domain/bookings/cancellation-credit';
@@ -894,10 +895,11 @@ async function reconcileSucceededRefunds(
           order.occurrenceId &&
           bookingId
         ) {
-          await tx.booking.updateMany({
+          const releasedBooking = await tx.booking.updateMany({
             where: { id: bookingId, status: { not: 'CANCELLED' } },
             data: { status: 'CANCELLED', cancelledAt: verifiedAt },
           });
+          if (releasedBooking.count) await notifyWaitlistOpening(tx, order.occurrenceId, `refund:${order.id}:${bookingId}`);
           await tx.attendanceRecord.deleteMany({
             where: {
               OR: [

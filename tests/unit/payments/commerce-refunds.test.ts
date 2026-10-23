@@ -97,6 +97,7 @@ function stripe(refundStatus = 'succeeded', chargeRefunds: any[] = []) {
 function db(fixture = order()) {
   let refundOperation: any = null;
   const tx: any = {
+    classOccurrence: { findUnique: vi.fn().mockResolvedValue(null) },
     $executeRaw: vi.fn(),
     commerceOrder: {
       findFirst: vi.fn().mockResolvedValue(fixture),
@@ -137,7 +138,7 @@ function db(fixture = order()) {
           { id: 'booking_event_refund', source: 'STRIPE_EVENT' },
         ]),
       update: vi.fn(),
-      updateMany: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     bookingTransfer: { findFirst: vi.fn().mockResolvedValue(null) },
     creditLedgerEntry: { findFirst: vi.fn().mockResolvedValue(null) },

@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventCheckoutButton } from '@/components/checkout/EventCheckoutButton';
 
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('Mommy & Me checkout', () => {
-  afterEach(() => vi.unstubAllGlobals());
 
   it('lets a parent choose children and sends that count for server pricing', async () => {
     const fetchRequest = vi.fn().mockResolvedValue({
@@ -33,7 +33,17 @@ describe('Mommy & Me checkout', () => {
     expect(JSON.parse(fetchRequest.mock.calls[0][1].body)).toEqual({
       slug: 'mommy-and-me-dennisse',
       childCount: 3,
+      occurrenceId: 'mommy_occurrence',
     });
     expect(screen.getByText('$40 total')).toBeTruthy();
   });
 });
+
+ it('allows a newly opened event place to be purchased even when all five waitlist positions are filled', () => {
+   render(<EventCheckoutButton slug="event" occurrenceId="date-two" soldOut={false} waitlistFull />);
+   expect((screen.getByRole('button', { name: 'Confirm Event Booking' }) as HTMLButtonElement).disabled).toBe(false);
+ });
+ it('stops new waitlist joins when both the roster and the five-person waitlist are full', () => {
+   render(<EventCheckoutButton slug="event" occurrenceId="date-two" soldOut waitlistFull />);
+   expect((screen.getByRole('button', { name: /waitlist full/i }) as HTMLButtonElement).disabled).toBe(true);
+ });

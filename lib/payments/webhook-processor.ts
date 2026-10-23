@@ -1,3 +1,4 @@
+import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import { queuePaymentFailureEmail } from '@/lib/notifications/payment-failure';
@@ -792,6 +793,7 @@ async function fulfillCommerceOrder(
           source: 'STRIPE_EVENT',
         },
       });
+      await completeWaitlistBooking(tx, order.occurrenceId, order.userId);
     }
   }
   const paymentRecordData = {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const tx = {
+    waitlistEntry: { updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     $executeRaw: vi.fn(), user: { findUnique: vi.fn(), findFirst: vi.fn() },
     classOccurrence: { findUnique: vi.fn(), findFirst: vi.fn() }, waiverVersion: { findFirst: vi.fn() }, waiverAcceptance: { findUnique: vi.fn() },
     booking: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn() },
@@ -26,7 +27,7 @@ function fixture(isEvent = false, role = 'INSTRUCTOR') {
   const membership = { id: 'vip', userId: 'instructor', purchaseId: 'paid', status: 'ACTIVE', currentPeriodEnd: end,
     product: { kind: 'VIP' }, purchase: { status: 'PAID', paidAt: now, creditAccount: { isUnlimited: true, validFrom: now, validUntil: end } } };
   const user = { ...mocks.actor, role, status: 'ACTIVE', instructorProfile: { isActive: true }, memberships: [] as typeof membership[] };
-  const occurrence = { id: 'class', status: 'SCHEDULED', startAt: new Date('2026-09-22T16:00Z'), endAt: new Date('2026-09-22T16:50Z'), capacity: 25, historicalSignupCount: 0,
+  const occurrence = { id: 'class', status: 'SCHEDULED', startAt: new Date('2026-09-22T16:00Z'), endAt: new Date('2026-09-22T16:50Z'), capacity: 25, historicalSignupCount: 0, _count: { bookings: 0 },
     template: { name: 'Test class', isEvent, durationMinutes: 50, slug: 'test' }, instructor: { name: 'Teacher' } };
   mocks.tx.user.findUnique.mockResolvedValue(user); mocks.tx.user.findFirst.mockResolvedValue(user);
   mocks.tx.classOccurrence.findUnique.mockResolvedValue(occurrence);

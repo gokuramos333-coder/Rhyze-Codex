@@ -1,3 +1,4 @@
+import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { bookOccurrenceAction } from '../actions';
@@ -17,10 +18,11 @@ export default async function NewBookingPage(
   const occurrence = searchParams.occurrence
     ? await prisma.classOccurrence.findUnique({
         where: { id: searchParams.occurrence },
-        include: { template: true, instructor: true, room: true },
+        include: { template: true, instructor: true, room: true, _count: { select: { bookings: { where: { status: 'CONFIRMED' } }, waitlistEntries: { where: { status: 'WAITING' } } } } },
       })
     : null;
-  if (!occurrence) notFound();
+  if (!occurrence || occurrence.status !== 'SCHEDULED' || occurrence.startAt <= new Date()) notFound();
+  const availability = bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount, occurrence.capacity, occurrence._count.waitlistEntries);
 
   const activeWaiver = await prisma.waiverVersion.findFirst({
     where: { isActive: true, requiresSign: true },
@@ -42,11 +44,12 @@ export default async function NewBookingPage(
 
   return (
     <>
-      <p className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Confirm booking {isPublicEvent(occurrence.template) && <EventBadge />}</p>
+      <p className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">{availability.soldOut ? 'Join waiting list' : 'Confirm booking'} {isPublicEvent(occurrence.template) && <EventBadge />}</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
       <div className="mt-8 border-t-4 border-rhyze-gold bg-white p-6">
         <p className="font-bold">{memberBookingDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'}</p>
         <p className="mt-2 text-sm text-rhyze-black/55">{occurrence.room?.name || 'Room TBA'} · {occurrence.capacity} spots</p>
+        {availability.soldOut && <div className="mt-4 border-l-4 border-rhyze-gold bg-rhyze-gold/10 p-4"><p className="font-black">{availability.label}</p><p className="mt-2 text-sm">Up to 5 people can wait. Joining is free and uses no credit. If a place opens before the start, everyone on the list receives an email with a booking link. Places are first come, first served; you must complete booking and are not automatically booked or charged.</p></div>}
         {isMemberClassEvent(occurrence.template) && <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">{MEMBER_CLASS_EVENT_COPY}</p>}
         {occurrence.template.isEvent && (
           <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">
@@ -81,7 +84,7 @@ export default async function NewBookingPage(
         {!missingWaiver ? (
           <form action={bookOccurrenceAction}>
             <input type="hidden" name="occurrenceId" value={occurrence.id} />
-            <button className="mt-6 bg-rhyze-gradient px-6 py-4 text-xs font-black uppercase tracking-widest">Confirm my place</button>
+            <button disabled={availability.soldOut && availability.waitlistFull} className="mt-6 bg-rhyze-gradient px-6 py-4 text-xs font-black uppercase tracking-widest disabled:opacity-50">{availability.soldOut ? availability.waitlistFull ? 'Waiting list full' : 'Join waiting list' : 'Confirm my place'}</button>
           </form>
         ) : (
           <button

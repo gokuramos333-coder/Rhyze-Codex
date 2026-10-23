@@ -1,3 +1,4 @@
+import { policySafeEmailOverride } from '@/lib/notifications/email-template-overrides';
 import Link from 'next/link';
 import { EmailTestSubmitButton } from '@/components/admin/EmailTestSubmitButton';
 import { requireApprovedOwner } from '@/lib/auth/session';
@@ -73,7 +74,8 @@ export default async function AdminEmailPreviewsPage(
         payload: archivedPayload,
       }
     : sample;
-  const copyOverride = parseEmailCopyOverride(selectedReview?.copyOverride);
+  const waitlistPolicyCopy = selected === 'WAITLIST_SPOT_AVAILABLE';
+  const copyOverride = policySafeEmailOverride(selected, parseEmailCopyOverride(selectedReview?.copyOverride));
   const presentation = applyEmailCopyOverride(
     definition.present(previewInput.payload),
     previewInput.payload,
@@ -163,32 +165,33 @@ export default async function AdminEmailPreviewsPage(
               <p className="mt-2 text-sm font-bold text-rhyze-black/55">Saved changes become the approved version immediately.</p>
             </summary>
             <form action={saveEmailTemplateCopyAction} className="mt-6 grid gap-4 md:grid-cols-2">
+              {waitlistPolicyCopy && <p className="md:col-span-2 border-l-4 border-rhyze-gold bg-rhyze-gold/10 p-3 text-sm">Waiting-list opening notices go to everyone on the list. Their subject and booking instructions are managed by the system so they never promise an exclusive or automatic booking. You can edit the greeting and closing below.</p>}
               <input type="hidden" name="template" value={selected} />
               {archivedMessage && <input type="hidden" name="messageId" value={archivedMessage.id} />}
               <label className="md:col-span-2 text-[10px] font-black uppercase tracking-[0.16em]">Subject
-                <input name="subject" required defaultValue={rendered.subject} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
+                <input name="subject" readOnly={waitlistPolicyCopy} required defaultValue={rendered.subject} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
               </label>
               <label className="text-[10px] font-black uppercase tracking-[0.16em]">Small heading
-                <input name="eyebrow" required defaultValue={presentation.eyebrow} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
+                <input name="eyebrow" readOnly={waitlistPolicyCopy} required defaultValue={presentation.eyebrow} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
               </label>
               <label className="text-[10px] font-black uppercase tracking-[0.16em]">Main headline
-                <input name="headline" required defaultValue={presentation.headline} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
+                <input name="headline" readOnly={waitlistPolicyCopy} required defaultValue={presentation.headline} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
               </label>
               <label className="md:col-span-2 text-[10px] font-black uppercase tracking-[0.16em]">Greeting
                 <input name="greeting" defaultValue={presentation.greeting || ''} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
               </label>
               <label className="md:col-span-2 text-[10px] font-black uppercase tracking-[0.16em]">Main message
-                <textarea name="paragraphs" required rows={7} defaultValue={presentation.paragraphs.join('\n\n')} className="mt-2 w-full border border-rhyze-orange/40 bg-[#fff0e5] p-3 text-sm font-normal normal-case tracking-normal" />
+                <textarea name="paragraphs" readOnly={waitlistPolicyCopy} required rows={7} defaultValue={presentation.paragraphs.join('\n\n')} className="mt-2 w-full border border-rhyze-orange/40 bg-[#fff0e5] p-3 text-sm font-normal normal-case tracking-normal" />
                 <span className="mt-1 block text-[10px] normal-case tracking-normal text-rhyze-black/45">Leave one blank line between paragraphs.</span>
               </label>
               <label className="text-[10px] font-black uppercase tracking-[0.16em]">Callout title
-                <input name="calloutTitle" defaultValue={presentation.callout?.title || ''} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
+                <input name="calloutTitle" readOnly={waitlistPolicyCopy} defaultValue={presentation.callout?.title || ''} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
               </label>
               <label className="text-[10px] font-black uppercase tracking-[0.16em]">Button text
-                <input name="ctaLabel" defaultValue={presentation.cta?.label || ''} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
+                <input name="ctaLabel" readOnly={waitlistPolicyCopy} defaultValue={presentation.cta?.label || ''} className="mt-2 min-h-12 w-full border border-rhyze-orange/40 bg-[#fff0e5] px-3 text-sm normal-case tracking-normal" />
               </label>
               <label className="md:col-span-2 text-[10px] font-black uppercase tracking-[0.16em]">Callout message
-                <textarea name="calloutBody" rows={3} defaultValue={presentation.callout?.body || ''} className="mt-2 w-full border border-rhyze-orange/40 bg-[#fff0e5] p-3 text-sm font-normal normal-case tracking-normal" />
+                <textarea name="calloutBody" readOnly={waitlistPolicyCopy} rows={3} defaultValue={presentation.callout?.body || ''} className="mt-2 w-full border border-rhyze-orange/40 bg-[#fff0e5] p-3 text-sm font-normal normal-case tracking-normal" />
               </label>
               <label className="md:col-span-2 text-[10px] font-black uppercase tracking-[0.16em]">Closing line
                 <textarea name="closing" rows={2} defaultValue={presentation.closing || ''} className="mt-2 w-full border border-rhyze-orange/40 bg-[#fff0e5] p-3 text-sm font-normal normal-case tracking-normal" />

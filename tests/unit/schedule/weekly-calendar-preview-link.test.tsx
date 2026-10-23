@@ -89,3 +89,14 @@ describe('schedule preview link', () => {
     ).toBeTruthy();
   });
 });
+
+describe('full schedule availability', () => {
+ it.each([[true, 4, 'Sold out · Waiting list available', 'JOIN WAITLIST'], [false, 5, 'Sold out · Waiting list full', 'WAITLIST FULL']] as const)('labels a full small-capacity class/event (event=%s, waiting=%s)', (isEvent, waitlist, label, action) => {
+  render(<WeeklyCalendar initialDateKey="2026-10-23" initialView="weekly" slots={[{
+    id: 'full', dateKey: '2026-10-23', dayLabel: 'Friday', shortDay: 'Fri', dateLabel: 'Oct 23', timeLabel: '7:00 PM', className: 'Synthetic class', category: 'Dance', instructor: 'Teacher', photo: '/founders/instructor-adriana.jpg', isEvent, isSubstitute: false, room: 'Main', duration: '50 min', capacity: 3, booked: 3, waitlist, price: '$30', bookingHref: '/book/synthetic?occurrence=full'
+  }]} />);
+  expect(screen.getByText(label)).toBeTruthy();
+  expect(screen.getByText(action)).toBeTruthy();
+  if (waitlist === 5) expect(screen.queryByRole('link', { name: /join waitlist/i })).toBeNull();
+ });
+});

@@ -1,3 +1,4 @@
+import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import React from 'react';
 import Image from 'next/image';
 import type { Metadata } from 'next';
@@ -145,6 +146,7 @@ export default async function EventBookingPage(
                 <h3 className="font-display text-3xl tracking-wider">
                   Specialty Event
                 </h3>
+                {soldOut && <p className="mt-3 text-sm font-black text-rhyze-gold">{bookingAvailability(booked, capacity, waiting).label}</p>}
                 {bookingLabel && (
                   <p className="text-sm text-rhyze-cream/60">
                     {bookingLabel}

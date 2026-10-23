@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -35,6 +37,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
           _count: {
             select: {
               bookings: { where: confirmedRosterBookingWhere() },
+              waitlistEntries: { where: { status: 'WAITING' } },
             },
           },
         },
@@ -55,6 +58,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
         occurrence.capacity,
       )
     : null;
+  const availability = occurrence ? bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount, occurrence.capacity, occurrence._count.waitlistEntries) : null;
   const details = event.description.split(/\n|(?<=[.!?])\s+/).filter(Boolean).slice(0, 5);
 
   return (
@@ -91,7 +95,10 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
             {bookingLabel && <EventDetail label="Booked" value={bookingLabel.replace(' booked', '')} />}
           </dl>
           <div className="px-6 pb-6">
-            <Button href={occurrence ? memberClassEvent ? `/book/${event.slug}?occurrence=${occurrence.id}` : `/book/event/${event.slug}?occurrence=${occurrence.id}` : '/events'} size="lg" className="w-full">Claim Your Spot</Button>
+            {availability && <p className="mb-4 text-sm font-black text-rhyze-gold">{availability.label}</p>}
+            {availability?.soldOut && availability.waitlistFull ? <span className="block rounded-full bg-white/10 p-4 text-center font-bold text-rhyze-cream/60">Waiting list full</span> : <>
+            <Button href={occurrence ? memberClassEvent ? `/book/${event.slug}?occurrence=${occurrence.id}` : `/book/event/${event.slug}?occurrence=${occurrence.id}` : '/events'} size="lg" className="w-full">{availability?.soldOut ? 'Join Waiting List' : occurrence ? 'Claim Your Spot' : 'Browse Events'}</Button>
+            </>}
           </div>
         </aside>
       </section>

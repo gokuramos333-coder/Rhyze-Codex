@@ -6,6 +6,7 @@ import {
 } from '@/lib/notifications/email-templates';
 import {
   applyEmailCopyOverride,
+  policySafeEmailOverride,
   applyEmailSubjectOverride,
   parseEmailCopyOverride,
 } from '@/lib/notifications/email-template-overrides';
@@ -76,7 +77,7 @@ export function renderTransactionalEmail(input: {
   const basePresentation = isEmailTemplateKey(input.template)
     ? emailTemplateCatalog[input.template].present(input.payload)
     : fallbackPresentation(input.subject, input.payload);
-  const copyOverride = parseEmailCopyOverride(input.copyOverride);
+  const copyOverride = policySafeEmailOverride(input.template, parseEmailCopyOverride(input.copyOverride));
   const subject = applyEmailSubjectOverride(input.subject, input.payload, copyOverride);
   const presentation = applyEmailCopyOverride(basePresentation, input.payload, copyOverride);
   // Required transactional disclosure must survive editable marketing copy.

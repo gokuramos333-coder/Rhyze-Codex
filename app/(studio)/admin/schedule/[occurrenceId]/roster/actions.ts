@@ -1,4 +1,5 @@
 'use server';
+import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { prioritizeMemberEventCredits } from '@/lib/domain/bookings/member-event-credits';
@@ -162,6 +163,7 @@ export async function addMemberToClassAction(formData: FormData) {
       update: { status: 'CONFIRMED', source: 'ADMIN_ADDED', cancelledAt: null, bookedAt: new Date(), policySnapshot },
       create: { occurrenceId, userId: member.id, source: 'ADMIN_ADDED', policySnapshot },
     });
+    await completeWaitlistBooking(tx, occurrenceId, member.id);
     if (!instructorAccess && creditAccount && !creditAccount.isUnlimited) {
       await tx.creditLedgerEntry.create({
         data: {

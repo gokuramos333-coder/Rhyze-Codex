@@ -1,4 +1,5 @@
 'use server';
+import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 
 import type { AttendanceStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
@@ -147,6 +148,9 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
 
   try {
     await prisma.$transaction(async (tx) => {
+      if (transition.bookingStatus === 'LATE_CANCELLED') {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+      }
       if (transition.action === 'CLEAR') {
         await tx.attendanceRecord.deleteMany({
           where: { occurrenceId, userId: booking.userId },
@@ -177,6 +181,9 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
             booking.cancelledAt ?? (transition.attendanceStatus === 'LATE_CANCELLED' ? new Date() : null),
         },
       });
+      if (booking.status === 'CONFIRMED' && transition.bookingStatus === 'LATE_CANCELLED') {
+        await notifyWaitlistOpening(tx, occurrenceId, booking.id);
+      }
     });
   } catch (error) {
     if (noShowFeeResult?.status === 'SUCCEEDED' && noShowFee) {

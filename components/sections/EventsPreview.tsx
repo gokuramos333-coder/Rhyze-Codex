@@ -1,3 +1,4 @@
+import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, CalendarDays } from 'lucide-react';
@@ -38,6 +39,7 @@ export async function EventsPreview({
           _count: {
             select: {
               bookings: { where: { status: 'CONFIRMED' } },
+              waitlistEntries: { where: { status: 'WAITING' } },
             },
           },
         },
@@ -93,6 +95,7 @@ export async function EventsPreview({
               occurrence._count.bookings + occurrence.historicalSignupCount,
               occurrence.capacity,
             );
+            const availability = bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount, occurrence.capacity, occurrence._count.waitlistEntries);
             const cardContent = (
               <>
                 <div className="relative aspect-[4/3] overflow-hidden bg-rhyze-black">
@@ -112,7 +115,7 @@ export async function EventsPreview({
                     })}
                   </div>
                   <div className="absolute bottom-4 left-4 rounded-full bg-rhyze-coral px-3 py-1 text-xs font-black uppercase tracking-widest text-rhyze-black">
-                    Booking available
+                    {availability.label}
                   </div>
                 </div>
                 <div className="p-5">

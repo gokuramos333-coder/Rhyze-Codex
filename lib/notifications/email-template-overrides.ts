@@ -84,3 +84,9 @@ export function applyEmailCopyOverride(
       : presentation.closing,
   };
 }
+
+/** Opening notices are broadcast, not exclusive offers. Keep policy copy consistent. */
+export function policySafeEmailOverride(template: string, override?: EmailCopyOverride): EmailCopyOverride | undefined {
+  if (template !== 'WAITLIST_SPOT_AVAILABLE' || !override) return override;
+  return { greeting: override.greeting, closing: override.closing };
+}

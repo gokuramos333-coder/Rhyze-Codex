@@ -12,7 +12,7 @@ beforeEach(() => {
   f.booking = { id: 'b', userId: 'u', occurrenceId: 'o', source: 'MEMBER', status: 'LATE_CANCELLED', cancelledAt: original,
     attendance: { status: 'LATE_CANCELLED' }, policySnapshot: { accessType: 'STANDARD' },
     user: { email: 'test@example.test', name: 'Test', memberships: [] }, occurrence: { startAt: original, timezone: 'America/New_York', template: { name: 'Class' } } };
-  f.prisma = { classOccurrence: { findUnique: async () => ({ instructorId: 'teacher' }) },
+  f.prisma = { $executeRaw: vi.fn(), classOccurrence: { findUnique: async () => ({ instructorId: 'teacher' }) },
     booking: { findFirst: async () => f.booking, update: async ({ data }: any) => Object.assign(f.booking, data) },
     attendanceRecord: { count: async () => 0, deleteMany: async () => { f.booking.attendance = null; }, upsert: async ({ update }: any) => { f.booking.attendance = update; } },
     creditLedgerEntry: { findFirst: async () => null }, paymentRecord: { findFirst: async () => null },

@@ -1,3 +1,4 @@
+import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import type { Prisma } from '@prisma/client';
 import { classTicketBinding, classTicketFulfillment } from '@/lib/payments/class-ticket';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
@@ -38,6 +39,7 @@ export async function fulfillClassTicket(tx: Prisma.TransactionClient, purchaseI
   } else {
     const booking = await tx.booking.create({ data: { occurrenceId: ticket.occurrenceId, userId, source: 'CLASS_TICKET', bookedAt: fresh.paidAt || now, policySnapshot: { accessType: 'STANDARD', accessProductKind: 'DROP_IN', creditAccountId: account!.id, classTicket: ticket } } });
     await tx.creditLedgerEntry.create({ data: { creditAccountId: account!.id, bookingId: booking.id, type: 'RESERVE', quantity: -1, sourceReturnKey: `class-ticket-reservation:${purchaseId}`, reason: 'Paid occurrence-specific class ticket' } });
+    await completeWaitlistBooking(tx, ticket.occurrenceId, userId);
     result = { status: 'BOOKED', bookingId: booking.id };
   }
   const policy = fresh.policyAcceptance && typeof fresh.policyAcceptance === 'object' && !Array.isArray(fresh.policyAcceptance) ? fresh.policyAcceptance : {};

@@ -1,4 +1,5 @@
 'use server';
+import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 
 import { redirect } from 'next/navigation';
@@ -55,10 +56,13 @@ export async function transferBookingAction(formData: FormData) {
   });
   const policy = evaluateTransferWindow(booking.occurrence.startAt, new Date(), accessType);
   if (policy === 'BLOCKED') {
-    await prisma.$transaction([
-      prisma.booking.update({ where: { id: booking.id }, data: { status: 'LATE_CANCELLED', cancelledAt: new Date() } }),
-      prisma.bookingTransfer.create({ data: { bookingId, memberId: booking.userId, instructorId: instructor.id, fromOccurrenceId: booking.occurrenceId, status: 'BLOCKED', reason } }),
-    ]);
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.occurrenceId}))`;
+      const changed = await tx.booking.updateMany({ where: { id: booking.id, status: 'CONFIRMED' }, data: { status: 'LATE_CANCELLED', cancelledAt: new Date() } });
+      if (!changed.count) return;
+      await tx.bookingTransfer.create({ data: { bookingId, memberId: booking.userId, instructorId: instructor.id, fromOccurrenceId: booking.occurrenceId, status: 'BLOCKED', reason } });
+      await notifyWaitlistOpening(tx, booking.occurrenceId, booking.id);
+    });
     redirect(`/instructor/classes/${booking.occurrenceId}/roster?transfer=blocked`);
   }
   const feeCents = policy === 'FEE_500' ? 500 : 0;
@@ -137,7 +141,10 @@ export async function transferBookingAction(formData: FormData) {
     ? feeResult.paymentIntentId
     : undefined;
   const outcome = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${destinationId}))`;
+    // Lock both rosters in a consistent order, including concurrent waitlist joins.
+    for (const id of [...new Set([booking.occurrenceId, destinationId])].sort()) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+    }
     const destination = await tx.classOccurrence.findFirst({
       where: { id: destinationId, status: 'SCHEDULED' },
       include: { template: true },
@@ -186,6 +193,8 @@ export async function transferBookingAction(formData: FormData) {
         },
       },
     });
+    await completeWaitlistBooking(tx, destination.id, booking.userId);
+    await notifyWaitlistOpening(tx, booking.occurrenceId, `transfer:${booking.id}:${booking.occurrenceId}:${destination.id}`);
     await tx.bookingTransfer.create({
       data: {
         bookingId,

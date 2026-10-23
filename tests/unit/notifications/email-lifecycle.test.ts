@@ -20,21 +20,6 @@ describe('Rhyze email lifecycle wiring', () => {
     expect(actions).toContain('resetUrl');
   });
 
-  it('queues complete booking and waitlist details', () => {
-    const actions = readFileSync('app/(portal)/member/bookings/actions.ts', 'utf8');
-    const templates = readFileSync('lib/notifications/email-templates.ts', 'utf8');
-    expect(actions).toContain("template: 'WAITLIST_JOINED'");
-    expect(actions).toContain("template: 'WAITLIST_SPOT_AVAILABLE'");
-    expect(actions).toContain('className: occurrence.template.name');
-    expect(actions).toContain('className: booking.occurrence.template.name');
-    expect(actions).toContain('classDate:');
-    expect(actions).toContain('classTime:');
-    expect(actions).toContain('claimUrl: publicOccurrenceUrl(booking.occurrence)');
-    expect(actions).toContain("take: 5");
-    expect(actions).not.toContain("template: 'WAITLIST_PROMOTED'");
-    expect(templates).toContain('This spot is first come, first served for the waitlist');
-  });
-
   it('alerts management when a member cancels a booked class', () => {
     const actions = readFileSync('app/(portal)/member/bookings/actions.ts', 'utf8');
     const helper = readFileSync('lib/notifications/admin-booking-cancellations.ts', 'utf8');

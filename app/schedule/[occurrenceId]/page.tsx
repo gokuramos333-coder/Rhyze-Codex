@@ -67,7 +67,7 @@ export default async function ClassOccurrencePage(
           />
           <Detail label="Availability" value={soldOut ? `SOLD OUT · ${occurrence._count.waitlistEntries}/${WAITLIST_CAPACITY} waiting` : `${Math.max(0, occurrence.capacity - bookedCount)} spots remaining`} />
         </dl>
-        {waitlistFull ? (
+        {soldOut && waitlistFull ? (
           <span className="mt-8 inline-block cursor-not-allowed border border-white/20 bg-white/10 px-7 py-4 text-sm font-black uppercase tracking-widest text-rhyze-cream/45">Waitlist full</span>
         ) : (
           <Link

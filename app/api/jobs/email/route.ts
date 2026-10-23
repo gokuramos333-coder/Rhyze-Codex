@@ -1,3 +1,4 @@
+import { waitlistEmailIsDeliverable } from '@/lib/domain/bookings/waitlist';
 import { birthdayReminderExpired } from '@/lib/domain/birthdays/birthday-delivery';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
           select: { id: true },
         })),
       );
-      if (!stillDeliverable || !await accountTokenEmailIsDeliverable(prisma, message)) {
+      if (!stillDeliverable || !await accountTokenEmailIsDeliverable(prisma, message) || !await waitlistEmailIsDeliverable(prisma, message)) {
         await prisma.emailMessage.updateMany({
           where: { id: message.id, status: 'PROCESSING' },
           data: { status: 'CANCELLED', lastError: null },

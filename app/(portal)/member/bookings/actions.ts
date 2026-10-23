@@ -1,4 +1,5 @@
 'use server';
+import { publicOccurrenceUrl, notifyWaitlistOpening, completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { prioritizeMemberEventCredits } from '@/lib/domain/bookings/member-event-credits';
@@ -60,15 +61,6 @@ function emailTime(value: Date) {
   });
 }
 
-function publicOccurrenceUrl(occurrence: {
-  id: string;
-  template: { isEvent: boolean; slug: string };
-}) {
-  return occurrence.template.isEvent
-    ? `/book/event/${occurrence.template.slug}`
-    : `/book/${occurrence.template.slug}?occurrence=${encodeURIComponent(occurrence.id)}`;
-}
-
 export async function bookOccurrenceAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
   const occurrenceId = String(formData.get('occurrenceId') || '');
@@ -80,7 +72,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       where: { id: occurrenceId },
       include: { template: true, instructor: { select: { name: true } } },
     });
-    if (!occurrence || occurrence.status !== 'SCHEDULED') return 'unavailable';
+    if (!occurrence || occurrence.status !== 'SCHEDULED' || occurrence.startAt <= new Date()) return 'unavailable';
     const now = new Date();
     const currentUser = await tx.user.findUnique({
       where: { id: user.id },
@@ -163,6 +155,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           classDate: emailDate(occurrence.startAt),
           classTime: emailTime(occurrence.startAt),
           waitlistPosition: String(waitlistPosition),
+          occurrenceId,
           bookingsUrl: publicOccurrenceUrl(occurrence),
         },
         dedupeKey: `waitlist-joined:${waitlist.id}:${joinedAt.toISOString()}`,
@@ -287,6 +280,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         }),
       },
     });
+    await completeWaitlistBooking(tx, occurrenceId, user.id);
     if (!instructorAccess && trial && trialAccess?.allowed && !trial.activatedAt) {
       await tx.membership.update({
         where: { id: trial.id },
@@ -438,6 +432,8 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   let transactionOutcome: { creditReturned: boolean } | undefined;
   try {
     transactionOutcome = await prisma.$transaction(async (tx) => {
+    // Serialize roster release with waitlist joins so a concurrent join cannot miss the opening.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingForPolicy.occurrenceId}))`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
     await lockMembershipEntitlements(tx, user.id);
     const booking = await tx.booking.findFirst({
@@ -561,31 +557,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       status: decision.status,
       creditReturned,
     });
-    if (decision.status === 'CANCELLED') {
-      const waitingEntries = await tx.waitlistEntry.findMany({
-        where: { occurrenceId: booking.occurrenceId, status: 'WAITING' },
-        include: { user: true },
-        orderBy: { joinedAt: 'asc' },
-        take: 5,
-      });
-      for (const entry of waitingEntries) {
-        await queueEmail(tx, {
-          userId: entry.userId,
-          to: entry.user.email,
-          subject: `A spot opened for ${booking.occurrence.template.name}`,
-          template: 'WAITLIST_SPOT_AVAILABLE',
-          payload: {
-            name: entry.user.name || 'Rhyzer',
-            className: booking.occurrence.template.name,
-            instructorName: booking.occurrence.instructor?.name || 'Rhyze instructor',
-            classDate: emailDate(booking.occurrence.startAt),
-            classTime: emailTime(booking.occurrence.startAt),
-            claimUrl: publicOccurrenceUrl(booking.occurrence),
-          },
-          dedupeKey: `waitlist-spot-available:${booking.id}:${entry.id}`,
-        });
-      }
-    }
+    await notifyWaitlistOpening(tx, booking.occurrenceId, `${booking.id}:${cancelledAt.toISOString()}`);
     return { creditReturned };
     });
   } catch (error) {

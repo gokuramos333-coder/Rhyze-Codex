@@ -1,4 +1,5 @@
 'use server';
+import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 
 import { redirect } from 'next/navigation';
@@ -118,7 +119,10 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     : undefined;
 
   const moved = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${destinationId}))`;
+    // Lock both rosters in a consistent order, including concurrent waitlist joins.
+    for (const id of [...new Set([booking.occurrenceId, destinationId])].sort()) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+    }
     const destination = await tx.classOccurrence.findFirst({
       where: {
         id: destinationId,
@@ -165,6 +169,8 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
         },
       },
     });
+    await completeWaitlistBooking(tx, destination.id, user.id);
+    await notifyWaitlistOpening(tx, booking.occurrenceId, `transfer:${booking.id}:${booking.occurrenceId}:${destination.id}`);
     await tx.bookingTransfer.create({
       data: {
         bookingId,

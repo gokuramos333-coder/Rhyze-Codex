@@ -10,6 +10,7 @@ import { eventCheckoutWaiverDestination } from '@/lib/domain/waivers/acceptance'
 
 const requestSchema = z.object({
   slug: z.string().min(1),
+  occurrenceId: z.string().min(1).optional(),
   childCount: z.number().int().min(1).max(5).optional(),
 });
 
@@ -22,9 +23,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Secure event checkout is not connected yet.' }, { status: 503 });
   }
   try {
-    const { slug, childCount } = requestSchema.parse(await request.json());
+    const { slug, occurrenceId, childCount } = requestSchema.parse(await request.json());
     const occurrence = await prisma.classOccurrence.findFirst({
       where: {
+        ...(occurrenceId ? { id: occurrenceId } : {}),
         template: { slug, isEvent: true, isActive: true },
         status: 'SCHEDULED',
         startAt: { gt: new Date() },
@@ -130,7 +132,7 @@ export async function POST(request: Request) {
         customerEmail: user.email,
       },
       success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/book/event/${slug}`,
+      cancel_url: `${origin}/book/event/${slug}?occurrence=${encodeURIComponent(occurrence.id)}`,
     }, { idempotencyKey: `event-checkout-${order.id}` });
     await prisma.commerceOrder.update({
       where: { id: order.id },

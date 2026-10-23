@@ -1,3 +1,4 @@
+import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
@@ -223,7 +224,8 @@ export default async function BookingPage(
   const occurrenceBookingCount = occurrence
     ? occurrence._count.bookings + occurrence.historicalSignupCount
     : 0;
-  const soldOut = Boolean(occurrence && occurrenceBookingCount >= occurrence.capacity);
+  const availability = occurrence ? bookingAvailability(occurrenceBookingCount, occurrence.capacity, occurrence._count.waitlistEntries) : null;
+  const soldOut = Boolean(availability?.soldOut);
   const effectiveBookingHref = soldOut && occurrence
     ? session?.user
       ? memberBookingDestination
@@ -427,8 +429,9 @@ export default async function BookingPage(
           <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-gold">
             Choose How To Book
           </p>
+          {soldOut && <p className="mb-4 text-sm font-black text-rhyze-gold">{availability?.label}</p>}
           <div className="space-y-4">
-            <Link
+            {soldOut && availability?.waitlistFull ? <p className="rounded-2xl bg-white/10 p-4 font-bold text-rhyze-cream/60">Waiting list full</p> : <Link
               href={effectiveBookingHref}
               className="focus-ring block rounded-2xl border border-rhyze-coral/50 bg-rhyze-coral/10 p-4 transition hover:border-rhyze-coral hover:bg-rhyze-coral/20"
             >
@@ -452,7 +455,7 @@ export default async function BookingPage(
                 </div>
                 <span className="text-2xl text-rhyze-coral" aria-hidden>→</span>
               </div>
-            </Link>
+            </Link>}
 
             {activeMembership && !hasMembershipAccess && (
               <div className="rounded-2xl border border-rhyze-orange/50 bg-rhyze-orange/10 p-4">
