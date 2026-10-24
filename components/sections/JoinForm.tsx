@@ -15,7 +15,7 @@ const schema = z.object({
   phone: z.string().min(7, 'A phone we can reach you at'),
   startDate: z.string().min(1, 'Pick a date'),
   waiver: z.literal(true, {
-    errorMap: () => ({ message: 'Please agree to the waiver to continue' }),
+    error: 'Please agree to the waiver to continue',
   }),
 });
 

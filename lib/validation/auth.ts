@@ -39,7 +39,7 @@ export const signUpSchema = z
     birthdayMonth: birthdayMonthSchema,
     birthdayDay: birthdayDaySchema,
     waiverAccepted: z.literal(true, {
-      errorMap: () => ({ message: 'Accept the studio policies and waiver to create an account.' }),
+      error: 'Accept the studio policies and waiver to create an account.',
     }),
     mediaConsent: z.boolean().default(false),
     password: z.string(),
@@ -100,7 +100,7 @@ export const accountClaimSchema = z
     birthdayMonth: birthdayMonthSchema,
     birthdayDay: birthdayDaySchema,
     waiverAccepted: z.literal(true, {
-      errorMap: () => ({ message: 'Accept the studio policies and waiver to activate your account.' }),
+      error: 'Accept the studio policies and waiver to activate your account.',
     }),
     mediaConsent: z.boolean().default(false),
     password: z.string(),
