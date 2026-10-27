@@ -416,6 +416,11 @@ export default async function AdminMemberDetailPage(
           )}
         </div>
       </div>
+      <nav aria-label="Client account sections" className="mt-6 flex flex-wrap gap-2">
+        <a href="#payment-history" className="border border-rhyze-black bg-white px-4 py-3 text-xs font-black uppercase">Payments &amp; refunds</a>
+        <a href="#class-history" className="border border-rhyze-black/20 bg-white px-4 py-3 text-xs font-black uppercase">Class history</a>
+        <a href="#credits" className="border border-rhyze-black/20 bg-white px-4 py-3 text-xs font-black uppercase">Credits</a>
+      </nav>
       <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Metric label="Classes booked" value={`${bookedClassCount}`} icon={<CalendarCheck />} href="#class-history" actionLabel="View class history →" />
         <Metric label="Available class credits" value={classCreditLabel} icon={<UserRound />} href="#credits" />

@@ -5,6 +5,9 @@ describe('admin client event refund surface', () => {
   it('keeps purchase refunds visible and adds explicit commerce event refund controls to client financials', () => {
     const page = readFileSync('app/(studio)/admin/members/[userId]/page.tsx', 'utf8');
 
+    expect(page).toContain('aria-label="Client account sections"');
+    expect(page).toContain('Payments &amp; refunds');
+    expect(page).toContain('href="#payment-history"');
     expect(page).toContain('refundMemberPurchaseAction');
     expect(page).toContain('Refund payment');
     expect(page).toContain('refundMemberCommerceOrderAction');
