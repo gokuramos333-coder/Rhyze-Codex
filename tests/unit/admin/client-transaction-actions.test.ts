@@ -8,7 +8,9 @@ describe('admin client transaction actions', () => {
     expect(page).not.toContain('Lifetime value');
     expect(page).not.toContain('SPENDING BY PERIOD');
     expect(page).toContain('Transaction details');
-    expect(page).toContain('Refund payment');
+    expect(page).not.toContain('Refund payment');
+    expect(page).toContain('Purchase refunds require staff review');
+    expect(page).toContain('Refund remaining cash');
     expect(page).toContain('Return 1 class credit');
     expect(page).toContain('Expires 14 days after return');
   });
