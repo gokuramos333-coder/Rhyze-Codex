@@ -1,4 +1,5 @@
 'use server';
+import { restoredCancellationAt } from '@/lib/domain/bookings/restored-cancellation-at';
 import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 
 import type { AttendanceStatus } from '@prisma/client';
@@ -338,9 +339,22 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
       }
     }
 
+    const cancelledAt = restoredCancellationAt(booking.cancelledAt, restoredAt, existingEventRestore);
+    if (cancelledAt.getTime() !== booking.cancelledAt?.getTime()) {
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'booking.cancellation-history-restored',
+          entityType: 'Booking',
+          entityId: booking.id,
+          before: { cancelledAt: booking.cancelledAt?.toISOString() ?? null },
+          after: { cancelledAt: cancelledAt.toISOString(), sourceReturnKey: existingEventRestore?.sourceReturnKey ?? null },
+        },
+      });
+    }
     await tx.booking.update({
       where: { id: booking.id },
-      data: { status: 'CANCELLED', cancelledAt: booking.cancelledAt ?? restoredAt },
+      data: { status: 'CANCELLED', cancelledAt },
     });
     await tx.attendanceRecord.deleteMany({
       where: { bookingId: booking.id },

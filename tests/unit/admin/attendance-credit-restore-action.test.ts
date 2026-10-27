@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const tx = {
     $executeRaw: vi.fn(),
+    auditLog: { create: vi.fn() },
     attendanceRecord: { deleteMany: vi.fn() },
     booking: { findFirst: vi.fn(), update: vi.fn() },
     commerceOrder: { findFirst: vi.fn() },
@@ -145,6 +146,23 @@ describe('admin attendance credit restore action', () => {
         quantity: 1,
       }),
     });
+  });
+
+  it('repairs an early credited cancellation without issuing a second credit', async () => {
+    const booking = await mocks.tx.booking.findFirst();
+    const original = new Date('2026-09-27T20:24:09.334Z');
+    mocks.tx.booking.findFirst.mockResolvedValue({ ...booking, status: 'LATE_CANCELLED', cancelledAt: new Date('2026-09-29T16:52:42.579Z'), occurrence: { ...booking.occurrence, template: { ...booking.occurrence.template, isEvent: true } } });
+    mocks.tx.creditLedgerEntry.findFirst.mockReset();
+    mocks.tx.creditLedgerEntry.findFirst.mockResolvedValue(null);
+    mocks.tx.creditLedgerEntry.findUnique.mockImplementation(async ({ where }) => where.sourceReturnKey === 'event-cancellation:booking_1' ? {
+      id: 'existing_grant', createdAt: original, reason: 'Early event cancellation replacement credit', sourceReturnKey: 'event-cancellation:booking_1',
+    } : null);
+    const form = new FormData(); form.set('occurrenceId', 'occurrence_1'); form.set('bookingId', 'booking_1');
+    await expect(restoreCreditAction(form)).rejects.toThrow('attendance-credit-restored');
+    expect(mocks.tx.booking.update).toHaveBeenCalledWith({ where: { id: 'booking_1' }, data: { status: 'CANCELLED', cancelledAt: original } });
+    expect(mocks.tx.creditLedgerEntry.create).not.toHaveBeenCalled();
+    expect(mocks.tx.creditAccount.create).not.toHaveBeenCalled();
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ actorId: 'admin_1', entityId: 'booking_1', action: 'booking.cancellation-history-restored' }) });
   });
 
   it('preserves the actual cancellation timestamp when an admin later restores its credit', async () => {
