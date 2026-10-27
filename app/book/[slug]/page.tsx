@@ -1,4 +1,5 @@
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
+import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
@@ -134,7 +135,7 @@ export default async function BookingPage(
         const productAllowsOccurrence = complimentaryStandardAccessCanBook({
           customPlanType: currentCreditProduct(account)?.customPlanType,
           isEvent: occurrence.template.isEvent,
-          durationMinutes: occurrence.template.durationMinutes,
+          durationMinutes: occurrenceDurationMinutes(occurrence),
         });
         return currentUser?.status === 'ACTIVE' && productAllowsOccurrence &&
           creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
@@ -303,7 +304,7 @@ export default async function BookingPage(
                   {isPublicEvent({ slug: params.slug, isEvent: occurrence?.template.isEvent ?? false }) && <EventBadge />}
                   <span aria-hidden>·</span>
                   <Clock className="h-3.5 w-3.5" aria-hidden />
-                  {occurrence?.template.durationMinutes ?? cls.duration} min
+                  {occurrence ? occurrenceDurationMinutes(occurrence) : cls.duration} min
                 </p>
               </div>
             </div>

@@ -1,10 +1,13 @@
 import React from 'react';
+import { occurrenceTitle, occurrenceInstructorName } from '@/lib/domain/schedule/occurrence-management';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 
 export type RescheduleDestination = {
   id: string;
   startAt: Date;
   timezone?: string | null;
+  titleOverride?: string | null;
+  substituteInstructorName?: string | null;
   capacity: number;
   historicalSignupCount: number;
   _count: { bookings: number };
@@ -53,10 +56,10 @@ export function RescheduleClassPicker({
                 </span>
               </span>
               <span className="break-words font-display text-3xl leading-none tracking-wider text-rhyze-black">
-                {item.template.name}
+                {occurrenceTitle(item)}
               </span>
               <span className="break-words text-sm font-semibold text-rhyze-black/60">
-                Instructor: {item.instructor?.name || 'TBA'}
+                Instructor: {occurrenceInstructorName(item)}
               </span>
               <span className="mt-1 text-[0.65rem] font-black uppercase tracking-[0.18em] text-rhyze-black/45 peer-checked:text-rhyze-coral">
                 Tap to select

@@ -6,7 +6,7 @@ import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { prisma } from '@/lib/db/prisma';
 import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
 import { publicBookingCountLabel } from '@/lib/catalog/public-booking-count';
-import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
+import { occurrenceDurationMinutes, occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
 import { isMemberClassEvent } from '@/lib/catalog/member-class-event';
 import {
@@ -126,7 +126,7 @@ export async function EventsPreview({
                       timeZone: occurrenceLocalTimeZone(),
                       hour: 'numeric',
                       minute: '2-digit',
-                    })} · {event.durationMinutes} min
+                    })} · {occurrenceDurationMinutes(occurrence)} min
                   </p>
                   <h3 className="font-display text-4xl leading-none tracking-wider">
                     {event.name}

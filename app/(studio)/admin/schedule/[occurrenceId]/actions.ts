@@ -1,5 +1,7 @@
 'use server';
 
+import { Prisma } from '@prisma/client';
+import { hasScheduleConflict } from '@/lib/domain/schedule/conflict-service';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -127,45 +129,70 @@ async function cancelOccurrencesWithNotifications(
 export async function updateOccurrenceAction(formData: FormData) {
   const actor = await requireArea('admin');
   const id = String(formData.get('id') || '');
-  const current = await prisma.classOccurrence.findUnique({ where: { id }, include: { template: true } });
-  if (!current) return;
-  const startAt = parseOccurrenceLocalStart(
-    String(formData.get('startAt') || ''),
-    current.timezone || studioTimezone,
-  );
-  const instructorPayMethod = normalizeInstructorPayMethod(formData.get('instructorPayMethod'));
-  const instructorPayCents = parseDollarCents(formData.get('instructorPayAmount'));
-  const priceCents = parseClassPriceCents(formData.get('dropInPrice'));
-  if (priceCents === null) {
-    redirect(`/admin/schedule/${id}?error=price`);
-  }
-  const endAt = new Date(startAt.getTime() + current.template.durationMinutes * 60_000);
-  const instructorId = String(formData.get('instructorId') || '') || null;
-  // Historical/cancelled rows may retain legacy ownership; scheduled rows may not.
-  if (current.status === 'SCHEDULED' && endAt > new Date()) {
-    try {
-      await requireAssignableInstructor(instructorId);
-    } catch {
-      redirect(`/admin/schedule/${id}?error=instructor`);
-    }
-  }
-  const data = {
-    instructorId,
-    roomId: formData.has('roomId') ? String(formData.get('roomId') || '') || null : current.roomId,
-    startAt,
-    endAt,
-    capacity: Math.max(1, Number(formData.get('capacity') || current.capacity)),
-    priceCents,
-    titleOverride: cleanOptionalText(formData.get('titleOverride')),
-    substituteInstructorName: cleanOptionalText(formData.get('substituteInstructorName')),
-    isSubstitute: formData.get('isSubstitute') === 'on',
-    publicNotes: cleanOptionalText(formData.get('publicNotes')),
-    internalNotes: cleanOptionalText(formData.get('internalNotes')),
-    instructorPayMethod,
-    instructorPayCents,
-    instructorPayNote: cleanOptionalText(formData.get('instructorPayNote')),
-  };
   await prisma.$transaction(async (tx) => {
+    // Coordinate with schedule imports; serializable reads fail closed on concurrent edits.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('rhyze-schedule-import'))`;
+    const current = await tx.classOccurrence.findUnique({ where: { id }, include: { template: true } });
+    if (!current) return;
+    const startAt = parseOccurrenceLocalStart(
+      String(formData.get('startAt') || ''),
+      current.timezone || studioTimezone,
+    );
+    const instructorPayMethod = normalizeInstructorPayMethod(formData.get('instructorPayMethod'));
+    const instructorPayCents = parseDollarCents(formData.get('instructorPayAmount'));
+    const priceCents = parseClassPriceCents(formData.get('dropInPrice'));
+    if (priceCents === null) {
+      redirect(`/admin/schedule/${id}?error=price`);
+    }
+    // Older forms omit the field: retain this occurrence's duration, including overrides.
+    const durationMinutes = formData.has('durationMinutes')
+      ? Number(formData.get('durationMinutes'))
+      : (current.endAt.getTime() - current.startAt.getTime()) / 60_000;
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 5 || durationMinutes > 480) {
+      redirect(`/admin/schedule/${id}?error=duration`);
+    }
+    const endAt = new Date(startAt.getTime() + durationMinutes * 60_000);
+    const instructorId = String(formData.get('instructorId') || '') || null;
+    // Historical/cancelled rows may retain legacy ownership; scheduled rows may not.
+    if (current.status === 'SCHEDULED' && endAt > new Date()) {
+      try {
+        await requireAssignableInstructor(instructorId);
+      } catch {
+        redirect(`/admin/schedule/${id}?error=instructor`);
+      }
+    }
+    const data = {
+      instructorId,
+      roomId: formData.has('roomId') ? String(formData.get('roomId') || '') || null : current.roomId,
+      startAt,
+      endAt,
+      capacity: Math.max(1, Number(formData.get('capacity') || current.capacity)),
+      priceCents,
+      titleOverride: cleanOptionalText(formData.get('titleOverride')),
+      substituteInstructorName: cleanOptionalText(formData.get('substituteInstructorName')),
+      isSubstitute: formData.get('isSubstitute') === 'on',
+      publicNotes: cleanOptionalText(formData.get('publicNotes')),
+      internalNotes: cleanOptionalText(formData.get('internalNotes')),
+      instructorPayMethod,
+      instructorPayCents,
+      instructorPayNote: cleanOptionalText(formData.get('instructorPayNote')),
+    };
+    if (current.status === 'SCHEDULED') {
+      const resources = [
+        ...(data.roomId ? [{ roomId: data.roomId }] : []),
+        ...(instructorId ? [{ instructorId }] : []),
+      ];
+      if (resources.length) {
+        const conflicts = await tx.classOccurrence.findMany({
+          where: { id: { not: id }, status: 'SCHEDULED', OR: resources,
+            startAt: { lt: endAt }, endAt: { gt: startAt } },
+          select: { startAt: true, endAt: true },
+        });
+        if (conflicts.some(item => hasScheduleConflict(item, { startAt, endAt }))) {
+          redirect(`/admin/schedule/${id}?error=conflict`);
+        }
+      }
+    }
     await tx.classOccurrence.update({ where: { id }, data });
     await tx.auditLog.create({
       data: {
@@ -185,7 +212,7 @@ export async function updateOccurrenceAction(formData: FormData) {
         after: data,
       },
     });
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   revalidatePath('/admin/schedule');
   revalidatePath(`/admin/schedule/${id}`);
   revalidatePath('/schedule');

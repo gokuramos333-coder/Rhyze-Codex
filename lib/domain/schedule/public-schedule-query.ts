@@ -1,4 +1,5 @@
 import 'server-only';
+import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { prisma } from '@/lib/db/prisma';
 import { resolveClassArtwork } from './class-artwork';
@@ -118,7 +119,7 @@ export async function loadPublicScheduleSlots(
       isEvent: isPublicEvent(occurrence.template),
       isSubstitute: occurrence.isSubstitute || isIgniteSub,
       room: occurrence.room?.name || 'Rhyze Floor',
-      duration: `${occurrence.template.durationMinutes} min`,
+      duration: `${occurrenceDurationMinutes(occurrence)} min`,
       capacity: occurrence.capacity,
       booked:
         occurrence._count.bookings + occurrence.historicalSignupCount,

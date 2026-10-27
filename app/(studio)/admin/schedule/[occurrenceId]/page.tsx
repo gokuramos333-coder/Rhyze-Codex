@@ -32,6 +32,8 @@ export default async function ManageOccurrencePage(
       {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">Class saved.</p>}
       {searchParams.error === 'price' && <p className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Enter a valid client drop-in price.</p>}
       {searchParams.error === 'instructor' && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Choose an active instructor account with portal access. A display name alone does not assign a class.</p>}
+      {searchParams.error === 'duration' && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Enter a whole-number duration from 5 to 480 minutes.</p>}
+      {searchParams.error === 'conflict' && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">This time overlaps another scheduled class in the same room or with the same instructor. No changes were saved.</p>}
       <form action={updateOccurrenceAction} className="mt-8 grid gap-4 border-t-4 border-rhyze-gold bg-white p-6 md:grid-cols-2">
         <input type="hidden" name="id" value={item.id}/>
         <Label text="Class title for this date"><input name="titleOverride" defaultValue={item.titleOverride || ''} placeholder={item.template.name} className="min-h-12 border px-3"/></Label>
@@ -42,6 +44,7 @@ export default async function ManageOccurrencePage(
           Show small red Sub box next to instructor name
         </label>
         <Label text="Start"><input name="startAt" type="datetime-local" defaultValue={occurrenceLocalInputValue(item.startAt)} required className="min-h-12 border px-3"/></Label>
+        <Label text="Duration for this date (minutes)"><input name="durationMinutes" type="number" min="5" max="480" step="1" defaultValue={(item.endAt.getTime() - item.startAt.getTime()) / 60_000} required className="min-h-12 border px-3"/></Label>
         <Label text="Capacity"><input name="capacity" type="number" min="1" defaultValue={item.capacity} className="min-h-12 border px-3"/></Label>
         <Label text="Client drop-in price">
           <input

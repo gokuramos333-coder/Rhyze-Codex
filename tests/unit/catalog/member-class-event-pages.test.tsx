@@ -27,7 +27,7 @@ function textIn(node: React.ReactNode): string {
 }
 const slug = 'soul-line-dancing-rachel';
 const template = { slug, name: 'Soul Line Dancing with Rachel', description: 'Connection, rhythm, and joy.', durationMinutes: 60, isEvent: false, dropInPriceCents: 2500 };
-const occurrence = { id: 'rachel-oct16', template, priceCents: 1500, startAt: new Date('2026-10-16T23:30Z'), capacity: 25, historicalSignupCount: 0, instructor: { name: 'Rachel Crowe' }, _count: { bookings: 0, waitlistEntries: 0 } };
+const occurrence = { id: 'rachel-oct16', template, priceCents: 1500, startAt: new Date('2026-10-16T23:30Z'), endAt: new Date('2026-10-17T00:30Z'), capacity: 25, historicalSignupCount: 0, instructor: { name: 'Rachel Crowe' }, _count: { bookings: 0, waitlistEntries: 0 } };
 beforeEach(() => {
   vi.stubGlobal('React', React);
   db.auth.mockResolvedValue(null);
@@ -40,6 +40,12 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe('Rachel public event to class-credit booking flow', () => {
+  it('shows a 50-minute occurrence even when its template remains 30 minutes', async () => {
+    db.classOccurrence.findFirst.mockResolvedValue({ ...occurrence, endAt: new Date('2026-10-17T00:20Z'), template: { ...template, durationMinutes: 30 } });
+    const page = await BookingPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve({ occurrence: occurrence.id }) });
+    expect(textIn(page)).toMatch(/50\s+min/);
+    expect(textIn(page)).not.toMatch(/30\s+min/);
+  });
   it('shows the actual $15 occurrence and retains its identity in the standard-credit booking link', async () => {
     const page = await EventDetailPage({ params: Promise.resolve({ slug }), searchParams: Promise.resolve({ occurrence: occurrence.id }) });
     const props = propsIn(page);
@@ -48,6 +54,12 @@ describe('Rachel public event to class-credit booking flow', () => {
     expect(textIn(page)).toContain('VIP unlimited access does not use your monthly event credit');
     expect(renderToStaticMarkup(page)).toMatch(/>Event<\/span>/);
     expect(db.classTemplate.findFirst.mock.calls[0][0].where).toMatchObject({ slug, isActive: true, archivedAt: null, OR: [{ isEvent: true }, { isEvent: false, slug }] });
+  });
+  it('uses the actual date duration on home/events cards', async () => {
+    db.classTemplate.findMany.mockResolvedValue([{ ...template, durationMinutes: 30, occurrences: [{ ...occurrence, endAt: new Date('2026-10-17T00:20Z') }] }]);
+    const page = await EventsPreview({});
+    expect(textIn(page)).toMatch(/50\s+min/);
+    expect(textIn(page)).not.toMatch(/30\s+min/);
   });
   it('displays $15 on the Events list instead of the old $25 template price', async () => {
     const page = await EventsPreview({});

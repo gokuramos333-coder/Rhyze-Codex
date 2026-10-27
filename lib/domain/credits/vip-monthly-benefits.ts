@@ -64,7 +64,7 @@ export function vipMonthlyBenefitWindow(input: {
     expirationLabel,
     classCreditLabel: `VIP membership — unlimited standard class credits — ${monthLabel}`,
     eventCreditLabel: `${EVENT_CREDIT_LABEL_PREFIX} — ${monthLabel} VIP complimentary event credit — expires ${expirationLabel}`,
-    eventGrantReason: `Manual admin credit grant: ${monthLabel} VIP complimentary event credit — no rollover; excludes Tricia Johnsen specialty events`,
+    eventGrantReason: `Manual admin credit grant: ${monthLabel} VIP complimentary event credit — no rollover; ${year === 2026 && monthIndex === 10 ? 'ANY event, including Tricia Johnsen specialty events' : 'excludes Tricia Johnsen specialty events'}`,
   };
 }
 

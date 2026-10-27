@@ -5,13 +5,19 @@ vi.mock('@/lib/db/prisma', () => ({ prisma: { classOccurrence: db } }));
 import { loadPublicScheduleSlots } from '@/lib/domain/schedule/public-schedule-query';
 const from = new Date('2026-10-01T04:00:00Z');
 function occurrence(index: number, isEvent = false) {
-  return { id: `date-${index}`, startAt: new Date(from.getTime() + (index + 1) * 3600000), timezone: 'America/New_York',
+  return { id: `date-${index}`, startAt: new Date(from.getTime() + (index + 1) * 3600000), endAt: new Date(from.getTime() + (index + 1) * 3600000 + 50 * 60000), timezone: 'America/New_York',
     template: { slug: isEvent ? 'mommy' : 'dance', name: isEvent ? 'Mommy & Me' : 'Dance', isActive: true, archivedAt: null, isEvent, category: { name: 'Dance' }, durationMinutes: 50 },
     instructor: null, room: null, capacity: 20, historicalSignupCount: 0, priceCents: 3000, _count: { bookings: 0, waitlistEntries: 0 },
   };
 }
 beforeEach(() => vi.clearAllMocks());
 describe('public schedule event eligibility', () => {
+  it('shows the stored 50-minute override instead of the 30-minute template', async () => {
+    const row = { ...occurrence(1), endAt: new Date(occurrence(1).startAt.getTime() + 50 * 60000) };
+    row.template.durationMinutes = 30;
+    db.findMany.mockResolvedValue([row]);
+    expect(await loadPublicScheduleSlots(from)).toMatchObject([{ duration: '50 min' }]);
+  });
   it('keeps events reachable even after 180 earlier scheduled classes', async () => {
     const rows = [...Array.from({ length: 180 }, (_, i) => occurrence(i)), occurrence(180, true)];
     db.findMany.mockImplementation(async ({ take }) => take ? rows.slice(0, take) : rows);
@@ -23,6 +29,7 @@ describe('public schedule event eligibility', () => {
     const row = occurrence(1);
     row.template.slug = 'soul-line-dancing-rachel';
     row.template.durationMinutes = 60;
+    row.endAt = new Date(row.startAt.getTime() + 60 * 60000);
     row.priceCents = 1500;
     db.findMany.mockResolvedValue([row]);
     expect(await loadPublicScheduleSlots(from)).toMatchObject([{ isEvent: true, duration: '60 min', price: '$15', bookingHref: '/events/soul-line-dancing-rachel?occurrence=date-1' }]);

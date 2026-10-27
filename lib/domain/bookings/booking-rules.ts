@@ -1,3 +1,4 @@
+import { isNovember2026EventDate } from '@/lib/domain/credits/november-vip-policy';
 import { classTicketBinding, classTicketCanBook } from '@/lib/payments/class-ticket';
 import type { BookingAccessType } from '@/lib/domain/bookings/cancellation-policy';
 
@@ -79,13 +80,23 @@ export function eventCreditCanBook(input: {
   isEvent: boolean;
   className?: string | null;
   instructorName?: string | null;
+  occurrenceStartsAt?: Date;
+  now?: Date;
+  validFrom?: Date;
+  validUntil?: Date | null;
 }) {
   const specialtyText = `${input.className ?? ''} ${input.instructorName ?? ''}`.toLowerCase();
   const triciaSpecialty = specialtyText.includes('tricia');
   const vipComplimentaryEventCredit = input.label.toLowerCase().includes('vip complimentary');
+  const novemberEvent = input.isEvent && isNovember2026EventDate(input.occurrenceStartsAt);
+  // Use existing monthly inventory, never extend its booking/expiry window.
+  const validNovemberCredit = Boolean(input.now && input.validFrom && input.validUntil && input.occurrenceStartsAt &&
+    input.validFrom <= input.now && input.now < input.validUntil &&
+    input.validFrom <= input.occurrenceStartsAt && input.occurrenceStartsAt < input.validUntil);
+  if (novemberEvent && vipComplimentaryEventCredit && !validNovemberCredit) return false;
   return (
     (input.isEvent || input.label.startsWith(EVENT_CREDIT_LABEL_PREFIX)) &&
-    !(triciaSpecialty && vipComplimentaryEventCredit) &&
+    !(triciaSpecialty && vipComplimentaryEventCredit && !novemberEvent) &&
     !input.sourceProductKind &&
     input.label.startsWith(EVENT_CREDIT_LABEL_PREFIX)
   );

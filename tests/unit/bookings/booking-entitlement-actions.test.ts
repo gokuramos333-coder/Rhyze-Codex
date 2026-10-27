@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const tx = {
-    waitlistEntry: { updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+    waitlistEntry: { findUnique: vi.fn(), count: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     $executeRaw: vi.fn(), user: { findUnique: vi.fn(), findFirst: vi.fn() },
     classOccurrence: { findUnique: vi.fn(), findFirst: vi.fn() }, waiverVersion: { findFirst: vi.fn() }, waiverAcceptance: { findUnique: vi.fn() },
     booking: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn() },
@@ -46,6 +46,43 @@ import { afterEach } from 'vitest';
 afterEach(() => vi.useRealTimers());
 
 describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]] as const)('%s booking entitlement', (_label, action) => {
+  it('books a November Tricia event with the existing monthly credit once', async () => {
+    const f = fixture(true, 'MEMBER');
+    vi.setSystemTime(new Date('2026-11-02T17:00Z'));
+    f.occurrence.startAt = new Date('2026-11-15T17:00Z');
+    f.occurrence.endAt = new Date('2026-11-15T18:15Z');
+    f.occurrence.instructor.name = 'Tricia Johnsen';
+    f.membership.currentPeriodEnd = new Date('2026-12-01T05:00Z');
+    f.membership.purchase.creditAccount.validUntil = f.membership.currentPeriodEnd;
+    f.user.memberships.push(f.membership);
+    f.accounts.splice(0, f.accounts.length, { id: 'november-event', label: 'Event credit — November 2026 VIP complimentary event credit', isUnlimited: false, validFrom: new Date('2026-11-01T04:00Z'), validUntil: new Date('2026-12-01T05:00Z'), entries: [{ quantity: 1 }], sourcePurchase: null });
+    await expect(action(f.form)).rejects.toThrow(/confirmed|member-added/);
+    expect(mocks.tx.creditLedgerEntry.create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ data: expect.objectContaining({ creditAccountId: 'november-event', quantity: -1 }) }));
+    expect(mocks.charge).not.toHaveBeenCalled();
+  });
+  it.each(['expired', 'outside-credit-window', 'spent', 'ordinary', 'unpaid', 'future-policy'])('denies November benefit misuse: %s', async reason => {
+    const f = fixture(true, 'MEMBER');
+    vi.setSystemTime(new Date('2026-11-02T17:00Z'));
+    f.occurrence.startAt = new Date(reason === 'future-policy' ? '2026-12-15T17:00Z' : '2026-11-15T17:00Z');
+    f.occurrence.endAt = new Date(f.occurrence.startAt.getTime() + 75 * 60000);
+    f.occurrence.instructor.name = 'Tricia Johnsen';
+    f.membership.currentPeriodEnd = new Date('2027-01-01T05:00Z');
+    f.membership.purchase.creditAccount.validUntil = f.membership.currentPeriodEnd;
+    if (reason === 'unpaid') f.membership.purchase.status = 'FAILED';
+    f.user.memberships.push(f.membership);
+    f.accounts.splice(0, f.accounts.length, { id: 'november-event', label: reason === 'ordinary' ? 'Manual class credit' : 'Event credit — November 2026 VIP complimentary event credit', isUnlimited: false, validFrom: new Date('2026-11-01T04:00Z'), validUntil: new Date(reason === 'expired' ? '2026-11-02T17:00Z' : reason === 'outside-credit-window' ? '2026-11-15T17:00Z' : '2027-01-01T05:00Z'), entries: [{ quantity: reason === 'spent' ? 0 : 1 }], sourcePurchase: null });
+    await expect(action(f.form)).rejects.toThrow(/access|member-no-credit/);
+    expect(mocks.tx.creditLedgerEntry.create).not.toHaveBeenCalled();
+    expect(mocks.tx.booking.create).not.toHaveBeenCalled(); expect(mocks.tx.booking.upsert).not.toHaveBeenCalled();
+    expect(mocks.charge).not.toHaveBeenCalled();
+  });
+  it.each([[30, 50, true], [50, 75, false]])('uses occurrence duration for complimentary access (template %s, actual %s)', async (templateMinutes, actualMinutes, allowed) => {
+    const f = fixture(false, 'MEMBER');
+    f.occurrence.template.durationMinutes = templateMinutes;
+    f.occurrence.endAt = new Date(f.occurrence.startAt.getTime() + actualMinutes * 60000);
+    f.accounts.splice(0, f.accounts.length, { id: 'comp', label: 'Comp', isUnlimited: true, sourcePurchase: { product: { kind: 'MONTHLY_UNLIMITED', customPlanType: 'COMPLIMENTARY_STANDARD_50MIN' }, membership: { status: 'ACTIVE' } } });
+    await expect(action(f.form)).rejects.toThrow(allowed ? /confirmed|member-added/ : /access|member-no-credit/);
+  });
   it('prefers paid VIP unlimited access over an older event credit for Rachel only', async () => {
     const f = fixture(false, 'MEMBER');
     f.occurrence.template.slug = 'soul-line-dancing-rachel';
@@ -263,5 +300,30 @@ describe.each([['member', rescheduleMemberBookingAction], ['instructor', transfe
     const form=new FormData();form.set('bookingId','booking');form.set('destinationId','destination');
     await expect(transfer(form)).rejects.toThrow(/destination/);
     expect(mocks.charge).not.toHaveBeenCalled();expect(mocks.tx.booking.update).not.toHaveBeenCalled();expect(mocks.tx.bookingTransfer.create).not.toHaveBeenCalled();expect(mocks.queue).not.toHaveBeenCalled();
+  });
+});
+
+// Notification boundary is mocked: these tests never enqueue or send real mail.
+describe('substitute notification labels', () => {
+  it.each([false, true])('uses occurrence labels for booking/reminder or waitlist payloads (full=%s)', async full => {
+    mocks.tx.booking.findFirst.mockReset();
+    const f = fixture(false, 'MEMBER');
+    Object.assign(f.occurrence, { titleOverride: 'Zumba', substituteInstructorName: 'Vincent', isSubstitute: true, instructorId: 'canonical-melissa' });
+    f.occurrence.template.name = 'Rhyze Ritmo'; f.occurrence.instructor.name = 'Melissa';
+    if (full) {
+      mocks.tx.booking.count.mockResolvedValue(25);
+      mocks.tx.waitlistEntry.findUnique.mockResolvedValue(null);
+      mocks.tx.waitlistEntry.count.mockResolvedValue(1);
+      mocks.tx.waitlistEntry.upsert.mockResolvedValue({ id: 'waiting', joinedAt: now });
+    }
+    await expect(bookOccurrenceAction(f.form)).rejects.toThrow(full ? /result=waitlist/ : /result=confirmed/);
+    const messages = mocks.queue.mock.calls.map(call => call[1]);
+    expect(messages.map(m => m.template)).toEqual(full ? ['WAITLIST_JOINED'] : ['BOOKING_CONFIRMATION', 'CLASS_REMINDER']);
+    for (const message of messages) {
+      expect(message.subject).toContain('Zumba');
+      expect(message.payload).toMatchObject({ className: 'Zumba', instructorName: 'Vincent' });
+      expect(JSON.stringify(message)).not.toMatch(/Melissa|Rhyze Ritmo/);
+    }
+    expect(f.occurrence.instructor.name).toBe('Melissa'); expect(mocks.charge).not.toHaveBeenCalled();
   });
 });

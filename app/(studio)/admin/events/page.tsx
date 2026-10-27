@@ -7,7 +7,7 @@ import { prisma } from '@/lib/db/prisma';
 import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { createClassTemplateAction, deleteClassTemplateAction } from '../classes/actions';
-import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
+import { occurrenceDurationMinutes, occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
 import { sortCatalogByNextOccurrence } from '@/lib/admin/catalog-order';
 import { resolveAnalyticsRange } from '@/lib/admin/analytics-range';
 import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
@@ -129,7 +129,7 @@ export default async function AdminEventsPage(
                 />
               <div>
               <h2 className="font-display text-3xl tracking-wider">{event.name}</h2>
-              <p className="mt-2 text-sm">${((priceCents || 0) / 100).toFixed(2)} · {event.durationMinutes} minutes · {event._count.occurrences} dates · {signups} signups</p>
+              <p className="mt-2 text-sm">${((priceCents || 0) / 100).toFixed(2)} · {occurrence ? occurrenceDurationMinutes(occurrence) : event.durationMinutes} minutes · {event._count.occurrences} dates · {signups} signups</p>
               {memberClassEvent && <p className="mt-2 text-sm font-bold">Class credits, active 7-day trial and VIP unlimited access accepted.</p>}
               <p className="mt-2 text-xs font-black uppercase text-rhyze-coral">{occurrence ? occurrence.startAt.toLocaleString('en-US', { timeZone: occurrenceLocalTimeZone(), dateStyle: 'medium', timeStyle: 'short' }) : memberClassEvent ? 'No upcoming date' : 'Date not scheduled'}</p>
               </div>

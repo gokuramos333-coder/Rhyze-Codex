@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { occurrenceDurationMinutes, occurrenceInstructorName, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { CancellationTimestamp } from '@/components/attendance/CancellationTimestamp';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
@@ -142,12 +143,12 @@ export default async function MemberBookingsPage(
             }`}
           >
             <div>
-              <h2 className="font-display text-3xl tracking-wider">{booking.occurrence.template.name}</h2>
+              <h2 className="font-display text-3xl tracking-wider">{occurrenceTitle(booking.occurrence)}</h2>
               <p className="text-sm text-rhyze-black/55">
-                {memberBookingDateTimeLabel(booking.occurrence)} · {booking.occurrence.instructor?.name || 'TBA'}
+                {memberBookingDateTimeLabel(booking.occurrence)} · {occurrenceInstructorName(booking.occurrence)}{booking.occurrence.isSubstitute && <span className="ml-2 font-bold text-red-700">Substitute</span>}
               </p>
               <p className="mt-1 text-xs font-bold uppercase tracking-wider text-rhyze-black/45">
-                {booking.occurrence.template.isEvent ? 'Event' : 'Class'} · {booking.occurrence.room?.name || 'Room TBA'} · {booking.occurrence.template.durationMinutes} min
+                {booking.occurrence.template.isEvent ? 'Event' : 'Class'} · {booking.occurrence.room?.name || 'Room TBA'} · {occurrenceDurationMinutes(booking.occurrence)} min
               </p>
               <p className="mt-1 text-xs font-bold uppercase tracking-wider text-rhyze-black/45">
                 Booked at {memberBookingDateTimeLabel({ startAt: booking.bookedAt, timezone: booking.occurrence.timezone })}
@@ -165,7 +166,7 @@ export default async function MemberBookingsPage(
           <h2 className="font-display text-4xl tracking-wider">WAITLIST</h2>
           {waitlist.map((entry) => (
             <div key={entry.id} className="mt-3 flex items-center justify-between gap-4 bg-white p-4">
-              <p className="font-bold">{entry.occurrence.template.name}</p>
+              <p className="font-bold">{occurrenceTitle(entry.occurrence)}</p>
               <form action={leaveWaitlistAction}>
                 <input type="hidden" name="waitlistId" value={entry.id} />
                 <button className="border border-rhyze-black px-3 py-2 text-xs font-black uppercase tracking-widest">

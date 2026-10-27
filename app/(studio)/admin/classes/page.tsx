@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import {
@@ -178,7 +179,7 @@ export default async function AdminClassesPage(
           hour: 'numeric',
           minute: '2-digit',
         }),
-        duration: `${occurrence.template.durationMinutes} min`,
+        duration: `${occurrenceDurationMinutes(occurrence)} min`,
         className: occurrenceTitleWithInstructor(
           occurrenceTitle(occurrence),
           instructor,

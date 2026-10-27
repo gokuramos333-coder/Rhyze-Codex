@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { occurrenceTitle, occurrenceInstructorName } from '@/lib/domain/schedule/occurrence-management';
 import { WAITLIST_CAPACITY } from './booking-rules';
 import { queueEmail } from '@/lib/notifications/email-queue';
 
@@ -22,10 +23,10 @@ export async function notifyWaitlistOpening(tx: Prisma.TransactionClient, occurr
   for (const entry of waiting) {
     await queueEmail(tx, {
       userId: entry.userId, to: entry.user.email,
-      subject: `A spot opened for ${occurrence.template.name}`, template: 'WAITLIST_SPOT_AVAILABLE',
+      subject: `A spot opened for ${occurrenceTitle(occurrence)}`, template: 'WAITLIST_SPOT_AVAILABLE',
       payload: {
-        name: entry.user.name || 'Rhyzer', className: occurrence.titleOverride || occurrence.template.name,
-        instructorName: occurrence.instructor?.name || 'Rhyze instructor',
+        name: entry.user.name || 'Rhyzer', className: occurrenceTitle(occurrence),
+        instructorName: occurrenceInstructorName(occurrence),
         classDate: occurrence.startAt.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric' }),
         classTime: occurrence.startAt.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }),
         claimUrl: publicOccurrenceUrl(occurrence), occurrenceId,

@@ -29,7 +29,7 @@ describe('member booking display', () => {
 
     for (const source of [memberHome, memberBookings]) {
       expect(source).toContain('room: true');
-      expect(source).toContain('durationMinutes');
+      expect(source).toContain('occurrenceDurationMinutes');
       expect(source).toContain('occurrence.room?.name');
     }
     expect(memberBookings).toContain('booking.occurrence.template.isEvent');

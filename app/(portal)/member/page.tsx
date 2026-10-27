@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { occurrenceDurationMinutes, occurrenceInstructorName, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
@@ -143,7 +144,7 @@ export default async function MemberHomePage() {
         )}
       </Link>
       <div className="mt-10 flex items-end justify-between gap-4"><h2 className="font-display text-4xl tracking-wider">UP NEXT</h2><Link href="/schedule" className="text-xs font-black uppercase tracking-widest text-rhyze-coral">Browse schedule →</Link></div>
-      <div className="mt-4 grid gap-3">{upcoming.map((booking) => <Link key={booking.id} href="/member/bookings" className="bg-white p-5"><strong className="block font-display text-3xl tracking-wider">{booking.occurrence.template.name}</strong><small>{memberBookingDateTimeLabel(booking.occurrence)} · {booking.occurrence.instructor?.name || 'TBA'}</small><small className="mt-1 block uppercase tracking-wider text-rhyze-black/45">{booking.occurrence.room?.name || 'Room TBA'} · {booking.occurrence.template.durationMinutes} min</small></Link>)}{upcoming.length === 0 && <p className="bg-white p-8 text-rhyze-black/55">Nothing booked yet. Your next class is waiting.</p>}</div>
+      <div className="mt-4 grid gap-3">{upcoming.map((booking) => <Link key={booking.id} href="/member/bookings" className="bg-white p-5"><strong className="block font-display text-3xl tracking-wider">{occurrenceTitle(booking.occurrence)}</strong><small>{memberBookingDateTimeLabel(booking.occurrence)} · {occurrenceInstructorName(booking.occurrence)}{booking.occurrence.isSubstitute && <span className="ml-2 font-bold text-red-700">Substitute</span>}</small><small className="mt-1 block uppercase tracking-wider text-rhyze-black/45">{booking.occurrence.room?.name || 'Room TBA'} · {occurrenceDurationMinutes(booking.occurrence)} min</small></Link>)}{upcoming.length === 0 && <p className="bg-white p-8 text-rhyze-black/55">Nothing booked yet. Your next class is waiting.</p>}</div>
     </>
   );
 }

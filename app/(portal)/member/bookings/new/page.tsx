@@ -1,3 +1,5 @@
+import { occurrenceInstructorName, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
+import { isNovember2026EventDate, vipEventAccessCopy } from '@/lib/domain/credits/november-vip-policy';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
@@ -45,15 +47,18 @@ export default async function NewBookingPage(
   return (
     <>
       <p className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">{availability.soldOut ? 'Join waiting list' : 'Confirm booking'} {isPublicEvent(occurrence.template) && <EventBadge />}</p>
-      <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
+      <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrenceTitle(occurrence)}</h1>
       <div className="mt-8 border-t-4 border-rhyze-gold bg-white p-6">
-        <p className="font-bold">{memberBookingDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'}</p>
+        <p className="font-bold">{memberBookingDateTimeLabel(occurrence)} · {occurrenceInstructorName(occurrence)}{occurrence.isSubstitute && <span className="ml-2 font-bold text-red-700">Substitute</span>}</p>
         <p className="mt-2 text-sm text-rhyze-black/55">{occurrence.room?.name || 'Room TBA'} · {occurrence.capacity} spots</p>
         {availability.soldOut && <div className="mt-4 border-l-4 border-rhyze-gold bg-rhyze-gold/10 p-4"><p className="font-black">{availability.label}</p><p className="mt-2 text-sm">Up to 5 people can wait. Joining is free and uses no credit. If a place opens before the start, everyone on the list receives an email with a booking link. Places are first come, first served; you must complete booking and are not automatically booked or charged.</p></div>}
         {isMemberClassEvent(occurrence.template) && <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">{MEMBER_CLASS_EVENT_COPY}</p>}
+        {occurrence.template.isEvent && isNovember2026EventDate(occurrence.startAt) && (
+          <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">{vipEventAccessCopy(occurrence.startAt)}</p>
+        )}
         {occurrence.template.isEvent && (
           <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">
-            Event credits can be used for specialty events or standard classes and expire 30 days after the cancellation that issued them.
+            Cancellation-issued event credits can be used for specialty events or standard classes and expire 30 days after the cancellation that issued them.
           </p>
         )}
         {missingWaiver && (

@@ -4,6 +4,7 @@ import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import { evaluateTransferWindow } from '@/lib/domain/transfers/transfer-policy';
+import { occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { RescheduleClassPicker } from '@/components/member/RescheduleClassPicker';
 import { rescheduleMemberBookingAction } from './actions';
@@ -79,7 +80,7 @@ export default async function MemberReschedulePage(
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Reschedule class</p>
       <h1 className="mt-3 break-words font-display text-4xl leading-none tracking-wider sm:text-5xl lg:text-6xl">Choose the class using this credit</h1>
       <p className="mt-3 break-words text-rhyze-black/55">
-        Moving from {booking.occurrence.template.name} · {memberBookingDateTimeLabel(booking.occurrence)}. {accessType === 'INTRO_TRIAL' ? 'Choose a standard class within your original 7-day trial window. Rescheduling does not extend your trial.' : 'You must choose an eligible class within two weeks now for the credit to roll over.'}
+        Moving from {occurrenceTitle(booking.occurrence)} · {memberBookingDateTimeLabel(booking.occurrence)}. {accessType === 'INTRO_TRIAL' ? 'Choose a standard class within your original 7-day trial window. Rescheduling does not extend your trial.' : 'You must choose an eligible class within two weeks now for the credit to roll over.'}
       </p>
       {policy === 'FEE_500' && (
         <p className="mt-5 border-l-4 border-rhyze-gold bg-orange-50 p-4 font-bold">

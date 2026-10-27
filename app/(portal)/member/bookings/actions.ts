@@ -1,4 +1,5 @@
 'use server';
+import { occurrenceDurationMinutes, occurrenceTitle, occurrenceInstructorName } from '@/lib/domain/schedule/occurrence-management';
 import { publicOccurrenceUrl, notifyWaitlistOpening, completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
@@ -146,12 +147,12 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       await queueEmail(tx, {
         userId: user.id,
         to: user.email,
-        subject: `You’re on the waitlist for ${occurrence.template.name}`,
+        subject: `You’re on the waitlist for ${occurrenceTitle(occurrence)}`,
         template: 'WAITLIST_JOINED',
         payload: {
           name: user.name || 'Rhyzer',
-          className: occurrence.template.name,
-          instructorName: occurrence.instructor?.name || 'Rhyze instructor',
+          className: occurrenceTitle(occurrence),
+          instructorName: occurrenceInstructorName(occurrence),
           classDate: emailDate(occurrence.startAt),
           classTime: emailTime(occurrence.startAt),
           waitlistPosition: String(waitlistPosition),
@@ -217,6 +218,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         const productKind = currentCreditProduct(item)?.kind ?? null;
         const isEventCredit = eventCreditCanBook({
           label: item.label,
+          occurrenceStartsAt: occurrence.startAt, now, validFrom: item.validFrom, validUntil: item.validUntil,
           sourceProductKind: productKind,
           isEvent: occurrence.template.isEvent,
           className: occurrence.template.name,
@@ -230,7 +232,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         const productAllowsOccurrence = complimentaryStandardAccessCanBook({
           customPlanType: currentCreditProduct(item)?.customPlanType,
           isEvent: occurrence.template.isEvent,
-          durationMinutes: occurrence.template.durationMinutes,
+          durationMinutes: occurrenceDurationMinutes(occurrence),
         });
         const validSingleClassCredit = !isSingleClassCredit || standardSingleClassCreditCanBook({
           productKind,
@@ -318,12 +320,12 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     await queueEmail(tx, {
       userId: user.id,
       to: user.email,
-      subject: `You’re booked for ${occurrence.template.name}`,
+      subject: `You’re booked for ${occurrenceTitle(occurrence)}`,
       template: 'BOOKING_CONFIRMATION',
       payload: {
         name: user.name || 'Rhyzer',
-        className: occurrence.template.name,
-        instructorName: occurrence.instructor?.name || 'Rhyze instructor',
+        className: occurrenceTitle(occurrence),
+        instructorName: occurrenceInstructorName(occurrence),
         classDate: emailDate(occurrence.startAt),
         classTime: emailTime(occurrence.startAt),
         bookingsUrl: '/member/bookings',
@@ -332,14 +334,14 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     await queueEmail(tx, {
       userId: user.id,
       to: user.email,
-      subject: `${occurrence.template.name} is tomorrow`,
+      subject: `${occurrenceTitle(occurrence)} is tomorrow`,
       template: 'CLASS_REMINDER',
       payload: {
         name: user.name || 'Rhyzer',
         bookingId: booking.id,
         occurrenceId: occurrence.id,
-        className: occurrence.template.name,
-        instructorName: occurrence.instructor?.name || 'Rhyze instructor',
+        className: occurrenceTitle(occurrence),
+        instructorName: occurrenceInstructorName(occurrence),
         classDate: emailDate(occurrence.startAt),
         classTime: emailTime(occurrence.startAt),
         bookingsUrl: '/member/bookings',

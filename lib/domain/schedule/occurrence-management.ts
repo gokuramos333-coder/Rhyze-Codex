@@ -41,6 +41,11 @@ export function cleanOptionalText(value: FormDataEntryValue | null) {
   return cleaned || null;
 }
 
+/** Persisted dates are authoritative for occurrence overrides and access rules. */
+export function occurrenceDurationMinutes(occurrence: { startAt: Date; endAt: Date }) {
+  return (occurrence.endAt.getTime() - occurrence.startAt.getTime()) / 60_000;
+}
+
 export function occurrenceTitle(occurrence: OccurrenceTitleSource) {
   return occurrence.titleOverride?.trim() || occurrence.template.name;
 }

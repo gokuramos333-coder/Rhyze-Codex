@@ -14,10 +14,26 @@ let occurrence: any;
 let template: any;
 beforeEach(()=>{
  template={id:'event',slug:'synthetic-event',name:'Synthetic Event',description:'Synthetic event description.',isEvent:true,durationMinutes:50,dropInPriceCents:3000,imageUrl:'/brand/rhyze-logo-header.png'};
- occurrence={id:'second-date',template,startAt:new Date('2099-10-24T16:00:00Z'),status:'SCHEDULED',capacity:3,historicalSignupCount:1,instructor:null,room:null,_count:{bookings:2,waitlistEntries:4}};
+ occurrence={id:'second-date',template,startAt:new Date('2099-10-24T16:00:00Z'),endAt:new Date('2099-10-24T16:50:00Z'),status:'SCHEDULED',capacity:3,historicalSignupCount:1,instructor:null,room:null,_count:{bookings:2,waitlistEntries:4}};
  mocks.template.mockResolvedValue({...template,occurrences:[occurrence]});mocks.templates.mockResolvedValue([{...template,occurrences:[occurrence]}]);mocks.occurrence.mockResolvedValue(occurrence);
 });
 afterEach(cleanup);
+it('confirms the substitute title/name without changing the canonical instructor', async () => {
+ occurrence.titleOverride='Zumba'; occurrence.substituteInstructorName='Vincent'; occurrence.isSubstitute=true; occurrence.instructor={name:'Melissa'};
+ render(await NewBookingPage({searchParams:Promise.resolve({occurrence:'second-date'})}));
+ expect(screen.getByRole('heading',{name:'Zumba'})).toBeTruthy();
+ expect(screen.getByText(/Vincent/)).toBeTruthy(); expect(screen.getByText('Substitute')).toBeTruthy();
+ expect(occurrence.instructor.name).toBe('Melissa');
+});
+it('explains November ANY-event monthly expiry on the actual confirmation page', async () => {
+ vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-01T17:00Z'));
+ try {
+  occurrence.startAt=new Date('2026-11-15T17:00Z');
+  render(await NewBookingPage({searchParams:Promise.resolve({occurrence:'second-date'})}));
+  expect(screen.getByText(/ANY event, including Tricia/)).toBeTruthy();
+  expect(screen.getByText(/no rollover/)).toBeTruthy();
+ } finally { vi.useRealTimers(); }
+});
 it('marks full home/events cards sold out even with fewer than ten bookings',async()=>{
  render(await EventsPreview({}));
  expect(screen.getByText('Sold out · Waiting list available')).toBeTruthy();

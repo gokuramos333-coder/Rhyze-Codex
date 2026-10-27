@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -50,6 +51,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
   const occurrence = event.occurrences[0];
   const memberClassEvent = isMemberClassEvent(event);
   if (searchParams?.occurrence && !occurrence) notFound();
+  const durationMinutes = occurrence ? occurrenceDurationMinutes(occurrence) : event.durationMinutes;
   const artwork = resolveClassArtwork({ ...occurrence, template: event });
   const fallback = getOwnedEvent(event.slug);
   const bookingLabel = occurrence
@@ -91,7 +93,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
           <dl className="divide-y divide-white/10 p-6 text-sm">
             <EventDetail label="Instructor" value={occurrence?.instructor?.name || 'To be announced'} />
             <EventDetail label="Price" value={`$${((occurrence?.priceCents ?? event.dropInPriceCents ?? 0) / 100).toFixed(2)}`} />
-            <EventDetail label="Duration" value={`${event.durationMinutes} minutes`} />
+            <EventDetail label="Duration" value={`${durationMinutes} minutes`} />
             {bookingLabel && <EventDetail label="Booked" value={bookingLabel.replace(' booked', '')} />}
           </dl>
           <div className="px-6 pb-6">

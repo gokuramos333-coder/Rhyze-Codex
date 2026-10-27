@@ -1,4 +1,5 @@
 'use server';
+import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
@@ -113,6 +114,7 @@ export async function addMemberToClassAction(formData: FormData) {
       const productKind = currentCreditProduct(account)?.kind ?? null;
       const isEventCredit = eventCreditCanBook({
         label: account.label,
+          occurrenceStartsAt: occurrence.startAt, now, validFrom: account.validFrom, validUntil: account.validUntil,
         sourceProductKind: productKind,
         isEvent: occurrence.template.isEvent,
         className: occurrence.template.name,
@@ -124,7 +126,7 @@ export async function addMemberToClassAction(formData: FormData) {
       const productAllowsOccurrence = complimentaryStandardAccessCanBook({
         customPlanType: currentCreditProduct(account)?.customPlanType,
         isEvent: occurrence.template.isEvent,
-        durationMinutes: occurrence.template.durationMinutes,
+        durationMinutes: occurrenceDurationMinutes(occurrence),
       });
       const validSingleClassCredit = productKind !== 'DROP_IN' || standardSingleClassCreditCanBook({
         productKind,

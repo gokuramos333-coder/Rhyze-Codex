@@ -1,3 +1,5 @@
+import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
+import { vipEventAccessCopy } from '@/lib/domain/credits/november-vip-policy';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import React from 'react';
 import Image from 'next/image';
@@ -57,6 +59,7 @@ export default async function EventBookingPage(
   const booked = occurrence
     ? occurrence._count.bookings + occurrence.historicalSignupCount
     : 0;
+  const durationMinutes = occurrence ? occurrenceDurationMinutes(occurrence) : event.durationMinutes;
   const artwork = resolveClassArtwork({ ...occurrence, template: event });
   const capacity = occurrence?.capacity ?? event.defaultCapacity;
   const waiting = occurrence?._count.waitlistEntries ?? 0;
@@ -85,7 +88,7 @@ export default async function EventBookingPage(
     'Instructor to be announced';
   const bullets = fallback?.bullets || [
     event.description,
-    `${event.durationMinutes}-minute specialty event`,
+    `${durationMinutes}-minute specialty event`,
   ];
 
   return (
@@ -120,7 +123,7 @@ export default async function EventBookingPage(
             </h2>
             <div className="mt-3"><NewProgramBadge slug={event.slug} /></div>
             <p className="mt-3 text-rhyze-cream/70">
-              {eventDate} · {eventTime} · {event.durationMinutes} min · {instructorName}
+              {eventDate} · {eventTime} · {durationMinutes} min · {instructorName}
             </p>
             <ul className="mt-5 grid gap-2 text-sm text-rhyze-cream/70">
               {bullets.slice(0, 3).map((bullet) => (
@@ -171,8 +174,7 @@ export default async function EventBookingPage(
                   Specialty access
                 </h3>
                 <p className="mt-1 text-sm text-rhyze-cream/70">
-                  VIP members receive 1 eligible specialty event per month when
-                  this event is included in the monthly selection.
+                  {vipEventAccessCopy(occurrence?.startAt)}
                 </p>
               </div>
             </div>
