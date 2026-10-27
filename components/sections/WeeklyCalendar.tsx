@@ -39,6 +39,15 @@ function calendarNotice(dateKey: string) {
   return dateKey === '2026-09-07' ? 'LABOR DAY!' : null;
 }
 
+function ThanksgivingNotice({ dateKey }: { dateKey: string }) {
+  if (dateKey !== '2026-11-26') return null;
+  return (
+    <p data-calendar-notice-date={dateKey} className="my-2 max-w-full break-words text-sm font-bold leading-snug text-rhyze-orange">
+      Happy Thanksgiving
+    </p>
+  );
+}
+
 function shiftDate(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -214,6 +223,7 @@ export function WeeklyCalendar({
               Rhyze-owned booking · credits · waitlist
             </p>
           </div>
+          <ThanksgivingNotice dateKey={selectedDate} />
           {calendarNotice(selectedDate) && (
             <div className="mb-4 rounded-xl border-2 border-rhyze-gold bg-rhyze-gold px-4 py-3 text-center font-black uppercase tracking-[0.2em] text-rhyze-black shadow-glow">
               {calendarNotice(selectedDate)}
@@ -267,6 +277,7 @@ export function WeeklyCalendar({
                   )}
                   <span className="text-xs font-black uppercase tracking-widest text-rhyze-cream/55">{formatClassCount(day.slots.length)}</span>
                 </button>
+                <ThanksgivingNotice dateKey={day.dateKey} />
                 <div className="grid gap-2">
                   {day.slots.map((slot) => <CustomerScheduleCard key={slot.id} slot={slot} compact={compact} />)}
                   {!day.slots.length && <p className="rounded-lg border border-dashed border-white/10 bg-rhyze-black/40 p-4 text-sm font-bold text-rhyze-cream/40">No Classes Bookable</p>}
@@ -303,6 +314,7 @@ export function WeeklyCalendar({
                         {day.dayNumber}
                         {calendarNotice(day.dateKey) && <span className="ml-1 rounded-sm bg-rhyze-gold px-1 text-[0.6rem] text-rhyze-black">{calendarNotice(day.dateKey)}</span>}
                       </button>
+                      <ThanksgivingNotice dateKey={day.dateKey} />
                       <div className="mt-2 space-y-2">
                         {day.slots.map((slot) => (
                           <Link key={slot.id} href={slot.bookingHref} data-schedule-slot={slot.id} className={cn('focus-ring block rounded-lg border p-2 text-rhyze-cream transition hover:border-rhyze-orange', slot.isEvent ? 'border-rhyze-coral/70 bg-rhyze-coral/20' : 'border-white/15 bg-rhyze-charcoal/75')}>
