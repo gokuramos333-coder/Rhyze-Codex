@@ -10,6 +10,7 @@ const slotSchema = z.object({
   localStart: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
   durationMinutes: z.number().int().min(5).max(480), priceCents: z.number().int().min(0).max(100000),
   isEvent: z.boolean(), title: z.string().trim().min(1).max(180),
+  capacity: z.number().int().min(1).max(1000).optional(),
 }).strict();
 export const scheduleImportSchema = z.object({
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), reason: z.string().trim().min(10).max(1000),
@@ -57,20 +58,25 @@ export async function importSchedule(db: PrismaClient, raw: ScheduleImportInput,
       const room = rooms.find(r => r.id === row.roomId);
       if (!template || !instructor || !room) throw new Error(`Inactive/missing catalog, instructor or room at ${row.localStart}.`);
       if (template.isEvent !== row.isEvent) throw new Error(`Class/event classification mismatch at ${row.localStart}.`);
+      const capacity = row.capacity ?? Math.min(template.defaultCapacity, room.capacity ?? template.defaultCapacity);
+      if (row.capacity !== undefined && room.capacity !== null && capacity > room.capacity)
+        throw new Error(`Requested capacity exceeds room capacity at ${row.localStart}.`);
       const same = existing.find(e => e.id === row.id);
       if (same) {
         if (same.status !== 'SCHEDULED' || same.templateId !== row.templateId || same.instructorId !== row.instructorId || same.roomId !== row.roomId || same.startAt.getTime() !== row.startAt.getTime() || same.endAt.getTime() !== row.endAt.getTime() || same.priceCents !== row.priceCents || same.titleOverride !== row.title)
           throw new Error(`Existing imported occurrence changed; review it manually: ${row.id}`);
+        if (row.capacity !== undefined && same.capacity !== capacity)
+          throw new Error(`Existing imported occurrence capacity changed; review it manually: ${row.id}`);
         unchanged++; continue;
       }
       if (existing.some(e => e.status === 'SCHEDULED' && (scheduleSlotsConflict(e, row) || (e.templateId === row.templateId && e.startAt.getTime() === row.startAt.getTime()))))
         throw new Error(`Existing schedule conflict at ${row.localStart}.`);
       const pay = defaultInstructorPayForOccurrence({ isEvent: template.isEvent, standardClassRateCents: instructor.instructorProfile?.standardClassRateCents, specialtyEventRateCents: instructor.instructorProfile?.specialtyEventRateCents });
-      pending.push({ id: row.id, templateId: row.templateId, instructorId: row.instructorId, roomId: row.roomId, startAt: row.startAt, endAt: row.endAt, timezone: 'America/New_York', capacity: Math.min(template.defaultCapacity, room.capacity ?? template.defaultCapacity), priceCents: row.priceCents, titleOverride: row.title, instructorPayMethod: pay.method, instructorPayCents: pay.cents });
+      pending.push({ id: row.id, templateId: row.templateId, instructorId: row.instructorId, roomId: row.roomId, startAt: row.startAt, endAt: row.endAt, timezone: 'America/New_York', capacity, priceCents: row.priceCents, titleOverride: row.title, instructorPayMethod: pay.method, instructorPayCents: pay.cents });
     }
     if (!input.dryRun && pending.length) {
       await tx.classOccurrence.createMany({ data: pending });
-      await tx.auditLog.createMany({ data: pending.map(row => ({ actorId, action: 'class-occurrence.imported', entityType: 'ClassOccurrence', entityId: row.id, after: { reason: input.reason, month: input.month, localStart: occurrenceLocalInputValue(row.startAt), priceCents: row.priceCents, instructorId: row.instructorId } })) });
+      await tx.auditLog.createMany({ data: pending.map(row => ({ actorId, action: 'class-occurrence.imported', entityType: 'ClassOccurrence', entityId: row.id, after: { reason: input.reason, month: input.month, localStart: occurrenceLocalInputValue(row.startAt), priceCents: row.priceCents, instructorId: row.instructorId, capacity: row.capacity } })) });
     }
     return { dryRun: input.dryRun, created: input.dryRun ? 0 : pending.length, wouldCreate: pending.length, unchanged, occurrenceIds: rows.map(r => r.id) };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
