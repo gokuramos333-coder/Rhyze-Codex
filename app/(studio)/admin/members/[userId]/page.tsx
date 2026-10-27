@@ -43,7 +43,6 @@ import {
   deleteManualMemberCreditsAction,
   grantManualMemberCreditsAction,
   refundMemberCommerceOrderAction,
-  refundMemberPurchaseAction,
   returnTransactionCreditAction,
   reviewMembershipChangeRequestAction,
   scheduleMembershipFreezeAction,
@@ -417,7 +416,7 @@ export default async function AdminMemberDetailPage(
         </div>
       </div>
       <nav aria-label="Client account sections" className="mt-6 flex flex-wrap gap-2">
-        <a href="#payment-history" className="border border-rhyze-black bg-white px-4 py-3 text-xs font-black uppercase">Payments &amp; refunds</a>
+        <a href="#payment-history" className="border border-rhyze-black bg-white px-4 py-3 text-xs font-black uppercase">Payments &amp; event refunds</a>
         <a href="#class-history" className="border border-rhyze-black/20 bg-white px-4 py-3 text-xs font-black uppercase">Class history</a>
         <a href="#credits" className="border border-rhyze-black/20 bg-white px-4 py-3 text-xs font-black uppercase">Credits</a>
       </nav>
@@ -1006,11 +1005,7 @@ export default async function AdminMemberDetailPage(
                     )}
                     <div className="mt-4 flex flex-wrap gap-2">
                       {payment.purchaseId && ['SUCCEEDED', 'PARTIALLY_REFUNDED'].includes(payment.status) && payment.stripePaymentIntentId && (
-                        <form action={refundMemberPurchaseAction}>
-                          <input type="hidden" name="userId" value={member.id} />
-                          <input type="hidden" name="purchaseId" value={payment.purchaseId} />
-                          <button className="border border-red-700 bg-red-100 px-4 py-2 text-[10px] font-black uppercase text-red-900">Refund payment</button>
-                        </form>
+                        <p className="text-sm font-bold">Purchase refunds require staff review; self-service refund controls here are limited to verified event orders.</p>
                       )}
                       {payment.commerceOrderId && payment.commerceOrder && ['SUCCEEDED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(payment.status) && payment.stripePaymentIntentId && (
                         <form action={refundMemberCommerceOrderAction} className="grid gap-2 border border-red-700/30 bg-white p-3 sm:grid-cols-[1fr_12rem_auto] sm:items-end">

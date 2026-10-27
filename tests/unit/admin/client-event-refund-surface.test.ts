@@ -2,14 +2,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('admin client event refund surface', () => {
-  it('keeps purchase refunds visible and adds explicit commerce event refund controls to client financials', () => {
+  it('limits client refund navigation to verified commerce event controls', () => {
     const page = readFileSync('app/(studio)/admin/members/[userId]/page.tsx', 'utf8');
 
     expect(page).toContain('aria-label="Client account sections"');
-    expect(page).toContain('Payments &amp; refunds');
+    expect(page).toContain('Payments &amp; event refunds');
     expect(page).toContain('href="#payment-history"');
-    expect(page).toContain('refundMemberPurchaseAction');
-    expect(page).toContain('Refund payment');
+    expect(page).not.toContain('refundMemberPurchaseAction');
+    expect(page).not.toContain('Refund payment');
+    expect(page).toContain('Purchase refunds require staff review');
     expect(page).toContain('refundMemberCommerceOrderAction');
     expect(page).toContain('commerceOrderId');
     expect(page).toContain('Type REFUND to confirm');
