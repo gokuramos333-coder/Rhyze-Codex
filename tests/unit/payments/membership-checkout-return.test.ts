@@ -117,6 +117,7 @@ describe('membership checkout return', () => {
     });
     expect(mocks.checkoutCreate.mock.calls[0][0]).toMatchObject({
       wallet_options: { link: { display: 'never' } },
+      payment_intent_data: { setup_future_usage: 'off_session' },
       success_url:
         'https://www.rhyzefitness.com/api/checkout/membership/success?session_id={CHECKOUT_SESSION_ID}&plan=intro_7day',
       cancel_url:

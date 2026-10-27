@@ -11,7 +11,7 @@ import { chargeAttendanceFeeWithGateway, type AttendanceFeeGateway } from '@/lib
 import { noShowFeeDecision } from '@/lib/domain/bookings/booking-rules';
 
 const clause = 'I authorize Rhyze Fitness to retain my card on file and automatically bill a non-refundable $10 fee for any class reservation cancelled within 2 hours of start time or marked as a no-show.';
-const policy = "Studio spots are reserved exclusively for booked guests. Any cancellation made within 2 hours of class start time, or an unattended session, will result in an automatic, non-refundable $10 late fee charged to your card on file. Thank you for respecting our instructors' schedules and your fellow Rhyze Tribe members' availability.";
+const policy = "Studio spots are reserved exclusively for booked guests. Any cancellation made within 2 hours of class start time, or an unattended session, will result in an automatic, non-refundable $10 late fee charged to your card on file. Thank you for respecting our instructors’ schedules and your fellow dancers’ availability.";
 
 describe('trial attendance disclosure', () => {
   it('places the full disclosure immediately below the confirmation header', () => {
@@ -19,8 +19,8 @@ describe('trial attendance disclosure', () => {
     expect(html).toContain('YOUR TRIAL IS ACTIVE</h2><div');
     expect(html).toContain('Late Cancellation &amp; No-Show Policy');
     expect(html).toContain('automatic, non-refundable $10');
-    expect(html).toContain('fellow Rhyze Tribe members');
-    expect(html).not.toContain('dancers');
+    expect(html).toContain(policy);
+    expect(html).not.toContain('fellow Rhyze Tribe members');
   });
   it.each([[120 * 60000 + 1, 0], [120 * 60000, 1000], [120 * 60000 - 1, 1000]])('applies the exact two-hour boundary (%s milliseconds)', (before, fee) => {
     const startAt=new Date('2026-10-11T17:00:00Z');
@@ -28,13 +28,13 @@ describe('trial attendance disclosure', () => {
   });
   it('shows the exact required authorization and retains the accepted copy', () => {
     expect(renderToStaticMarkup(<TrialPolicyConsent />)).toContain(clause);
-    expect(parseTrialPolicyConsent('on').policyAcceptance).toMatchObject({ authorizationText: clause, policyText: policy, nonRefundable: true });
+    expect(parseTrialPolicyConsent('on').policyAcceptance).toMatchObject({ version: 'intro-trial-attendance-2026-10-26', authorizationText: clause, policyText: policy, nonRefundable: true });
   });
   it.each(['MEMBERSHIP_PURCHASE_CONFIRMATION','PAYMENT_RECEIPT'])('includes mandatory trial policy in %s despite editable copy overrides', (template) => {
     const email = renderTransactionalEmail({subject:'Trial activated',template,payload:{productKind:'INTRO_TRIAL',amount:700},copyOverride:{calloutTitle:'',calloutBody:''}});
     expect(email.text).toContain(policy);
     expect(email.html).toContain('Late Cancellation &amp; No-Show Policy');
-    expect(email.html).toContain('non-refundable $10');
+    expect(email.html).toContain(`font-weight:700;">${policy}</p>`);
   });
   it('does not add trial copy to other membership receipts', () => {
     const email = renderTransactionalEmail({subject:'VIP',template:'PAYMENT_RECEIPT',payload:{productKind:'VIP'}});
