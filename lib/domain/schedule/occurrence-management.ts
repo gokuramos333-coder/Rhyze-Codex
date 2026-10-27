@@ -69,5 +69,9 @@ export function occurrenceInstructorName(occurrence: OccurrenceInstructorSource)
 
 /** Use the same occurrence title and assigned instructor as the public calendar. */
 export function instructorOccurrenceTitle(occurrence: OccurrenceTitleSource & OccurrenceInstructorSource) {
-  return occurrenceTitleWithInstructor(occurrenceTitle(occurrence), occurrenceInstructorName(occurrence));
+  // Templates may retain their original teacher in the format name. Only an
+  // explicit date override may preserve a title's own instructor wording.
+  const title = occurrence.titleOverride?.trim()
+    || occurrence.template.name.replace(/\s+with\s+.+$/i, '').trim();
+  return occurrenceTitleWithInstructor(title, occurrenceInstructorName(occurrence));
 }

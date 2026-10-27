@@ -19,6 +19,12 @@ describe('instructor date-specific titles', () => {
         }),
       ).toBe(`Real Riddim with ${name.split(' ')[0]}`);
   });
+  it('replaces a template-owner suffix when the date is assigned to another teacher', () => {
+    expect(instructorOccurrenceTitle({
+      template: { name: 'Real Riddim Dance Workout with Vanessa' },
+      instructor: { name: 'Dennisse Mendoza' },
+    })).toBe('Real Riddim Dance Workout with Dennisse');
+  });
   it('retains custom occurrence titles and a substitute display', () => {
     expect(
       instructorOccurrenceTitle({
