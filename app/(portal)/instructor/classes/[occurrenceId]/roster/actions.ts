@@ -2,6 +2,8 @@
 import { restoredCancellationAt } from '@/lib/domain/bookings/restored-cancellation-at';
 import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 
+import { lockBookingWrites, lockOccurrenceWrites } from '@/lib/domain/bookings/write-fence';
+
 import type { AttendanceStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -149,8 +151,18 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
 
   try {
     await prisma.$transaction(async (tx) => {
-      if (transition.bookingStatus === 'LATE_CANCELLED') {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+      await lockOccurrenceWrites(tx, occurrenceId);
+      await lockBookingWrites(tx, bookingId);
+      const current = await tx.booking.findFirst({ where: { id: bookingId, occurrenceId }, include: { attendance: true, occurrence: true } });
+      if (!current || current.status === 'CANCELLED' || current.occurrence.status === 'CANCELLED' ||
+          (actor.role === 'INSTRUCTOR' && current.occurrence.instructorId !== actor.id) ||
+          current.updatedAt.getTime() !== booking.updatedAt.getTime() || current.attendance?.status !== booking.attendance?.status) {
+        throw new Error('Booking changed; refresh the roster before changing attendance.');
+      }
+      await assertNoCashRefundForBooking(tx, current);
+      if (['CONFIRMED', 'ATTENDED'].includes(transition.bookingStatus) && !['CONFIRMED', 'ATTENDED'].includes(current.status)) {
+        const occupied = await tx.booking.count({ where: { occurrenceId, status: { in: ['CONFIRMED', 'ATTENDED'] } } });
+        if (occupied + current.occurrence.historicalSignupCount >= current.occurrence.capacity) throw new Error('Class is full; attendance cannot restore a seat.');
       }
       if (transition.action === 'CLEAR') {
         await tx.attendanceRecord.deleteMany({
@@ -249,7 +261,7 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
   const occurrenceId = String(formData.get('occurrenceId') || '');
   const bookingId = String(formData.get('bookingId') || '');
   const restored = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+    await lockBookingWrites(tx, bookingId);
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, occurrenceId },
       select: {

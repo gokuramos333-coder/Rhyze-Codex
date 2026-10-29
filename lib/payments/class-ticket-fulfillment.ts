@@ -1,4 +1,5 @@
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
+import { lockOccurrenceWrites } from '@/lib/domain/bookings/write-fence';
 import type { Prisma } from '@prisma/client';
 import { classTicketBinding, classTicketFulfillment } from '@/lib/payments/class-ticket';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
@@ -8,7 +9,7 @@ export async function fulfillClassTicket(tx: Prisma.TransactionClient, purchaseI
   const purchase = await tx.purchase.findUniqueOrThrow({ where: { id: purchaseId } });
   const ticket = classTicketBinding(purchase.policyAcceptance);
   if (!ticket) return null;
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ticket.occurrenceId}))`;
+  await lockOccurrenceWrites(tx, ticket.occurrenceId);
   await lockMembershipEntitlements(tx, userId);
   const fresh = await tx.purchase.findUniqueOrThrow({ where: { id: purchaseId } });
   const prior = classTicketFulfillment(fresh.policyAcceptance);

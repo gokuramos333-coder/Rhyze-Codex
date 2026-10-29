@@ -9,11 +9,11 @@ vi.mock('@/lib/notifications/email-queue', () => ({ queueEmail: vi.fn() }));
 import { markAttendanceAction } from '@/app/(portal)/instructor/classes/[occurrenceId]/roster/actions';
 const original = new Date('2026-09-14T16:23:45Z');
 beforeEach(() => {
-  f.booking = { id: 'b', userId: 'u', occurrenceId: 'o', source: 'MEMBER', status: 'LATE_CANCELLED', cancelledAt: original,
+  f.booking = { id: 'b', userId: 'u', occurrenceId: 'o', source: 'MEMBER', status: 'LATE_CANCELLED', cancelledAt: original, updatedAt: original,
     attendance: { status: 'LATE_CANCELLED' }, policySnapshot: { accessType: 'STANDARD' },
-    user: { email: 'test@example.test', name: 'Test', memberships: [] }, occurrence: { startAt: original, timezone: 'America/New_York', template: { name: 'Class' } } };
-  f.prisma = { $executeRaw: vi.fn(), classOccurrence: { findUnique: async () => ({ instructorId: 'teacher' }) },
-    booking: { findFirst: async () => f.booking, update: async ({ data }: any) => Object.assign(f.booking, data) },
+    user: { email: 'test@example.test', name: 'Test', memberships: [] }, occurrence: { status: 'SCHEDULED', capacity: 10, historicalSignupCount: 0, startAt: original, timezone: 'America/New_York', template: { name: 'Class' } } };
+  f.prisma = { $executeRaw: async () => 1, commerceRefund: { findFirst: async () => null }, commerceOrder: { findFirst: async () => null }, classOccurrence: { findUnique: async () => ({ instructorId: 'teacher' }) },
+    booking: { count: async () => 0, findFirst: async () => f.booking, update: async ({ data }: any) => Object.assign(f.booking, data) },
     attendanceRecord: { count: async () => 0, deleteMany: async () => { f.booking.attendance = null; }, upsert: async ({ update }: any) => { f.booking.attendance = update; } },
     creditLedgerEntry: { findFirst: async () => null }, paymentRecord: { findFirst: async () => null },
     $transaction: async (fn: any) => fn(f.prisma) };

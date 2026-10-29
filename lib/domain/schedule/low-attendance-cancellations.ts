@@ -1,3 +1,5 @@
+import { lockOccurrenceWrites } from '@/lib/domain/bookings/write-fence';
+import { retrySerializableTransaction } from '@/lib/payments/transaction-retry';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { queueEmail } from '@/lib/notifications/email-queue';
 import {
@@ -31,7 +33,10 @@ function classTime(value: Date) {
 export async function cancelLowAttendanceOccurrences(
   client: Client,
   now = new Date(),
-) {
+) : Promise<{ checked: number; cancelled: number; instructorEmailsQueued: number; cancelledIds: string[] }> {
+  if ('$transaction' in client) {
+    return retrySerializableTransaction(() => client.$transaction(tx => cancelLowAttendanceOccurrences(tx, now), { timeout: 15000 }));
+  }
   const cutoff = new Date(now.getTime() + 2 * 60 * 60_000);
   const occurrences = await client.classOccurrence.findMany({
     where: {
@@ -53,7 +58,8 @@ export async function cancelLowAttendanceOccurrences(
   let instructorEmailsQueued = 0;
   const cancelledIds: string[] = [];
 
-  for (const occurrence of occurrences) {
+  for (const occurrence of [...occurrences].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) {
+    await lockOccurrenceWrites(client, occurrence.id);
     const claimed = await client.classOccurrence.updateMany({
       where: {
         id: occurrence.id,

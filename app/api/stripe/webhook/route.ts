@@ -63,10 +63,11 @@ export async function POST(request: Request) {
 
   const existing = await prisma.stripeEvent.findUnique({ where: { id: event.id } });
   const duplicate = Boolean(existing?.processedAt);
-  await prisma.stripeEvent.upsert({
-    where: { id: event.id },
-    update: {},
-    create: { id: event.id, type: event.type, payload: JSON.parse(rawBody) },
+  // Empty-update Prisma upsert can race its client-side existence check.
+  // ON CONFLICT DO NOTHING retains the first signed payload and processed gate.
+  await prisma.stripeEvent.createMany({
+    data: [{ id: event.id, type: event.type, payload: JSON.parse(rawBody) }],
+    skipDuplicates: true,
   });
   let phase = 'event-hydration';
   try {

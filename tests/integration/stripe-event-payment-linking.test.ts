@@ -1,3 +1,4 @@
+import { lockOccurrenceWrites } from '@/lib/domain/bookings/write-fence';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
@@ -29,7 +30,7 @@ describe.skipIf(!url)('external event Stripe payment linkage on PostgreSQL', () 
     await db.auditLog.deleteMany({ where: { actorId: ids.owner } });
     await db.attendanceRecord.deleteMany({ where: { userId: ids.member } });
     await db.paymentRecord.deleteMany({ where: { userId: ids.member } });
-    await db.booking.deleteMany({ where: { userId: ids.member } });
+    await db.booking.deleteMany({ where: { occurrenceId: ids.event } });
     await db.commerceOrderItem.deleteMany({ where: { order: { userId: ids.member } } });
     await db.commerceOrder.deleteMany({ where: { userId: ids.member } });
   }
@@ -86,6 +87,30 @@ describe.skipIf(!url)('external event Stripe payment linkage on PostgreSQL', () 
     await expect(linkStripeEventPayment(failing, provider(), { ...input, markAttended: true }, now)).rejects.toThrow('injected commit failure');
     for (const count of [await db.commerceOrder.count({ where: { userId: ids.member } }), await db.paymentRecord.count({ where: { userId: ids.member } }), await db.booking.count({ where: { userId: ids.member } }), await db.attendanceRecord.count({ where: { userId: ids.member } }), await db.auditLog.count({ where: { actorId: ids.owner } })]) expect(count).toBe(0);
     await expectCreditsUntouched();
+  });
+  it('retries an admin-linking snapshot older than the member last-seat commit', async () => {
+    await db.classOccurrence.update({ where: { id: ids.event }, data: { capacity: 1 } });
+    let attempts = 0;
+    const original = db.$transaction.bind(db) as any;
+    const delayed = new Proxy(db, { get(target, key) {
+      if (key !== '$transaction') return Reflect.get(target, key);
+      return (fn: any, options: any) => original(async (tx: any) => {
+        if (++attempts === 1) {
+          await tx.classOccurrence.findUniqueOrThrow({ where: { id: ids.event } });
+          await db.$transaction(async member => {
+            await lockOccurrenceWrites(member, ids.event);
+            await member.booking.create({ data: { userId: ids.owner, occurrenceId: ids.event } });
+          });
+        }
+        return fn(tx);
+      }, options);
+    } });
+    await expect(linkStripeEventPayment(delayed, provider(), input, now)).rejects.toThrow('Event is full');
+    expect(attempts).toBeGreaterThanOrEqual(2);
+    expect(await db.booking.count({ where: { occurrenceId: ids.event } })).toBe(1);
+    expect(await db.commerceOrder.count({ where: { userId: ids.member } })).toBe(0);
+    await expectCreditsUntouched();
+    await db.classOccurrence.update({ where: { id: ids.event }, data: { capacity: 5 } });
   });
   it('records explicit historical attendance once and preserves it on repeated calls', async () => {
     const first = await linkStripeEventPayment(db, provider(), { ...input, markAttended: true }, now);

@@ -112,7 +112,9 @@ describe('Rhyze email lifecycle wiring', () => {
   });
 
   it('notifies attendees when management cancels a class', () => {
-    const actions = readFileSync('app/(studio)/admin/schedule/[occurrenceId]/actions.ts', 'utf8');
+    const action = readFileSync('app/(studio)/admin/schedule/[occurrenceId]/actions.ts', 'utf8');
+    expect(action).toContain('cancelOccurrencesWithNotifications(prisma, actor.id,');
+    const actions = readFileSync('lib/domain/schedule/management-cancellation.ts', 'utf8');
     expect(actions).toContain("template: 'CLASS_CANCELLED'");
     expect(actions).toContain("status: 'CANCELLED'");
     expect(actions).toContain("type: 'RELEASE'");

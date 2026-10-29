@@ -23,6 +23,11 @@ vi.mock('@/lib/payments/stripe-receipt-refresh', async (actual) => ({
 }));
 vi.mock('@/lib/db/prisma', () => {
   const stripeEvent = {
+    createMany: vi.fn(async ({ data }: any) => {
+      let count = 0;
+      for (const row of data) if (!mocks.rows.has(row.id)) { mocks.rows.set(row.id, row); count++; }
+      return { count };
+    }),
     updateMany: vi.fn(async () => ({ count: 0 })),
     findUnique: vi.fn(
       async ({ where }: any) => mocks.rows.get(where.id) || null,

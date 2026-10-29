@@ -1,3 +1,4 @@
+import { lockBookingWrites } from '@/lib/domain/bookings/write-fence';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1350,6 +1351,38 @@ if (!url) {
       await expect(
         db.commerceOrder.findUniqueOrThrow({ where: { id: ids.order } }),
       ).resolves.toMatchObject({ status: 'PAID', refundedAmountCents: 0 });
+    });
+
+    it('retries a stale refund preparation snapshot and refuses a concurrently returned credit', async () => {
+      let snapshotTaken!: () => void;
+      const snapshot = new Promise<void>(resolve => { snapshotTaken = resolve; });
+      let creditCommitted!: () => void;
+      const committed = new Promise<void>(resolve => { creditCommitted = resolve; });
+      let attempts = 0;
+      const original = db.$transaction.bind(db) as any;
+      const delayed = new Proxy(db, { get(target, key) {
+        if (key !== '$transaction') return Reflect.get(target, key);
+        return (fn: any, options: any) => original(async (tx: any) => {
+          if (++attempts === 1) {
+            await tx.booking.findUniqueOrThrow({ where: { id: ids.booking } });
+            snapshotTaken(); await committed;
+          }
+          return fn(tx);
+        }, options);
+      } });
+      const provider = stripe();
+      const refund = refundCommerceOrderFullRemainder(delayed, provider as never, refundInput());
+      const assertion = expect(refund).rejects.toThrow(/credit ledger history/);
+      await snapshot;
+      await db.$transaction(async tx => {
+        await lockBookingWrites(tx, ids.booking);
+        await assertNoCashRefundForBooking(tx, { id: ids.booking, occurrenceId: ids.occurrence, userId: ids.member });
+        await tx.creditLedgerEntry.create({ data: { creditAccountId: ids.trialCreditAccount, bookingId: ids.booking, type: 'RESTORE', quantity: 1, reason: 'Concurrent cancellation credit' } });
+      });
+      creditCommitted(); await assertion;
+      expect(attempts).toBeGreaterThanOrEqual(2);
+      expect(provider.refunds.create).not.toHaveBeenCalled();
+      expect(await db.commerceRefund.count({ where: { commerceOrderId: ids.order } })).toBe(0);
     });
 
     it('serializes the shared booking guard so pending cash refund proof blocks later credit restore', async () => {

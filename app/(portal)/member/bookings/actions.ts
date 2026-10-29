@@ -1,6 +1,8 @@
 'use server';
 import { occurrenceDurationMinutes, occurrenceTitle, occurrenceInstructorName } from '@/lib/domain/schedule/occurrence-management';
 import { publicOccurrenceUrl, notifyWaitlistOpening, completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
+
+import { lockOccurrenceWrites, lockBookingWrites } from '@/lib/domain/bookings/write-fence';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { prioritizeMemberEventCredits } from '@/lib/domain/bookings/member-event-credits';
@@ -67,7 +69,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
   const occurrenceId = String(formData.get('occurrenceId') || '');
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+    await lockOccurrenceWrites(tx, occurrenceId);
     await lockMembershipEntitlements(tx, user.id);
     const occurrence = await tx.classOccurrence.findUnique({
       where: { id: occurrenceId },
@@ -121,7 +123,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     if (overlap) return 'overlap';
 
     const nativeBooked = await tx.booking.count({
-      where: { occurrenceId, status: 'CONFIRMED' },
+      where: { occurrenceId, status: { in: ['CONFIRMED', 'ATTENDED'] } },
     });
     const booked = nativeBooked + occurrence.historicalSignupCount;
     if (booked >= occurrence.capacity) {
@@ -434,9 +436,8 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   let transactionOutcome: { creditReturned: boolean } | undefined;
   try {
     transactionOutcome = await prisma.$transaction(async (tx) => {
-    // Serialize roster release with waitlist joins so a concurrent join cannot miss the opening.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingForPolicy.occurrenceId}))`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+    await lockOccurrenceWrites(tx, bookingForPolicy.occurrenceId);
+    await lockBookingWrites(tx, bookingId);
     await lockMembershipEntitlements(tx, user.id);
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, userId: user.id, status: 'CONFIRMED' },

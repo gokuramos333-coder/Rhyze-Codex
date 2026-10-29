@@ -1,6 +1,8 @@
 'use server';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
+
+import { lockOccurrenceWrites } from '@/lib/domain/bookings/write-fence';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { prioritizeMemberEventCredits } from '@/lib/domain/bookings/member-event-credits';
@@ -43,7 +45,7 @@ export async function addMemberToClassAction(formData: FormData) {
   if (!occurrenceId || memberQuery.length < 2) redirect(rosterPath(occurrenceId, 'member-search'));
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+    await lockOccurrenceWrites(tx, occurrenceId);
     const occurrence = await tx.classOccurrence.findUnique({
       where: { id: occurrenceId },
       include: { template: true, instructor: true },
@@ -90,7 +92,7 @@ export async function addMemberToClassAction(formData: FormData) {
     });
     if (overlap && overlap.occurrenceId !== occurrenceId) return 'member-overlap';
 
-    const confirmed = await tx.booking.count({ where: { occurrenceId, status: 'CONFIRMED' } });
+    const confirmed = await tx.booking.count({ where: { occurrenceId, status: { in: ['CONFIRMED', 'ATTENDED'] } } });
     if (confirmed + occurrence.historicalSignupCount >= occurrence.capacity) return 'full';
 
     const accounts = await tx.creditAccount.findMany({
@@ -203,13 +205,13 @@ export async function addOwnerComplimentaryBookingAction(formData: FormData) {
   if (!occurrenceId || !ownerEmails.has(email)) return;
 
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+    await lockOccurrenceWrites(tx, occurrenceId);
     const [occurrence, owner] = await Promise.all([
       tx.classOccurrence.findUnique({ where: { id: occurrenceId } }),
       tx.user.findUnique({ where: { email } }),
     ]);
     if (!occurrence || occurrence.status !== 'SCHEDULED' || !owner || owner.role !== 'OWNER') return;
-    const confirmed = await tx.booking.count({ where: { occurrenceId, status: 'CONFIRMED' } });
+    const confirmed = await tx.booking.count({ where: { occurrenceId, status: { in: ['CONFIRMED', 'ATTENDED'] } } });
     if (confirmed + occurrence.historicalSignupCount >= occurrence.capacity) return;
 
     await tx.booking.upsert({
