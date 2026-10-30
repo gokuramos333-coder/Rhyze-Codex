@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveScheduleOccurrenceRange } from '@/lib/admin/schedule-occurrence-range';
 
 describe('admin schedule occurrence ranges', () => {
@@ -76,4 +76,56 @@ it('supports a selected year and inclusive custom end dates through exclusive qu
   expect(custom.key).toBe('custom');
   expect(custom.start.toISOString()).toBe('2026-03-07T05:00:00.000Z');
   expect(custom.end.toISOString()).toBe('2026-03-10T04:00:00.000Z');
+});
+
+// Nov 1, 2026 is both the last day of this calendar week and the fall-back day.
+// A locale rendering midnight as 24:00 must not remove Sunday from the query.
+describe('Eastern calendar boundaries across daylight saving and winter', () => {
+  it('includes both November 1 morning classes in the week opened from October 30', () => {
+    const range = resolveScheduleOccurrenceRange(
+      { range: 'week', date: '2026-10-30' },
+      new Date('2026-10-30T16:00:00Z'),
+    );
+    expect(range.start.toISOString()).toBe('2026-10-26T04:00:00.000Z');
+    expect(range.end.toISOString()).toBe('2026-11-02T05:00:00.000Z');
+    for (const startAt of ['2026-11-01T14:00:00Z', '2026-11-01T15:00:00Z']) {
+      expect(new Date(startAt) >= range.start && new Date(startAt) < range.end).toBe(true);
+    }
+  });
+
+  it.each([
+    ['2026-11-01', '2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z', 25],
+    ['2026-11-02', '2026-11-02T05:00:00.000Z', '2026-11-03T05:00:00.000Z', 24],
+    ['2026-03-08', '2026-03-08T05:00:00.000Z', '2026-03-09T04:00:00.000Z', 23],
+    ['2027-01-01', '2027-01-01T05:00:00.000Z', '2027-01-02T05:00:00.000Z', 24],
+  ])('keeps the complete local day %s', (date, start, end, hours) => {
+    const range = resolveScheduleOccurrenceRange({ range: 'day', date });
+    expect(range.start.toISOString()).toBe(start);
+    expect(range.end.toISOString()).toBe(end);
+    expect((range.end.getTime() - range.start.getTime()) / 3_600_000).toBe(hours);
+  });
+
+  it('keeps the entire November month instead of starting or ending a day early', () => {
+    const range = resolveScheduleOccurrenceRange({ range: 'month', date: '2026-11-01' });
+    expect(range.start.toISOString()).toBe('2026-11-01T04:00:00.000Z');
+    expect(range.end.toISOString()).toBe('2026-12-01T05:00:00.000Z');
+    expect(range.label).toBe('November 2026');
+  });
+});
+
+
+it('does not depend on the runtime choosing 00:00 over 24:00 for midnight', () => {
+  const NativeFormatter = Intl.DateTimeFormat;
+  // Reproduce Node 20's en-US midnight convention even on newer ICU runtimes.
+  const formatter = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function(locales, options) {
+    return new NativeFormatter(locales, options?.hour12 === false
+      ? { ...options, hour12: undefined, hourCycle: 'h24' }
+      : options);
+  });
+  try {
+    const range = resolveScheduleOccurrenceRange({ range: 'week', date: '2026-10-30' });
+    expect(range.end.toISOString()).toBe('2026-11-02T05:00:00.000Z');
+  } finally {
+    formatter.mockRestore();
+  }
 });

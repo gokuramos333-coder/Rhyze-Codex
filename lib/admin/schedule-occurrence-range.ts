@@ -35,7 +35,9 @@ function newYorkBoundary(year: number, month: number, day: number) {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // Node 20's en-US hour12:false can format midnight as 24:00, which
+    // subtracts an entire extra day and hides classes at DST/winter boundaries.
+    hourCycle: 'h23',
   }).formatToParts(utcGuess);
   const hour = Number(parts.find((part) => part.type === 'hour')?.value);
   const minute = Number(parts.find((part) => part.type === 'minute')?.value);
