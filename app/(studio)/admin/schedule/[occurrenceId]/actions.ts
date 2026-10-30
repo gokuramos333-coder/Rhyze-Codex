@@ -8,11 +8,23 @@ import { requireArea } from '@/lib/auth/session';
 import { parseClassPriceCents } from '@/lib/catalog/class-pricing';
 import { prisma } from '@/lib/db/prisma';
 import { requireAssignableInstructor } from '@/lib/domain/instructors/assignment';
-import { cancelOccurrencesWithNotifications } from '@/lib/domain/schedule/management-cancellation';
+import { queueEmail } from '@/lib/notifications/email-queue';
 import { normalizeInstructorPayMethod, parseDollarCents } from '@/lib/domain/instructors/pay-rates';
-import { cleanOptionalText, parseOccurrenceLocalStart } from '@/lib/domain/schedule/occurrence-management';
+import { cleanOptionalText, occurrenceLocalTimeZone, occurrenceTitle, parseOccurrenceLocalStart } from '@/lib/domain/schedule/occurrence-management';
 
 const studioTimezone = 'America/New_York';
+
+function classDate(value: Date) {
+  return value.toLocaleDateString('en-US', {
+    timeZone: occurrenceLocalTimeZone(), weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
+}
+
+function classTime(value: Date) {
+  return value.toLocaleTimeString('en-US', {
+    timeZone: occurrenceLocalTimeZone(), hour: 'numeric', minute: '2-digit',
+  });
+}
 
 function resolveCancellationReason(formData: FormData) {
   const customReason = String(formData.get('customCancellationReason') || '').trim();
@@ -30,6 +42,88 @@ function resolveCancellationReason(formData: FormData) {
     default:
       return 'The studio needs to cancel this class. Thank you for your understanding.';
   }
+}
+
+async function cancelOccurrencesWithNotifications(
+  actorId: string,
+  occurrenceIds: string[],
+  reason: string,
+) {
+  const occurrences = await prisma.classOccurrence.findMany({
+    where: { id: { in: occurrenceIds }, status: 'SCHEDULED' },
+    include: {
+      template: true,
+      bookings: { where: { status: 'CONFIRMED' }, include: { user: true } },
+    },
+  });
+  await prisma.$transaction(async (tx) => {
+    for (const occurrence of occurrences) {
+      await tx.classOccurrence.update({
+        where: { id: occurrence.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason },
+      });
+      for (const booking of occurrence.bookings) {
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { status: 'CANCELLED', cancelledAt: new Date() },
+        });
+        const reservation = await tx.creditLedgerEntry.findFirst({
+          where: { bookingId: booking.id, type: 'RESERVE' },
+        });
+        if (reservation) {
+          const released = await tx.creditLedgerEntry.findFirst({
+            where: { bookingId: booking.id, type: { in: ['RELEASE', 'RESTORE'] } },
+          });
+          if (!released) {
+            await tx.creditLedgerEntry.create({
+              data: {
+                creditAccountId: reservation.creditAccountId,
+                bookingId: booking.id,
+                type: 'RELEASE',
+                quantity: 1,
+                reason: 'Studio cancelled class',
+              },
+            });
+          }
+        }
+        await tx.inAppNotification.upsert({
+          where: { dedupeKey: `class-cancelled:${occurrence.id}:${booking.userId}` },
+          update: {},
+          create: {
+            userId: booking.userId,
+            title: `${occurrenceTitle(occurrence)} was cancelled`,
+            body: reason,
+            link: '/member/bookings',
+            dedupeKey: `class-cancelled:${occurrence.id}:${booking.userId}`,
+          },
+        });
+        await queueEmail(tx, {
+          userId: booking.userId,
+          to: booking.user.email,
+          subject: `${occurrence.template.name} was cancelled`,
+          template: 'CLASS_CANCELLED',
+          payload: {
+            name: booking.user.name || 'Rhyzer',
+            className: occurrenceTitle(occurrence),
+            classDate: classDate(occurrence.startAt),
+            classTime: classTime(occurrence.startAt),
+            reason,
+            creditResult: 'Your eligible class credit was returned automatically.',
+          },
+          dedupeKey: `class-cancelled-email:${occurrence.id}:${booking.userId}`,
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'class.cancelled.by-management',
+          entityType: 'ClassOccurrence',
+          entityId: occurrence.id,
+          after: { reason, notifiedMembers: occurrence.bookings.length },
+        },
+      });
+    }
+  });
 }
 
 export async function updateOccurrenceAction(formData: FormData) {
@@ -153,7 +247,7 @@ export async function cancelOccurrenceAction(formData: FormData) {
   const actor = await requireArea('admin');
   const id = String(formData.get('id') || '');
   const reason = resolveCancellationReason(formData);
-  await cancelOccurrencesWithNotifications(prisma, actor.id, [id], reason);
+  await cancelOccurrencesWithNotifications(actor.id, [id], reason);
   revalidatePath('/admin/schedule');
   revalidatePath('/schedule');
   redirect('/admin/schedule');
@@ -168,7 +262,7 @@ export async function cancelSeriesAction(formData: FormData) {
     select: { id: true },
   });
   await prisma.classSeries.update({ where: { id: seriesId }, data: { isActive: false } });
-  await cancelOccurrencesWithNotifications(prisma, actor.id, occurrences.map((item) => item.id), 'Series cancelled by studio');
+  await cancelOccurrencesWithNotifications(actor.id, occurrences.map((item) => item.id), 'Series cancelled by studio');
   revalidatePath('/admin/schedule');
   revalidatePath('/schedule');
   redirect('/admin/schedule');

@@ -1,5 +1,4 @@
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
-import { lockOccurrenceWrites, lockOrderWrites, lockBookingWrites } from '@/lib/domain/bookings/write-fence';
 import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import { queuePaymentFailureEmail } from '@/lib/notifications/payment-failure';
@@ -692,16 +691,7 @@ async function fulfillCommerceOrder(
   >,
 ) {
   if (!action.commerceOrderId) return;
-  // Match event booking/payment linking lock order: occurrence, order, booking.
-  // Reconciliation uses READ COMMITTED, so different orders need a shared seat lock.
-  const binding = await tx.commerceOrder.findUnique({
-    where: { id: action.commerceOrderId },
-    select: { kind: true, occurrenceId: true },
-  });
-  if (binding?.kind === 'EVENT' && binding.occurrenceId) {
-    await lockOccurrenceWrites(tx, binding.occurrenceId);
-  }
-  await lockOrderWrites(tx, action.commerceOrderId);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${action.commerceOrderId}))`;
   const existingOrder = await tx.commerceOrder.findUnique({
     where: { id: action.commerceOrderId },
     include: {
@@ -741,7 +731,7 @@ async function fulfillCommerceOrder(
       select: { id: true },
     });
     if (existingBooking) {
-      await lockBookingWrites(tx, existingBooking.id);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${existingBooking.id}))`;
     }
   }
   const order = await tx.commerceOrder.update({
@@ -773,39 +763,36 @@ async function fulfillCommerceOrder(
     order.occurrenceId &&
     order.occurrence
   ) {
-    // Read after the booking lock: a cancellation must never be undone by replay.
-    const booking = await tx.booking.findUnique({
-      where: {
-        occurrenceId_userId: {
-          occurrenceId: order.occurrenceId,
-          userId: order.userId,
-        },
-      },
+    const booked = await tx.booking.count({
+      where: { occurrenceId: order.occurrenceId, status: 'CONFIRMED' },
     });
-    if (!booking || !['CONFIRMED', 'ATTENDED'].includes(booking.status) || order.occurrence.status === 'CANCELLED') {
-      const booked = await tx.booking.count({
-        where: { occurrenceId: order.occurrenceId, status: { in: ['CONFIRMED', 'ATTENDED'] } },
+    if (
+      booked + order.occurrence.historicalSignupCount >=
+      order.occurrence.capacity
+    ) {
+      await tx.commerceOrder.update({
+        where: { id: order.id },
+        data: { status: 'FULFILLMENT_REVIEW' },
       });
-      if (
-        booking ||
-        order.occurrence.status === 'CANCELLED' ||
-        booked + order.occurrence.historicalSignupCount >= order.occurrence.capacity
-      ) {
-        await tx.commerceOrder.update({
-          where: { id: order.id },
-          data: { status: 'FULFILLMENT_REVIEW' },
-        });
-      } else {
-        await tx.booking.create({
-          data: {
+    } else {
+      await tx.booking.upsert({
+        where: {
+          occurrenceId_userId: {
             occurrenceId: order.occurrenceId,
             userId: order.userId,
-            source: 'STRIPE_EVENT',
           },
-        });
-        await completeWaitlistBooking(tx, order.occurrenceId, order.userId);
-      }
-    } else {
+        },
+        update: {
+          status: 'CONFIRMED',
+          cancelledAt: null,
+          source: 'STRIPE_EVENT',
+        },
+        create: {
+          occurrenceId: order.occurrenceId,
+          userId: order.userId,
+          source: 'STRIPE_EVENT',
+        },
+      });
       await completeWaitlistBooking(tx, order.occurrenceId, order.userId);
     }
   }

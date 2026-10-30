@@ -1,8 +1,5 @@
 'use server';
 import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
-
-import { assertNoCashRefundForBooking } from '@/lib/domain/bookings/cash-refund-guard';
-import { lockOccurrenceWrites, lockBookingWrites } from '@/lib/domain/bookings/write-fence';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 
 import { redirect } from 'next/navigation';
@@ -88,7 +85,7 @@ export async function transferBookingAction(formData: FormData) {
     redirect(`/instructor/classes/${booking.occurrenceId}/transfers?booking=${booking.id}&error=destination`);
   }
   const [requestedOccupied, requestedOverlap] = await Promise.all([
-    prisma.booking.count({ where: { occurrenceId: destinationId, status: { in: ['CONFIRMED', 'ATTENDED'] } } }),
+    prisma.booking.count({ where: { occurrenceId: destinationId, status: 'CONFIRMED' } }),
     prisma.booking.findFirst({
       where: {
         userId: booking.userId,
@@ -144,11 +141,10 @@ export async function transferBookingAction(formData: FormData) {
     ? feeResult.paymentIntentId
     : undefined;
   const outcome = await prisma.$transaction(async (tx) => {
-    for (const id of [...new Set([booking.occurrenceId, destinationId])].sort()) await lockOccurrenceWrites(tx, id);
-    await lockBookingWrites(tx, booking.id);
-    const currentBooking = await tx.booking.findFirst({ where: { id: booking.id, occurrenceId: booking.occurrenceId, status: 'CONFIRMED', occurrence: { status: 'SCHEDULED' } } });
-    if (!currentBooking || currentBooking.updatedAt.getTime() !== booking.updatedAt.getTime()) return false;
-    await assertNoCashRefundForBooking(tx, currentBooking);
+    // Lock both rosters in a consistent order, including concurrent waitlist joins.
+    for (const id of [...new Set([booking.occurrenceId, destinationId])].sort()) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+    }
     const destination = await tx.classOccurrence.findFirst({
       where: { id: destinationId, status: 'SCHEDULED' },
       include: { template: true },
@@ -160,7 +156,7 @@ export async function transferBookingAction(formData: FormData) {
       accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: currentUser.memberships }),
       user: currentUser, sourceIsEvent: booking.occurrence.template.isEvent,
       destinationIsEvent: destination.template.isEvent, destinationStartsAt: destination.startAt, now: new Date() })) return false;
-    const occupied = await tx.booking.count({ where: { occurrenceId: destinationId, status: { in: ['CONFIRMED', 'ATTENDED'] } } });
+    const occupied = await tx.booking.count({ where: { occurrenceId: destinationId, status: 'CONFIRMED' } });
     if (occupied + destination.historicalSignupCount >= destination.capacity) return false;
     const trial = await tx.membership.findFirst({
       where: { userId: booking.userId, status: { in: ['TRIALING', 'ACTIVE'] }, product: { kind: 'INTRO_TRIAL' } },
@@ -226,7 +222,7 @@ export async function transferBookingAction(formData: FormData) {
       dedupeKey: `booking-transfer:${booking.id}:${destination.id}`,
     });
     return true;
-  }).catch(() => false); // Existing failure branch compensates any collected transfer fee.
+  });
   if (!outcome) {
     if (paymentIntentId) {
       await refundAttendanceFee({

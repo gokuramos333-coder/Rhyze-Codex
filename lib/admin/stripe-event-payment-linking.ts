@@ -1,4 +1,3 @@
-import { lockOccurrenceWrites, lockOrderWrites, lockBookingWrites } from '@/lib/domain/bookings/write-fence';
 import { retrySerializableTransaction } from '@/lib/payments/transaction-retry';
 import type Stripe from 'stripe';
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -64,7 +63,7 @@ export async function linkStripeEventPayment(db: PrismaClient, stripe: Stripe, i
   const { intent, charge, customerId, paidAt } = verified;
   return retrySerializableTransaction(() => db.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'external-event-payment:' + intent.id}))`;
-        await lockOccurrenceWrites(tx, input.occurrenceId);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.occurrenceId}))`;
         await lockMembershipEntitlements(tx, input.userId);
         const user = await tx.user.findUnique({ where: { id: input.userId } });
         const occurrence = await tx.classOccurrence.findUnique({ where: { id: input.occurrenceId }, include: { template: true } });
@@ -89,7 +88,7 @@ export async function linkStripeEventPayment(db: PrismaClient, stripe: Stripe, i
         if (purchase || transfer || somble || records.length > 1) reject('Payment already belongs to another purchase or imported transaction.');
         let order = await tx.commerceOrder.findUnique({ where: { stripePaymentIntentId: intent.id } });
         if (order) {
-          await lockOrderWrites(tx, order.id);
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${order.id}))`;
           // Re-read after the same lock used by refunds and webhook fulfillment.
           order = await tx.commerceOrder.findUnique({ where: { stripePaymentIntentId: intent.id } });
           if (!order || order.kind !== 'EVENT' || order.userId !== user.id || order.occurrenceId !== occurrence.id ||
@@ -111,7 +110,7 @@ export async function linkStripeEventPayment(db: PrismaClient, stripe: Stripe, i
         if (competingOrder) reject('Member already has another order for this event; reconcile that order first.');
         let booking = await tx.booking.findUnique({ where: { occurrenceId_userId: { occurrenceId: occurrence.id, userId: user.id } } });
         if (booking) {
-          await lockBookingWrites(tx, booking.id);
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.id}))`;
           booking = await tx.booking.findUnique({ where: { occurrenceId_userId: { occurrenceId: occurrence.id, userId: user.id } } });
         }
         if (booking && (!order || booking.source !== 'STRIPE_EVENT' || !['CONFIRMED', 'ATTENDED'].includes(booking.status))) reject('Existing booking must be reconciled separately; its credits and attendance were preserved.');

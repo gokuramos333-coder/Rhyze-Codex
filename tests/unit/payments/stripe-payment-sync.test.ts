@@ -83,7 +83,7 @@ function database(record: ReturnType<typeof linkedRecord> | null) {
     paymentRecord: {
       findFirst: vi.fn(async () => record),
       findMany: vi.fn(async () => (record ? [record] : [])),
-      updateMany: vi.fn(async (args: unknown) => { writes.push(args); return { count: 1 }; }),
+      update: vi.fn(async (args: unknown) => { writes.push(args); return record; }),
       create: vi.fn(async (args: unknown) => { writes.push(args); return record; }),
     },
     $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(db)),

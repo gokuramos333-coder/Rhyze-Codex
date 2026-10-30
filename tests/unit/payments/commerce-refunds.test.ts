@@ -100,7 +100,6 @@ function db(fixture = order()) {
     classOccurrence: { findUnique: vi.fn().mockResolvedValue(null) },
     $executeRaw: vi.fn(),
     commerceOrder: {
-      findUnique: vi.fn().mockResolvedValue(fixture),
       findFirst: vi.fn().mockResolvedValue(fixture),
       findMany: vi.fn().mockResolvedValue([fixture]),
       update: vi.fn(),

@@ -352,20 +352,10 @@ export async function syncRecentStripePaymentRecords(
       ...(user ? { userId: user.id } : {}),
     };
     if (existingPaymentRecord) {
-      // Provider and batch reads precede this write. Never regress a refund or
-      // dispute committed meanwhile, even when fulfillment itself is guarded.
-      const refreshed = await prisma.paymentRecord.updateMany({
-        where: {
-          id: existingPaymentRecord.id,
-          refundedAmountCents: { lte: charge.amount_refunded },
-          ...(status === 'SUCCEEDED' ? { status: { notIn: ['REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'] } } : { status: { not: 'DISPUTED' } }),
-          ...(existingPaymentRecord.commerceOrderId && status === 'SUCCEEDED' ? {
-            commerceOrder: { status: { notIn: ['REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'] }, refunds: { none: { status: { in: ['PENDING', 'SUCCEEDED'] } } } },
-          } : {}),
-        },
+      await prisma.paymentRecord.update({
+        where: { id: existingPaymentRecord.id },
         data: paymentRecordData,
       });
-      if (!refreshed.count) { unchanged += 1; continue; }
     } else {
       await prisma.paymentRecord.create({
         data: {

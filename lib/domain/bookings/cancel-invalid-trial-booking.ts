@@ -1,4 +1,3 @@
-import { lockBookingWrites } from '@/lib/domain/bookings/write-fence';
 import type { Prisma } from '@prisma/client';
 import { INTRO_TRIAL_DAYS } from './intro-trial-rules';
 
@@ -7,7 +6,7 @@ export async function cancelInvalidTrialBooking(tx: Prisma.TransactionClient, in
   userId: string; bookingId: string; occurrenceId: string; actorId: string;
   reason: string; dryRun: boolean; now: Date;
 }) {
-  await lockBookingWrites(tx, input.bookingId);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.bookingId}))`;
   const booking = await tx.booking.findUnique({ where: { id: input.bookingId }, include: { occurrence: { include: { template: true } } } });
   if (!booking || booking.userId !== input.userId || booking.occurrenceId !== input.occurrenceId) throw Error('Booking identity changed');
   const snapshot = booking.policySnapshot as { accessType?: string; creditAccountId?: string } | null;

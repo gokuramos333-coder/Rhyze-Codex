@@ -1,6 +1,4 @@
 import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
-import { retrySerializableTransaction as retrySafeSerializableTransaction } from '@/lib/payments/transaction-retry';
-import { lockOccurrenceWrites, lockOrderWrites, lockBookingWrites } from '@/lib/domain/bookings/write-fence';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { eventCancellationCreditKey } from '@/lib/domain/bookings/cancellation-credit';
@@ -62,6 +60,31 @@ type RefundPage = {
 type RefundBookingProof = {
   bookingId: string | null;
 };
+
+function isPrismaSerializableConflict(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2034'
+  );
+}
+
+async function retrySafeSerializableTransaction<T>(
+  operation: () => Promise<T>,
+) {
+  const maximumAttempts = 3;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isPrismaSerializableConflict(error) || attempt === maximumAttempts) {
+        throw error;
+      }
+    }
+  }
+  throw new Error('Serializable transaction retry exhausted.');
+}
 
 function providerId(value: unknown): string | null {
   if (typeof value === 'string') return value;
@@ -266,23 +289,11 @@ function ensureLocalOrderCanBeRefunded(order: RefundOrder) {
   }
 }
 
-// Refund confirmation releases a seat and notifies the waitlist. Keep its
-// parent-first order consistent with checkout, cancellation and waitlist joins.
-async function lockRefundOrderWrites(tx: Tx, orderId: string) {
-  const binding = await tx.commerceOrder.findUnique({
-    where: { id: orderId }, select: { kind: true, occurrenceId: true },
-  });
-  if (binding?.kind === 'EVENT' && binding.occurrenceId) {
-    await lockOccurrenceWrites(tx, binding.occurrenceId);
-  }
-  await lockOrderWrites(tx, orderId);
-}
-
 async function getOrderForRefund(
   tx: Tx,
   input: CommerceRefundInput,
 ): Promise<RefundOrder> {
-  await lockRefundOrderWrites(tx, input.orderId);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderId}))`;
   const order = await tx.commerceOrder.findFirst({
     where: {
       id: input.orderId,
@@ -354,7 +365,7 @@ async function proveEventBookingForCashRefund(
   }
 
   const bookingId = bookings[0].id;
-  await lockBookingWrites(tx, bookingId);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
 
   const transfer = await tx.bookingTransfer.findFirst({
     where: { bookingId },
@@ -610,7 +621,7 @@ async function bindProviderVerifiedOperationAmount(
   return retrySafeSerializableTransaction(() =>
     db.$transaction(
       async (tx) => {
-        await lockRefundOrderWrites(tx, input.orderId);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderId}))`;
         const operation = await tx.commerceRefund.findUnique({
           where: { operationKey: params.operationKey },
         });
@@ -661,7 +672,7 @@ async function recordProviderAttempt(
 ) {
   await db.$transaction(
     async (tx) => {
-      await lockRefundOrderWrites(tx, input.orderId);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderId}))`;
       await tx.commerceRefund.upsert({
         where: { operationKey: params.operationKey },
         update: {

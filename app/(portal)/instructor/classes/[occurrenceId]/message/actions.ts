@@ -1,6 +1,4 @@
 'use server';
-import { lockOccurrenceWrites, lockBookingWrites } from '@/lib/domain/bookings/write-fence';
-import { retrySerializableTransaction } from '@/lib/payments/transaction-retry';
 import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 
 import { revalidatePath } from 'next/cache';
@@ -81,20 +79,14 @@ export async function cancelAssignedClassAction(formData: FormData) {
   const occurrenceId = String(formData.get('occurrenceId') || '');
   const reason = resolveCancellationReason(formData);
   if (reason.length < 10) redirect(`/instructor/classes/${occurrenceId}/message?error=reason`);
-  await retrySerializableTransaction(() => prisma.$transaction(async (tx) => {
-    await lockOccurrenceWrites(tx, occurrenceId);
-    const occurrence = await tx.classOccurrence.findFirst({
-      where: { id: occurrenceId, instructorId: instructor.id, status: 'SCHEDULED' },
-      include: { template: true, instructor: { select: { name: true } }, bookings: { where: { status: 'CONFIRMED' }, include: { user: true }, orderBy: { id: 'asc' } } },
-    });
-    if (!occurrence) return;
+  const occurrence = await prisma.classOccurrence.findFirst({
+    where: { id: occurrenceId, instructorId: instructor.id, status: 'SCHEDULED' },
+    include: { template: true, instructor: {select:{name:true}}, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
+  });
+  if (!occurrence) redirect('/instructor/schedule');
+  await prisma.$transaction(async (tx) => {
     await tx.classOccurrence.update({ where: { id: occurrenceId }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason } });
-    for (const candidate of occurrence.bookings) {
-      await lockBookingWrites(tx, candidate.id);
-      const booking = await tx.booking.findFirst({ where: { id: candidate.id, occurrenceId, status: 'CONFIRMED' }, include: { user: true } });
-      if (!booking) continue;
-      await tx.attendanceRecord.deleteMany({ where: { bookingId: booking.id } });
-      await tx.emailMessage.updateMany({ where: { dedupeKey: `class-reminder:${booking.id}:${occurrenceId}`, template: 'CLASS_REMINDER', status: { in: ['QUEUED', 'PROCESSING'] } }, data: { status: 'CANCELLED' } });
+    for (const booking of occurrence.bookings) {
       await tx.booking.update({ where: { id: booking.id }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
       const reservation = await tx.creditLedgerEntry.findFirst({ where: { bookingId: booking.id, type: 'RESERVE' } });
       if (reservation) {
@@ -120,7 +112,7 @@ export async function cancelAssignedClassAction(formData: FormData) {
     }
     await tx.classMessage.create({ data: { occurrenceId, instructorId: instructor.id, subject: `${instructorOccurrenceTitle(occurrence)} cancelled`, body: reason, kind: 'CANCELLATION', recipientCount: occurrence.bookings.length } });
     await tx.auditLog.create({ data: { actorId: instructor.id, action: 'class.cancelled.by-instructor', entityType: 'ClassOccurrence', entityId: occurrenceId } });
-  }, { timeout: 15000 }));
+  });
   revalidatePath('/instructor/schedule');
   revalidatePath('/schedule');
   redirect('/instructor/schedule?cancelled=1');

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const tx = {
     waitlistEntry: { findUnique: vi.fn(), count: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-    commerceRefund: { findFirst: async () => null }, commerceOrder: { findFirst: async () => null },
     $executeRaw: vi.fn(), user: { findUnique: vi.fn(), findFirst: vi.fn() },
     classOccurrence: { findUnique: vi.fn(), findFirst: vi.fn() }, waiverVersion: { findFirst: vi.fn() }, waiverAcceptance: { findUnique: vi.fn() },
     booking: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn() },
@@ -237,7 +236,7 @@ describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]
 describe.each([['member', rescheduleMemberBookingAction], ['instructor', transferBookingAction]] as const)('%s transfer fresh entitlement', (_label, transfer) => {
   function transferFixture(snapshot: unknown = { accessType: 'STANDARD', accessProductKind: null }) {
     const f = fixture(false, 'MEMBER'); f.user.memberships.push(f.membership);
-    const booking = { id: 'booking', updatedAt: now, userId: f.user.id, source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', user: f.user, policySnapshot: snapshot,
+    const booking = { id: 'booking', userId: f.user.id, source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', user: f.user, policySnapshot: snapshot,
       occurrence: { ...f.occurrence, instructorId: mocks.actor.id } };
     mocks.tx.booking.findUnique.mockResolvedValue(booking);
     mocks.tx.booking.findFirst.mockImplementation(async ({ where }: any) => where.id === 'booking' ? booking : null);
