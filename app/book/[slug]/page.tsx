@@ -55,7 +55,20 @@ export default async function BookingPage(
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
-  const cls = getClass(params.slug);
+  const catalogClass = getClass(params.slug);
+  const template = catalogClass ? null : await prisma.classTemplate.findFirst({
+    where: { slug: params.slug, isActive: true, archivedAt: null, isEvent: false },
+    include: { category: true },
+  });
+  const cls = catalogClass ?? (template ? {
+    name: template.name,
+    category: template.category.name,
+    duration: template.durationMinutes,
+    tagline: template.description.split(/[.!?]/)[0] || template.name,
+    description: template.description,
+    whatToExpect: template.tags.length ? template.tags : [template.description],
+    whatToBring: template.equipment,
+  } : null);
   if (!cls) notFound();
   const session = await auth();
   const now = new Date();
@@ -216,7 +229,7 @@ export default async function BookingPage(
     occurrence ? occurrenceInstructorName(occurrence) :
     matchingSlot?.instructor ??
     [instructor?.firstName, instructor?.lastName].filter(Boolean).join(' ');
-  const artworkTemplate = occurrence?.template ?? await prisma.classTemplate.findFirst({
+  const artworkTemplate = occurrence?.template ?? template ?? await prisma.classTemplate.findFirst({
     where: { slug: params.slug, isActive: true, archivedAt: null },
     select: { imageUrl: true },
   });
@@ -300,7 +313,7 @@ export default async function BookingPage(
                   {cls.tagline}
                 </p>
                 <p className="mt-4 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-widest text-rhyze-cream/65">
-                  {categoryLabel[cls.category]}
+                  {catalogClass ? categoryLabel[catalogClass.category] : cls.category}
                   {isPublicEvent({ slug: params.slug, isEvent: occurrence?.template.isEvent ?? false }) && <EventBadge />}
                   <span aria-hidden>·</span>
                   <Clock className="h-3.5 w-3.5" aria-hidden />

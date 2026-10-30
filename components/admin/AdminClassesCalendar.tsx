@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import { EventBadge } from '@/components/catalog/EventBadge';
+import { ThanksgivingNotice } from '@/components/sections/ThanksgivingNotice';
 import { AnalyticsDateRangeForm } from './AnalyticsRangeControls';
 import { CalendarDayStrip } from '@/components/sections/CalendarDayStrip';
 import Link from 'next/link';
@@ -9,6 +11,7 @@ export type AdminCalendarView = 'day' | 'week' | 'month' | 'year' | 'custom';
 
 export type AdminCalendarOccurrence = {
   id: string;
+  isEvent?: boolean;
   dateKey: string;
   dayLabel: string;
   shortDay: string;
@@ -30,6 +33,7 @@ export type AdminCalendarOccurrence = {
 };
 
 type Props = {
+  kind?: 'all' | 'classes' | 'events';
   occurrences: AdminCalendarOccurrence[];
   view: AdminCalendarView;
   selectedDateKey: string;
@@ -79,8 +83,8 @@ function calendarNotice(dateKey: string) {
   return dateKey === '2026-09-07' ? 'LABOR DAY!' : null;
 }
 
-function calendarHref(view: AdminCalendarView, dateKey: string) {
-  return `/admin/classes?range=${view}&date=${dateKey}#scheduled-classes`;
+function calendarDestination(view: AdminCalendarView, dateKey: string, kind = 'all', from?: string, to?: string) {
+  return `/admin/classes?range=${view}&date=${dateKey}${kind !== 'all' ? `&kind=${kind}` : ''}${view === 'custom' ? `&from=${from || ''}&to=${to || ''}` : ''}#scheduled-classes`;
 }
 
 function buildMonthDays(
@@ -114,12 +118,15 @@ function buildMonthDays(
 }
 
 export function AdminClassesCalendar({
-  occurrences,
+  occurrences: allOccurrences,
+  kind = 'all',
   view,
   selectedDateKey,
   from,
   to,
 }: Props) {
+  const occurrences = allOccurrences.filter((occurrence) => kind === 'all' || (kind === 'events' ? occurrence.isEvent : !occurrence.isEvent));
+  const calendarHref = (view: AdminCalendarView, dateKey: string) => calendarDestination(view, dateKey, kind, from, to);
   const weekStart = startOfWeek(selectedDateKey);
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const dateKey = shiftDate(weekStart, index);
@@ -158,6 +165,13 @@ export function AdminClassesCalendar({
 
   return (
     <div className="rounded-[1.75rem] border border-white/10 bg-rhyze-black p-4 text-rhyze-cream shadow-2xl shadow-black/30 md:p-6">
+      <nav aria-label="Schedule type" className="mb-4 flex flex-wrap gap-2">
+        {(['all', 'classes', 'events'] as const).map((option) => (
+          <Link key={option} href={calendarDestination(view, selectedDateKey, option, from, to)} aria-current={kind === option ? 'page' : undefined} className={cn('focus-ring rounded-full border px-4 py-2 text-xs font-black uppercase tracking-widest', option === 'events' ? 'border-rhyze-gold ring-1 ring-rhyze-gold/40' : 'border-white/20', kind === option ? 'bg-rhyze-gradient text-rhyze-black' : 'text-rhyze-cream')}>
+            {option === 'all' ? 'All' : option === 'events' ? 'Events' : 'Classes'}
+          </Link>
+        ))}
+      </nav>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         {view !== 'custom' && (
           <div className="flex items-center gap-2">
@@ -202,7 +216,7 @@ export function AdminClassesCalendar({
           from={from}
           to={to}
           anchor="scheduled-classes"
-          preservedParams={{ date: selectedDateKey }}
+          preservedParams={{ date: selectedDateKey, ...(kind !== 'all' ? { kind } : {}) }}
         />
       </div>
       {(view === 'year' || view === 'custom') && (
@@ -277,6 +291,7 @@ export function AdminClassesCalendar({
               Admin schedule controls
             </p>
           </div>
+          <ThanksgivingNotice dateKey={selectedDateKey} />
           {calendarNotice(selectedDateKey) && (
             <div className="mb-4 rounded-xl border-2 border-rhyze-gold bg-rhyze-gold px-4 py-3 text-center font-black uppercase tracking-[0.2em] text-rhyze-black shadow-glow">
               {calendarNotice(selectedDateKey)}
@@ -330,6 +345,7 @@ export function AdminClassesCalendar({
                   </span>
                 </Link>
                 <div className="grid gap-2">
+                  <ThanksgivingNotice dateKey={day.dateKey} />
                   {day.occurrences.length ? (
                     day.occurrences.map((occurrence) => (
                       <AdminClassCard
@@ -404,6 +420,7 @@ export function AdminClassesCalendar({
                       >
                         {day.dayNumber}
                       </span>
+                      <ThanksgivingNotice dateKey={day.dateKey} />
                       {calendarNotice(day.dateKey) && (
                         <span className="mt-1 block rounded-sm bg-rhyze-gold px-1 py-0.5 text-[0.6rem] font-black uppercase tracking-wide text-rhyze-black">
                           {calendarNotice(day.dateKey)}
@@ -414,6 +431,7 @@ export function AdminClassesCalendar({
                           <p>{formatClassCount(day.occurrences.length)}</p>
                           <p className="mt-1 truncate text-rhyze-cream/55">
                             {day.occurrences[0].className}
+                            {day.occurrences.some((occurrence) => occurrence.isEvent) && <EventBadge />}
                           </p>
                         </div>
                       )}
@@ -443,6 +461,7 @@ function AdminClassCard({
     <article
       className={cn(
         'grid gap-4 rounded-xl border bg-rhyze-black p-4 shadow-[0_0_0_1px_rgba(255,199,44,0.3)] md:items-center',
+        occurrence.isEvent && 'border-rhyze-coral/70 bg-rhyze-coral/20',
         compact
           ? 'md:grid-cols-[4rem_minmax(0,1fr)_auto]'
           : 'md:grid-cols-[5rem_minmax(0,1fr)_auto] md:p-5',
@@ -478,7 +497,7 @@ function AdminClassCard({
         )}
         <div className="min-w-0">
           <p className="mb-1 text-xs font-black uppercase tracking-[0.2em] text-rhyze-orange">
-            {occurrence.category}
+            {occurrence.category} {occurrence.isEvent && <EventBadge />}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <h4
@@ -543,7 +562,7 @@ function AdminClassCard({
             href={`/admin/schedule/${occurrence.id}?cancel=1`}
             className="focus-ring rounded-lg border border-rhyze-coral px-4 py-2 text-center text-[0.65rem] font-black uppercase tracking-widest text-rhyze-coral transition hover:bg-rhyze-coral hover:text-white"
           >
-            Cancel class
+            {occurrence.isEvent ? 'Cancel event' : 'Cancel class'}
           </Link>
         )}
         <Link

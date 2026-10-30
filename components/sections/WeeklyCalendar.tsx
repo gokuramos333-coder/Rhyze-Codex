@@ -4,6 +4,7 @@ import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import React from 'react';
 import Image from 'next/image';
 import { CalendarDayStrip } from '@/components/sections/CalendarDayStrip';
+import { ThanksgivingNotice } from '@/components/sections/ThanksgivingNotice';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -39,14 +40,6 @@ function calendarNotice(dateKey: string) {
   return dateKey === '2026-09-07' ? 'LABOR DAY!' : null;
 }
 
-function ThanksgivingNotice({ dateKey }: { dateKey: string }) {
-  if (dateKey !== '2026-11-26') return null;
-  return (
-    <p data-calendar-notice-date={dateKey} className="my-2 max-w-full break-words text-sm font-bold leading-snug text-rhyze-orange">
-      Happy Thanksgiving
-    </p>
-  );
-}
 
 function shiftDate(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T12:00:00Z`);
@@ -75,11 +68,13 @@ function formatClassCount(count: number) {
 }
 
 export function WeeklyCalendar({
-  slots,
+  slots: allSlots,
   compact = false,
   initialDateKey,
   initialView = 'daily',
 }: Props) {
+  const [kind, setKind] = useState<'all' | 'classes' | 'events'>('all');
+  const slots = useMemo(() => allSlots.filter((slot) => kind === 'all' || (kind === 'events' ? slot.isEvent : !slot.isEvent)), [allSlots, kind]);
   const todayDateKey = localDateKey(new Date(), 'America/New_York');
   const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(initialDateKey || '')
     ? initialDateKey!
@@ -122,6 +117,13 @@ export function WeeklyCalendar({
 
   return (
     <div className="rounded-[1.75rem] border border-white/10 bg-rhyze-black/80 p-4 shadow-2xl shadow-black/30 md:p-6">
+      <div aria-label="Schedule type" className="mb-4 flex flex-wrap gap-2">
+        {(['all', 'classes', 'events'] as const).map((option) => (
+          <button key={option} type="button" aria-pressed={kind === option} onClick={() => setKind(option)} className={cn('focus-ring rounded-full border px-4 py-2 text-xs font-black uppercase tracking-widest', option === 'events' ? 'border-rhyze-gold ring-1 ring-rhyze-gold/40' : 'border-white/20', kind === option ? 'bg-rhyze-gradient text-rhyze-black' : 'text-rhyze-cream')}>
+            {option === 'all' ? 'All' : option === 'events' ? 'Events' : 'Classes'}
+          </button>
+        ))}
+      </div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button

@@ -1,3 +1,4 @@
+import { publicClassCatalogWhere } from '@/lib/catalog/public-class-catalog';
 import type { Metadata } from 'next';
 import { ClassList } from '@/components/sections/ClassList';
 import { WeeklyCalendar } from '@/components/sections/WeeklyCalendar';
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
 export default async function ClassesPage() {
   const [templates, slots, galleryImages] = await Promise.all([
     prisma.classTemplate.findMany({
-      where: { isActive: true, archivedAt: null, isEvent: false },
+      where: publicClassCatalogWhere(),
       include: { category: true },
       orderBy: { name: 'asc' },
     }),
@@ -46,9 +47,9 @@ export default async function ClassesPage() {
           CLASSES
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-rhyze-cream/70">
-          {catalog.length} official formats across three pillars, Dance, Yoga &
+          Classes across three pillars, Dance, Yoga &
           Pilates, and Strength & HIIT, matched to Rhyze-managed booking,
-          capacity, waitlists, and member credits.
+          capacity, waitlists, and member credits. Specialty events are highlighted separately; check each event for its pricing and access rules.
         </p>
         <ClassGallerySlideshow images={galleryImages} />
       </section>

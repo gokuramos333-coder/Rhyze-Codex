@@ -20,10 +20,11 @@ export type PublicClassData = {
   isEvent?: boolean;
 };
 
-type CatFilter = 'all' | ClassCategory;
+type CatFilter = 'all' | 'events' | ClassCategory;
 
 const cats: { id: CatFilter; label: string }[] = [
   { id: 'all', label: 'All' },
+  { id: 'events', label: 'Events' },
   { id: 'dance', label: 'Dance' },
   { id: 'yoga', label: 'Yoga & Pilates' },
   { id: 'strength', label: 'Strength & HIIT' },
@@ -34,6 +35,7 @@ const hashToCategory: Record<string, CatFilter> = {
   '#yoga': 'yoga',
   '#strength': 'strength',
   '#list': 'all',
+  '#events': 'events',
 };
 
 function getCategoryFromHash(): CatFilter {
@@ -52,7 +54,7 @@ export function ClassList({ catalog = classes }: { catalog?: PublicClassData[] }
   }, []);
 
   const filtered = useMemo(
-    () => catalog.filter((c) => cat === 'all' || c.category === cat),
+    () => catalog.filter((c) => cat === 'all' || (cat === 'events' ? c.isEvent : !c.isEvent && c.category === cat)),
     [cat, catalog],
   );
 
@@ -76,6 +78,7 @@ export function ClassList({ catalog = classes }: { catalog?: PublicClassData[] }
               }}
               className={cn(
                 'focus-ring rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-widest transition',
+                c.id === 'events' && 'border-rhyze-gold ring-1 ring-rhyze-gold/40',
                 cat === c.id
                   ? 'border-rhyze-coral bg-rhyze-coral text-rhyze-black'
                   : 'border-white/10 text-rhyze-cream/70 hover:border-rhyze-coral/50 hover:text-rhyze-cream',
@@ -121,10 +124,10 @@ export function ClassList({ catalog = classes }: { catalog?: PublicClassData[] }
             </ul>
             <div className="mt-auto">
               <Link
-                href={`/schedule?class=${encodeURIComponent(c.slug)}`}
+                href={c.isEvent ? `/events/${encodeURIComponent(c.slug)}` : `/schedule?class=${encodeURIComponent(c.slug)}`}
                 className="focus-ring inline-flex w-full items-center justify-center gap-1 rounded-full bg-rhyze-gradient px-4 py-2 text-xs font-bold uppercase tracking-widest text-rhyze-black hover:shadow-glow"
               >
-                View schedule <ArrowRight className="h-3 w-3" aria-hidden />
+                {c.isEvent ? 'View event' : 'View schedule'} <ArrowRight className="h-3 w-3" aria-hidden />
               </Link>
             </div>
           </article>

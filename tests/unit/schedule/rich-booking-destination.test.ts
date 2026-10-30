@@ -38,7 +38,8 @@ describe('schedule booking destinations', () => {
     expect(source).toContain('<Link');
     expect(source).not.toContain('ownedMemberships.slice');
     expect(source).not.toContain('lg:mt-64');
-    expect(source.match(/categoryLabel\[cls\.category\]/g)).toHaveLength(1);
+    // Category uniqueness and actual link destinations are exercised by rendering
+    // both catalog and database classes in dynamic-standard-booking-page.test.tsx.
   });
 
   it('sends people without an active membership to membership selection', () => {

@@ -1,3 +1,4 @@
+import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { prisma } from '@/lib/db/prisma';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
@@ -40,7 +41,7 @@ import {
 
 export default async function AdminClassesPage(
   props: {
-    searchParams: Promise<{ saved?: string; error?: string; range?: string; date?: string; from?: string; to?: string }>;
+    searchParams: Promise<{ saved?: string; error?: string; range?: string; date?: string; from?: string; to?: string; kind?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -112,7 +113,6 @@ export default async function AdminClassesPage(
     prisma.classOccurrence.findMany({
       where: {
         startAt: { gte: occurrenceQueryRange.start, lt: occurrenceQueryRange.end },
-        template: { isEvent: false },
       },
       include: {
         template: { include: { category: true } },
@@ -160,6 +160,7 @@ export default async function AdminClassesPage(
       const instructor = occurrenceInstructorName(occurrence);
       return {
         id: occurrence.id,
+        isEvent: isPublicEvent(occurrence.template),
         dateKey: localDateKey(occurrence.startAt, timezone),
         dayLabel: occurrence.startAt.toLocaleDateString('en-US', {
           timeZone: timezone,
@@ -262,6 +263,7 @@ export default async function AdminClassesPage(
           </div>
         </div>
         <AdminClassesCalendar
+          kind={searchParams.kind === 'events' || searchParams.kind === 'classes' ? searchParams.kind : 'all'}
           occurrences={adminCalendarOccurrences}
           view={occurrenceRange.key}
           selectedDateKey={occurrenceRange.dateKey}
