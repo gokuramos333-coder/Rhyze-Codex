@@ -39,6 +39,15 @@ export async function POST(request: Request) {
       replyTo: config.replyTo,
       postalAddress: config.postalAddress,
       outreachEnabled: process.env.MEMBER_ABSENCE_OUTREACH_ENABLED === 'true',
+      // Exact owner-approved initial recipients; the allowance expires after its Eastern day.
+      historicalUserIds:
+        process.env.MEMBER_ABSENCE_INITIAL_CATCHUP_DAY ===
+        absenceRunDay(now).day
+          ? (process.env.MEMBER_ABSENCE_INITIAL_RECIPIENT_IDS || '')
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : [],
     }),
   );
 }

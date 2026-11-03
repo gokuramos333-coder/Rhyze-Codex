@@ -233,6 +233,43 @@ describe('one re-engagement email per real absence, with daily owner digest', ()
       }),
     ).toBe(0);
   });
+  it('initial catch-up is exact, keeps opt-outs, and cannot resend the same absence', async () => {
+    const runAt = new Date(+now + 3 * 86400000);
+    await db.emailMessage.deleteMany({
+      where: { dedupeKey: { startsWith: 'absence-report:2035-11-08:' } },
+    });
+    const customers = ['history', 'optout'].map((kind) => ({
+      ...customer,
+      id: prefix + '-' + kind,
+      email: prefix + '-' + kind + '@example.test',
+      consent: kind === 'optout' ? 'OPTED_OUT' : 'OPTED_IN',
+    }));
+    const result = await prepareAbsenceFollowUp(db, {
+      ...input,
+      now: runAt,
+      customers,
+      historicalUserIds: [prefix + '-history', prefix + '-optout'],
+    });
+    expect(result.queued).toBe(1);
+    expect(
+      await db.newsletterRecipient.count({
+        where: { userId: prefix + '-history' },
+      }),
+    ).toBe(1);
+    expect(
+      await db.newsletterRecipient.count({
+        where: { userId: prefix + '-optout' },
+      }),
+    ).toBe(0);
+    expect(
+      await prepareAbsenceFollowUp(db, {
+        ...input,
+        now: runAt,
+        customers,
+        historicalUserIds: [prefix + '-history'],
+      }),
+    ).toMatchObject({ alreadyPrepared: true, queued: 0 });
+  });
   it('does not queue more outreach after the daily batch, and reports exclusions truthfully', async () => {
     expect(
       await prepareAbsenceFollowUp(db, {

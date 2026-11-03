@@ -63,4 +63,20 @@ describe('cloud absence job authorization and timing', () => {
     });
     expect(mocks.prepare).toHaveBeenCalledTimes(2);
   });
+  it('permits only the exact initial allowlist on its approved Eastern day', async () => {
+    setup();
+    vi.stubEnv('MEMBER_ABSENCE_INITIAL_CATCHUP_DAY', '2026-11-04');
+    vi.stubEnv('MEMBER_ABSENCE_INITIAL_RECIPIENT_IDS', 'one, two');
+    await POST(request());
+    expect(mocks.prepare).toHaveBeenLastCalledWith(
+      {},
+      expect.objectContaining({ historicalUserIds: ['one', 'two'] }),
+    );
+    vi.setSystemTime(new Date('2026-11-05T14:00Z'));
+    await POST(request());
+    expect(mocks.prepare).toHaveBeenLastCalledWith(
+      {},
+      expect.objectContaining({ historicalUserIds: [] }),
+    );
+  });
 });

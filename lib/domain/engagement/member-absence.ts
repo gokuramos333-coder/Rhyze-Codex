@@ -148,6 +148,7 @@ export async function prepareAbsenceFollowUp(
     replyTo: string;
     postalAddress: string;
     outreachEnabled: boolean;
+    historicalUserIds?: string[];
   },
 ) {
   const day = absenceRunDay(input.now).day;
@@ -209,13 +210,16 @@ export async function prepareAbsenceFollowUp(
                 : recorded
                   ? `Email ${recorded.status.toLowerCase()}`
                   : 'Existing outreach needs review';
+        const historical =
+          +member.lastAt + WEEK < +input.enabledAt &&
+          !input.historicalUserIds?.includes(member.id);
         let action =
           reason ||
           (member.upcoming
             ? 'Already booked to return'
             : existing
               ? deliveryStatus
-              : +member.lastAt + WEEK < +input.enabledAt
+              : historical
                 ? 'Historical absence — staff follow-up'
                 : !input.outreachEnabled
                   ? 'Automatic outreach paused'
@@ -224,7 +228,7 @@ export async function prepareAbsenceFollowUp(
           !existing &&
           !reason &&
           !member.upcoming &&
-          +member.lastAt + WEEK >= +input.enabledAt &&
+          !historical &&
           input.outreachEnabled
         ) {
           const snapshot = {
