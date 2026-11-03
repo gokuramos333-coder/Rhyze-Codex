@@ -1,3 +1,4 @@
+import { ABSENCE_TEMPLATE, absenceStillDeliverable } from '@/lib/domain/engagement/member-absence';
 import { Resend } from 'resend';
 import { prisma } from '@/lib/db/prisma';
 import {
@@ -60,7 +61,7 @@ export async function runNewsletterBatch() {
     where: {
       status: { in: ['QUEUED', 'RETRY'] },
       nextAttemptAt: { lte: new Date() },
-      campaign: { status: 'SENDING' },
+      campaign: { status: 'SENDING', ...((process.env.MEMBER_ABSENCE_ENABLED !== 'true' || process.env.MEMBER_ABSENCE_OUTREACH_ENABLED !== 'true') ? { templateType: { not: ABSENCE_TEMPLATE } } : {}) },
     },
     orderBy: { createdAt: 'asc' },
     take: 20,
@@ -108,6 +109,10 @@ export async function runNewsletterBatch() {
         where: { id: recipient.id },
         data: { status: 'CANCELLED' },
       });
+      continue;
+    }
+    if (latest.templateType === ABSENCE_TEMPLATE && !await absenceStillDeliverable(prisma, latest.sentSnapshot)) {
+      await prisma.newsletterRecipient.update({where:{id:recipient.id},data:{status:'EXCLUDED',exclusionReason:'Member returned, booked a future visit, or absence changed',leaseAt:null}});
       continue;
     }
     const snapshot = latest.sentSnapshot as unknown as FrozenNewsletter;

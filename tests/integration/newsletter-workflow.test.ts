@@ -818,3 +818,43 @@ describe('Allowlisted test emails', () => {
     }
   });
 });
+
+it('holds queued absence outreach while its delivery switch is off', async () => {
+  await customer();
+  const c = await draft();
+  await approve(c);
+  await prisma.emailCampaign.update({
+    where: { id: c.id },
+    data: { templateType: 'MEMBER_ABSENCE' },
+  });
+  await prepareCampaign(c.id);
+  const before = await prisma.newsletterRecipient.findMany({
+    where: { campaignId: c.id },
+  });
+  expect(before.some((r) => r.status === 'QUEUED')).toBe(true);
+  const master = process.env.MEMBER_ABSENCE_ENABLED;
+  const outreach = process.env.MEMBER_ABSENCE_OUTREACH_ENABLED;
+  try {
+    process.env.MEMBER_ABSENCE_ENABLED = 'true';
+    process.env.MEMBER_ABSENCE_OUTREACH_ENABLED = 'false';
+    await runNewsletterBatch();
+    expect(
+      (
+        await prisma.newsletterRecipient.findMany({
+          where: { campaignId: c.id },
+          select: { id: true, status: true },
+        })
+      ).sort((a, b) => a.id.localeCompare(b.id)),
+    ).toEqual(
+      before
+        .map((r) => ({ id: r.id, status: r.status }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    );
+  } finally {
+    if (master === undefined) delete process.env.MEMBER_ABSENCE_ENABLED;
+    else process.env.MEMBER_ABSENCE_ENABLED = master;
+    if (outreach === undefined)
+      delete process.env.MEMBER_ABSENCE_OUTREACH_ENABLED;
+    else process.env.MEMBER_ABSENCE_OUTREACH_ENABLED = outreach;
+  }
+});

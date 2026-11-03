@@ -44,6 +44,12 @@ const booking = {
 };
 
 export const emailTemplateCatalog = {
+  ADMIN_ABSENCE_REPORT: {
+    label: 'Daily member absence report', category: 'Messages', trigger: 'Daily at 9 AM Eastern after owner enables absence follow-up',
+    subject: (p) => `Rhyze daily follow-up — ${text(p, 'date', 'today')}`,
+    sample: {date:'2026-11-04',count:'3',queued:'1'},
+    present: (p) => ({eyebrow:'Owner follow-up',headline:'Members we haven’t seen in 7 days',paragraphs:[`${text(p,'count','0')} members have not attended a standard class in at least seven days. The attached list includes their last visit, contact details, upcoming bookings and outreach status.`,`${text(p,'queued','0')} new “we miss you” emails were queued. Queued does not mean delivered; check Newsletter history for delivery results.`, 'Each member receives at most one automated message per absence. A new checked-in class resets eligibility. Historical absences and contact restrictions are labeled for staff review; no automatic historical blast is sent. SMS is not connected.'],cta:{label:'Open membership leads',href:'/admin/members/leads'},closing:'Respect do-not-contact and unsubscribe preferences before following up.'}),
+  },
   SOMBLE_BILLING_RECOVERY: {
     label: 'Somble founding membership billing recovery', category: 'Memberships & payments', trigger: 'Only after an owner explicitly approves and queues a reviewed member recovery invitation',
     subject: () => 'Action needed: reconnect your Rhyze membership billing',
