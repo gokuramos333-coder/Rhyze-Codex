@@ -129,7 +129,8 @@ describe('admin class and client surfaces', () => {
 
     expect(source).toContain('href={`/admin/schedule/${template.occurrences[0].id}`}');
     expect(source).toContain('href={`/admin/schedule/${template.occurrences[0].id}?cancel=1`}');
-    expect(source).toContain('Manage next class');
+    expect(source).toContain('Edit this date');
+    expect(source).toContain('Choose dates & edit');
     expect(source).toContain('Cancel next class');
   });
 

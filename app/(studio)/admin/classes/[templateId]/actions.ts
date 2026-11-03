@@ -55,7 +55,6 @@ export async function updateClassTemplateAction(formData: FormData) {
       defaultCapacity: Number(formData.get('defaultCapacity')),
       dropInPriceCents,
       intensity: String(formData.get('intensity') || 'ALL_LEVELS') as 'LOW' | 'MODERATE' | 'HIGH' | 'ALL_LEVELS',
-      tags: String(formData.get('tags') || '').split(',').map((item) => item.trim()).filter(Boolean),
       equipment: String(formData.get('equipment') || '').split(',').map((item) => item.trim()).filter(Boolean),
       cancellationPolicy: String(formData.get('cancellationPolicy') || '') || null,
       isActive: formData.get('isActive') === 'on',

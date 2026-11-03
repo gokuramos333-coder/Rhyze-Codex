@@ -47,7 +47,7 @@ export default async function AdminClassesPage(
   const searchParams = await props.searchParams;
   const now = new Date();
   const range = resolveAnalyticsRange(searchParams);
-  const occurrenceRange = resolveScheduleOccurrenceRange(searchParams, now, 'day');
+  const occurrenceRange = resolveScheduleOccurrenceRange(searchParams, now, 'week');
   const occurrenceQueryRange = occurrenceRange.key === 'day'
     ? resolveScheduleOccurrenceRange(
         { range: 'week', date: occurrenceRange.dateKey },
@@ -62,7 +62,7 @@ export default async function AdminClassesPage(
         category: true,
         _count: { select: { occurrences: true } },
         occurrences: {
-          where: { status: 'SCHEDULED' },
+          where: { status: 'SCHEDULED', archivedAt: null, startAt: { gte: now } },
           orderBy: { startAt: 'asc' },
           take: 1,
           include: {
@@ -342,7 +342,7 @@ export default async function AdminClassesPage(
         className="mt-8 scroll-mt-8 border-t-4 border-rhyze-gold bg-white p-6"
       >
         <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">
-          Class templates
+          Today & upcoming
         </p>
         <h2 className="mt-2 font-display text-4xl tracking-wider">
           EDIT A CLASS
@@ -361,15 +361,15 @@ export default async function AdminClassesPage(
                 />
               <div>
               <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">
-                {template.category.name} · {template.durationMinutes} min
+                {template.category.name} · {template.occurrences[0] ? occurrenceDurationMinutes(template.occurrences[0]) : template.durationMinutes} min
               </p>
-              <h2 className="mt-1 font-display text-3xl tracking-wider">{template.name}</h2>
+              <h2 className="mt-1 font-display text-3xl tracking-wider">{template.occurrences[0] ? occurrenceTitle({ ...template.occurrences[0], template }) : template.name}</h2>
               <p className="mt-1 text-sm text-rhyze-black/55">
-                {template._count.occurrences} scheduled · {template.defaultCapacity} spots ·
-                {' '}${((template.dropInPriceCents || 0) / 100).toFixed(0)}
+                {template._count.occurrences} total dates · {template.occurrences[0]?.capacity ?? template.defaultCapacity} spots ·
+                {' '}${((template.occurrences[0]?.priceCents ?? template.dropInPriceCents ?? 0) / 100).toFixed(2)}
               </p>
               <p className="mt-2 text-xs font-bold uppercase tracking-widest text-rhyze-black/45">
-                {template.occurrences[0] ? `Next: ${template.occurrences[0].startAt.toLocaleString('en-US', { timeZone: template.occurrences[0].timezone, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'No upcoming date'}
+                {template.occurrences[0] ? `Next: ${template.occurrences[0].startAt.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'No upcoming date'}
                 {template.occurrences[0] ? ` · ${template.occurrences[0]._count.bookings + template.occurrences[0].historicalSignupCount} signups` : ''}
               </p>
               </div>
@@ -377,12 +377,12 @@ export default async function AdminClassesPage(
             <div className="flex flex-wrap gap-2">
               {template.occurrences[0] && (
                 <>
-                  <Link href={`/admin/schedule/${template.occurrences[0].id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Manage next class</Link>
+                  <Link href={`/admin/schedule/${template.occurrences[0].id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Edit this date</Link>
                   <Link href={`/admin/schedule/${template.occurrences[0].id}?cancel=1`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Cancel next class</Link>
                   <Link href={`/admin/schedule/${template.occurrences[0].id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>
                 </>
               )}
-              <Link href={`/admin/classes/${template.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Edit template</Link>
+              <Link href={`/admin/classes/${template.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Choose dates & edit</Link>
               {template.isActive ? (
                 <form action={archiveClassTemplateAction}>
                 <input type="hidden" name="id" value={template.id} />

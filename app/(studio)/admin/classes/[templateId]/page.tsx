@@ -1,107 +1,288 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { prisma } from '@/lib/db/prisma';
-import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
-import {
-  assignTemplateInstructorAction,
-  updateClassTemplateAction,
-} from './actions';
-import { occurrenceLocalTimeZone } from '@/lib/domain/schedule/occurrence-management';
+import { updateClassTemplateAction } from './actions';
 import { ClassArtworkForm } from '@/components/admin/ClassArtworkForm';
 import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { updateTemplateArtworkAction } from './artwork-actions';
-
-export default async function EditTemplatePage(
-  props: { params: Promise<{ templateId: string }>; searchParams: Promise<{ saved?: string }> }
-) {
-  const searchParams = await props.searchParams;
-  const params = await props.params;
-  const [item, categories, instructors] = await Promise.all([
+import { prisma } from '@/lib/db/prisma';
+import { UpcomingClassEditor } from '@/components/admin/UpcomingClassEditor';
+import {
+  occurrenceInstructorName,
+  occurrenceTitle,
+  occurrenceLocalTimeZone,
+} from '@/lib/domain/schedule/occurrence-management';
+import { resolveScheduleOccurrenceRange } from '@/lib/admin/schedule-occurrence-range';
+import {
+  assignableInstructorWhere,
+  dedupeAssignableInstructors,
+  instructorOptionLabel,
+} from '@/lib/admin/assignable-instructors';
+export default async function EditTemplatePage({
+  params,
+}: {
+  params: Promise<{ templateId: string }>;
+}) {
+  const { templateId } = await params;
+  const now = new Date();
+  const [item, instructors, categories] = await Promise.all([
     prisma.classTemplate.findUnique({
-      where: { id: params.templateId },
+      where: { id: templateId },
       include: {
         occurrences: {
           where: { archivedAt: null },
           orderBy: { startAt: 'asc' },
           include: {
-            instructor: { select: { id: true, name: true, instructorProfile: true } },
-            _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
+            instructor: { select: { name: true, instructorProfile: true } },
           },
         },
       },
     }),
-    prisma.classCategory.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
     prisma.user.findMany({
-      where: { instructorProfile: { isNot: null }, status: 'ACTIVE' },
+      where: assignableInstructorWhere,
       select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.classCategory.findMany({
+      where: { isActive: true },
       orderBy: { name: 'asc' },
     }),
   ]);
   if (!item) notFound();
+  const upcoming = item.occurrences.filter(
+    (o) => o.status === 'SCHEDULED' && o.startAt > now,
+  );
+  const history = item.occurrences
+    .filter((o) => !upcoming.includes(o))
+    .sort((a, b) => +b.startAt - +a.startAt);
+  const format = (date: Date) =>
+    date.toLocaleString('en-US', {
+      timeZone: occurrenceLocalTimeZone(),
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+  const week = resolveScheduleOccurrenceRange({ range: 'week' }, now, 'week');
   return (
     <>
-      <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class catalog</p>
-      <h1 className="mt-3 font-display text-6xl tracking-wider">EDIT {item.name}</h1>
-      {searchParams.saved && <p className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">Template updated.</p>}
-      <form action={updateClassTemplateAction} className="mt-8 grid gap-4 border-t-4 border-rhyze-coral bg-white p-6 md:grid-cols-2">
-        <input type="hidden" name="id" value={item.id}/>
-        <Field name="name" label="Name" value={item.name}/>
-        <label className="grid gap-2"><Span>Category</Span><select name="categoryId" defaultValue={item.categoryId} className="min-h-12 border px-3">{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-        <Field name="durationMinutes" label="Duration" type="number" value={String(item.durationMinutes)}/>
-        <Field name="defaultCapacity" label="Capacity" type="number" value={String(item.defaultCapacity)}/>
-        <Field name="dropInPrice" label="Drop-in price" type="number" value={String((item.dropInPriceCents || 2500)/100)} min="1" step="0.01"/>
-        <label className="grid gap-2"><Span>Intensity</Span><select name="intensity" defaultValue={item.intensity} className="min-h-12 border px-3">{['LOW','MODERATE','HIGH','ALL_LEVELS'].map((value) => <option key={value}>{value}</option>)}</select></label>
-        <Field name="tags" label="Tags (comma separated)" value={item.tags.join(', ')}/>
-        <Field name="equipment" label="Equipment (comma separated)" value={item.equipment.join(', ')}/>
-        <label className="grid gap-2 md:col-span-2"><Span>Description</Span><textarea name="description" defaultValue={item.description} required className="min-h-28 border p-3"/></label>
-        <label className="grid gap-2 md:col-span-2"><Span>Cancellation policy</Span><textarea name="cancellationPolicy" defaultValue={item.cancellationPolicy || ''} className="border p-3"/></label>
-        <label className="flex items-center gap-2 text-sm font-bold"><input name="isActive" type="checkbox" defaultChecked={item.isActive}/> Active</label>
-        <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">Save class template</button>
-      </form>
-      <ClassArtworkForm id={item.id} action={updateTemplateArtworkAction} currentPhotoUrl={item.imageUrl} fallbackPhotoUrl={resolveClassArtwork({ instructor: item.occurrences[0]?.instructor })} />
-      <form
-        action={assignTemplateInstructorAction}
-        className="mt-8 grid gap-4 border-t-4 border-rhyze-orange bg-white p-6 md:grid-cols-[1fr_auto] md:items-end"
+      <Link
+        href="/admin/classes#edit-a-class"
+        className="text-sm font-bold underline"
       >
-        <input type="hidden" name="templateId" value={item.id} />
-        <label className="grid gap-2">
-          <Span>Instructor for every scheduled date</Span>
-          <select
-            name="instructorId"
-            required
-            defaultValue={item.occurrences[0]?.instructor?.id || ''}
-            className="min-h-12 border px-3"
-          >
-            <option value="">Choose an instructor account</option>
-            {instructors.map((instructor) => (
-              <option key={instructor.id} value={instructor.id}>
-                {instructor.name || instructor.email}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="min-h-12 bg-rhyze-black px-5 text-xs font-black uppercase tracking-widest text-white">
-          Sync instructor
-        </button>
-      </form>
-      <section className="mt-8 border-t-4 border-rhyze-gold bg-white p-6">
-        <h2 className="font-display text-4xl tracking-wider">SCHEDULED DATES</h2>
-        <div className="mt-4 grid gap-2">
-          {item.occurrences.map((occurrence) => (
-            <div key={occurrence.id} className="grid gap-2 border-b border-black/10 py-3 lg:grid-cols-[1fr_auto_auto] lg:items-center">
-              <strong>{occurrence.startAt.toLocaleString('en-US', { timeZone: occurrenceLocalTimeZone(), dateStyle: 'full', timeStyle: 'short' })}</strong>
-              <span className="text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'Instructor TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups</span>
-              <span className="flex gap-2">
-                <Link href={`/admin/schedule/${occurrence.id}/roster`} className="border border-rhyze-orange px-3 py-2 text-xs font-black uppercase text-rhyze-coral">Attendees</Link>
-                <Link href={`/admin/schedule/${occurrence.id}`} className="border border-rhyze-black px-3 py-2 text-xs font-black uppercase">Edit date</Link>
-              </span>
+        ← Back to classes
+      </Link>
+      <p className="mt-5 text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">
+        Edit scheduled classes
+      </p>
+      <h1 className="mt-2 font-display text-5xl tracking-wide">
+        {upcoming[0]
+          ? occurrenceTitle({ ...upcoming[0], template: item })
+          : item.name}
+      </h1>
+      <p className="mt-3 max-w-3xl text-black/65">
+        Choose the dates you want to update, then make your changes in one
+        place. Your past schedule stays intact.
+      </p>
+      <UpcomingClassEditor
+        templateId={item.id}
+        weekEnd={week.end.toISOString()}
+        nowLabel={format(now)}
+        instructors={dedupeAssignableInstructors(instructors).map((i) => ({
+          id: i.id,
+          name: instructorOptionLabel(i),
+        }))}
+        dates={upcoming.map((o) => ({
+          id: o.id,
+          updatedAt: o.updatedAt.toISOString(),
+          startAt: o.startAt.toISOString(),
+          endAt: o.endAt.toISOString(),
+          title: occurrenceTitle({ ...o, template: item }),
+          instructor: occurrenceInstructorName(o),
+          instructorId: o.instructorId,
+          capacity: o.capacity,
+          priceCents: o.priceCents ?? item.dropInPriceCents ?? 2500,
+          publicNotes: o.publicNotes,
+        }))}
+      />
+      <details className="mt-8 border-t border-black/15 bg-white/60 p-5">
+        <summary className="cursor-pointer font-bold">
+          Shared format settings & artwork
+        </summary>
+        <p className="mt-3 border-l-4 border-rhyze-orange bg-orange-50 p-4 text-sm">
+          These settings belong to the whole class format, not your selected
+          dates. Description, category and artwork are shared with past dates
+          too. Use the editor above for changes that must leave past classes
+          untouched.
+        </p>
+        <form
+          action={updateClassTemplateAction}
+          className="mt-8 grid gap-4 border-t-4 border-rhyze-coral bg-white p-6 md:grid-cols-2"
+        >
+          <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="name" value={item.name} />
+          <p className="text-sm md:col-span-2">
+            Format: <strong>{item.name}</strong>. To change scheduled class
+            names, use the date selector above.
+          </p>
+          <label className="grid gap-2">
+            <Span>Category</Span>
+            <select
+              name="categoryId"
+              defaultValue={item.categoryId}
+              className="min-h-12 border px-3"
+            >
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Field
+            name="durationMinutes"
+            label="Duration"
+            type="number"
+            value={String(item.durationMinutes)}
+          />
+          <Field
+            name="defaultCapacity"
+            label="Capacity"
+            type="number"
+            value={String(item.defaultCapacity)}
+          />
+          <Field
+            name="dropInPrice"
+            label="Drop-in price"
+            type="number"
+            value={String((item.dropInPriceCents || 2500) / 100)}
+            min="1"
+            step="0.01"
+          />
+          <label className="grid gap-2">
+            <Span>Intensity</Span>
+            <select
+              name="intensity"
+              defaultValue={item.intensity}
+              className="min-h-12 border px-3"
+            >
+              {['LOW', 'MODERATE', 'HIGH', 'ALL_LEVELS'].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          </label>
+          <Field
+            name="equipment"
+            label="Equipment (comma separated)"
+            value={item.equipment.join(', ')}
+          />
+          <label className="grid gap-2 md:col-span-2">
+            <Span>Description</Span>
+            <textarea
+              name="description"
+              defaultValue={item.description}
+              required
+              className="min-h-28 border p-3"
+            />
+          </label>
+          <label className="grid gap-2 md:col-span-2">
+            <Span>Cancellation policy</Span>
+            <textarea
+              name="cancellationPolicy"
+              defaultValue={item.cancellationPolicy || ''}
+              className="border p-3"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm font-bold">
+            <input
+              name="isActive"
+              type="checkbox"
+              defaultChecked={item.isActive}
+            />{' '}
+            Active
+          </label>
+          <button className="min-h-12 bg-rhyze-gradient px-5 text-xs font-black uppercase tracking-widest md:col-span-2">
+            Save shared format settings
+          </button>
+        </form>
+        <ClassArtworkForm
+          id={item.id}
+          action={updateTemplateArtworkAction}
+          currentPhotoUrl={item.imageUrl}
+          fallbackPhotoUrl={resolveClassArtwork({
+            instructor: item.occurrences[0]?.instructor,
+          })}
+        />
+      </details>
+      <details className="mt-8 border-t border-black/15 bg-white/60 p-5">
+        <summary className="cursor-pointer font-bold">
+          Past & cancelled dates · {history.length} · view only
+        </summary>
+        <p className="mt-3 text-sm text-black/60">
+          Most recent first. These dates cannot be selected for future changes.
+        </p>
+        <div className="mt-4 max-h-96 divide-y overflow-y-auto">
+          {history.map((o) => (
+            <div key={o.id} className="py-3 text-sm">
+              <strong>{format(o.startAt)}</strong>
+              <p>
+                {occurrenceTitle({ ...o, template: item })} ·{' '}
+                {occurrenceInstructorName(o)} ·{' '}
+                {o.status.toLowerCase().replaceAll('_', ' ')}
+              </p>
+              <Link
+                href={`/admin/schedule/${o.id}/roster`}
+                className="font-bold underline"
+              >
+                View attendance
+              </Link>
             </div>
           ))}
-          {!item.occurrences.length && <p className="text-rhyze-black/55">No dates scheduled. Add one from Admin → Schedule.</p>}
+          {!history.length && <p>No past dates.</p>}
         </div>
-      </section>
+      </details>
     </>
   );
 }
-function Span({ children }: { children: React.ReactNode }) { return <span className="text-xs font-black uppercase tracking-widest">{children}</span>; }
-function Field({ name, label, value, type = 'text', required = true, min, step }: { name: string; label: string; value: string; type?: string; required?: boolean; min?: string; step?: string }) { return <label className="grid gap-2"><Span>{label}</Span><input name={name} defaultValue={value} type={type} required={required} min={min} step={step} className="min-h-12 border px-3"/></label>; }
+
+function Span({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-xs font-black uppercase tracking-widest">
+      {children}
+    </span>
+  );
+}
+function Field({
+  name,
+  label,
+  value,
+  type = 'text',
+  required = true,
+  min,
+  step,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  type?: string;
+  required?: boolean;
+  min?: string;
+  step?: string;
+}) {
+  return (
+    <label className="grid gap-2">
+      <Span>{label}</Span>
+      <input
+        name={name}
+        defaultValue={value}
+        type={type}
+        required={required}
+        min={min}
+        step={step}
+        className="min-h-12 border px-3"
+      />
+    </label>
+  );
+}
