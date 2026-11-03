@@ -767,6 +767,7 @@ async function fulfillCommerceOrder(
       where: { occurrenceId: order.occurrenceId, status: 'CONFIRMED' },
     });
     if (
+      order.occurrence.archivedAt ||
       booked + order.occurrence.historicalSignupCount >=
       order.occurrence.capacity
     ) {
@@ -840,7 +841,8 @@ async function fulfillCommerceOrder(
         'Rhyze shop purchase';
   const recipient = order.user?.email || order.customerEmail;
   if (recipient) {
-    await queueEmail(tx, {
+    // A late receipt still belongs in the ledger, but a removed date is not a booking.
+    if (!order.occurrence?.archivedAt) await queueEmail(tx, {
       userId: order.userId || undefined,
       to: recipient,
       subject:
@@ -853,6 +855,7 @@ async function fulfillCommerceOrder(
           : 'PURCHASE_CONFIRMATION',
       payload: {
         name: order.user?.name || 'Rhyzer',
+        occurrenceId: order.occurrenceId,
         eventName: itemName,
         itemName,
         eventDate: order.occurrence?.startAt.toLocaleDateString('en-US', {

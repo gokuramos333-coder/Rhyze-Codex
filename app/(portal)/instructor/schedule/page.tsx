@@ -28,6 +28,7 @@ export default async function InstructorSchedulePage() {
   const classes = await prisma.classOccurrence.findMany({
     where: {
       instructorId: user.id,
+      archivedAt: null,
       startAt: { gte: new Date() },
       status: { in: ['SCHEDULED', 'CANCELLED'] },
     },

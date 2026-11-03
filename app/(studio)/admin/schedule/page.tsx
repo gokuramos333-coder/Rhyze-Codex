@@ -12,6 +12,7 @@ export default async function AdminSchedulePage(
   const searchParams = await props.searchParams;
   const [occurrences, templates, instructors] = await Promise.all([
     prisma.classOccurrence.findMany({
+      where: { archivedAt: null },
       include: { template: true, instructor: true, room: true },
       orderBy: { startAt: 'asc' },
       take: 80,
@@ -77,6 +78,7 @@ export default async function AdminSchedulePage(
               {occurrence.status === 'SCHEDULED' && (
                 <Link href={`/admin/schedule/${occurrence.id}?cancel=1`} className="text-rhyze-coral">Cancel class</Link>
               )}
+              <Link href={`/admin/schedule/${occurrence.id}#delete-class`} className="text-rhyze-coral">Delete this date</Link>
               <Link href={`/admin/schedule/${occurrence.id}/roster`}>Roster</Link>
               <Link href={`/schedule/${occurrence.id}`}>Public view</Link>
             </span>

@@ -323,6 +323,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       subject: `You’re booked for ${occurrenceTitle(occurrence)}`,
       template: 'BOOKING_CONFIRMATION',
       payload: {
+        bookingId: booking.id, occurrenceId: occurrence.id,
         name: user.name || 'Rhyzer',
         className: occurrenceTitle(occurrence),
         instructorName: occurrenceInstructorName(occurrence),

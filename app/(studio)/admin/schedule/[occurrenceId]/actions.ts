@@ -1,5 +1,6 @@
 'use server';
 
+import { deleteScheduledOccurrence, DeleteOccurrenceError } from '@/lib/domain/schedule/delete-occurrence';
 import { Prisma } from '@prisma/client';
 import { hasScheduleConflict } from '@/lib/domain/schedule/conflict-service';
 import { revalidatePath } from 'next/cache';
@@ -133,7 +134,7 @@ export async function updateOccurrenceAction(formData: FormData) {
     // Coordinate with schedule imports; serializable reads fail closed on concurrent edits.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('rhyze-schedule-import'))`;
     const current = await tx.classOccurrence.findUnique({ where: { id }, include: { template: true } });
-    if (!current) return;
+    if (!current || current.archivedAt) return;
     const startAt = parseOccurrenceLocalStart(
       String(formData.get('startAt') || ''),
       current.timezone || studioTimezone,
@@ -266,4 +267,17 @@ export async function cancelSeriesAction(formData: FormData) {
   revalidatePath('/admin/schedule');
   revalidatePath('/schedule');
   redirect('/admin/schedule');
+}
+
+export async function deleteOccurrenceAction(formData: FormData) {
+ const actor=await requireArea('admin');
+ const id=String(formData.get('id')||'');
+ try { await deleteScheduledOccurrence(prisma,actor.id,{id,expectedStartAt:String(formData.get('expectedStartAt')||''),expectedUpdatedAt:String(formData.get('expectedUpdatedAt')||''),confirmed:formData.get('confirmDelete')==='yes'}); }
+ catch(error) {
+  if(error instanceof DeleteOccurrenceError) redirect(`/admin/schedule/${encodeURIComponent(id)}?error=${error.code}#delete-class`);
+  if(error instanceof Prisma.PrismaClientKnownRequestError && error.code==='P2034') redirect(`/admin/schedule/${encodeURIComponent(id)}?error=delete-stale#delete-class`);
+  throw error;
+ }
+ for(const path of ['/','/admin','/admin/classes','/admin/events','/admin/schedule','/instructor/schedule','/schedule','/events',`/schedule/${id}`]) revalidatePath(path);
+ redirect('/admin/classes?deleted=1');
 }
