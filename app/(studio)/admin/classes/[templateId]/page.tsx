@@ -5,6 +5,7 @@ import { ClassArtworkForm } from '@/components/admin/ClassArtworkForm';
 import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { updateTemplateArtworkAction } from './artwork-actions';
 import { prisma } from '@/lib/db/prisma';
+import { DeleteClassSchedule } from '@/components/admin/DeleteClassSchedule';
 import { UpcomingClassEditor } from '@/components/admin/UpcomingClassEditor';
 import {
   occurrenceInstructorName,
@@ -34,6 +35,16 @@ export default async function EditTemplatePage({
           orderBy: { startAt: 'asc' },
           include: {
             instructor: { select: { name: true, instructorProfile: true } },
+            _count: {
+              select: {
+                bookings: {
+                  where: {
+                    status: { in: ['CONFIRMED', 'ATTENDED', 'NO_SHOW'] },
+                  },
+                },
+                waitlistEntries: { where: { status: 'WAITING' } },
+              },
+            },
           },
         },
       },
@@ -87,6 +98,19 @@ export default async function EditTemplatePage({
         Choose the dates you want to update, then make your changes in one
         place. Your past schedule stays intact.
       </p>
+      <DeleteClassSchedule
+        templateId={item.id}
+        dates={item.occurrences
+          .filter((o) => o.startAt > now)
+          .map((o) => ({
+            id: o.id,
+            startAt: o.startAt.toISOString(),
+            updatedAt: o.updatedAt.toISOString(),
+            label: `${format(o.startAt)} · ${occurrenceTitle({ ...o, template: item })} · ${occurrenceInstructorName(o)}`,
+            booked: o._count.bookings,
+            waiting: o._count.waitlistEntries,
+          }))}
+      />
       <UpcomingClassEditor
         templateId={item.id}
         weekEnd={week.end.toISOString()}
@@ -118,6 +142,7 @@ export default async function EditTemplatePage({
           imageUrl: o.imageUrl,
         }))}
       />
+
       <details className="mt-8 border-t border-black/15 bg-white/60 p-5">
         <summary className="cursor-pointer font-bold">
           Advanced class-format settings & artwork
