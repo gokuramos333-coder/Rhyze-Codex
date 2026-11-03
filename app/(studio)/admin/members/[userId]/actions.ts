@@ -106,7 +106,8 @@ function newYorkBoundary(year: number, month: number, day: number) {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // Node 20 formats midnight as 24:00 with hour12:false; h23 keeps it at 00:00.
+    hourCycle: 'h23',
   }).formatToParts(utcGuess);
   const hour = Number(parts.find((part) => part.type === 'hour')?.value);
   const minute = Number(parts.find((part) => part.type === 'minute')?.value);

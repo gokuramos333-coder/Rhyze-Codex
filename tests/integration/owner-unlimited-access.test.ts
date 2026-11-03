@@ -12,6 +12,7 @@ vi.mock('@/lib/db/prisma', async () => {
   return { prisma: new PrismaClient({ datasourceUrl: url }) };
 });
 import { prisma as db } from '@/lib/db/prisma';
+import { grantOwnerUnlimitedAccessAction } from '@/app/(studio)/admin/members/[userId]/actions';
 import { addMemberToClassAction } from '@/app/(studio)/admin/schedule/[occurrenceId]/roster/actions';
 import { grantOwnerUnlimitedAccess } from '@/lib/domain/credits/grant-owner-unlimited-access';
 import { vipCreditAccountCanBook } from '@/lib/domain/credits/vip-access';
@@ -65,6 +66,15 @@ describe.skipIf(!url)('owner unlimited standard-class access', () => {
     expect(await db.booking.findMany({ where: { userId } })).toMatchObject([{ status: 'CONFIRMED', policySnapshot: { creditAccountId: account.id, accessType: 'COMPLIMENTARY' } }]);
     expect(await db.creditLedgerEntry.count({ where: { creditAccountId: account.id, type: 'RESERVE' } })).toBe(0);
     expect((await db.creditAccount.findUniqueOrThrow({ where: { id: account.id } })).isUnlimited).toBe(true);
+  });
+  it.each([['2026-10-31', '2026-11-01T04:00:00Z'], ['2026-11-01', '2026-11-02T05:00:00Z'], ['2026-11-03', '2026-11-04T05:00:00Z'], ['2026-03-08', '2026-03-09T04:00:00Z']])('accepts same-day access through Eastern midnight (%s)', async (day, expectedEnd) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(day + 'T16:00:00Z'));
+    try {
+      const form = new FormData(); form.set('userId', userId); form.set('expirationDate', day); form.set('reason', 'Owner-approved same-day bridge');
+      await expect(grantOwnerUnlimitedAccessAction(form)).rejects.toThrow('sent=owner-unlimited');
+      expect(await db.creditAccount.findFirst({ where: { userId, validUntil: new Date(expectedEnd) } })).toMatchObject({ isUnlimited: true });
+    } finally { vi.useRealTimers(); }
   });
   it.each(['ADMIN', 'MEMBER', 'INSTRUCTOR'])('rejects %s grant authority', async role => {
     await expect(db.$transaction(tx => grantOwnerUnlimitedAccess(tx, { ...input, actor: { ...actor, role } }))).rejects.toThrow('Invalid owner');
