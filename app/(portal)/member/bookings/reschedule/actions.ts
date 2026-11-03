@@ -1,4 +1,5 @@
 'use server';
+import { ownerUnlimitedAccountsInclude } from '@/lib/domain/credits/owner-unlimited-access';
 import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 
@@ -22,7 +23,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     include: {
       user: {
         include: {
-          instructorProfile: true,
+          instructorProfile: true, creditAccounts: ownerUnlimitedAccountsInclude,
           memberships: {
             include: vipEntitlementInclude,
           },
@@ -94,7 +95,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     redirect('/member/bookings?result=reschedule-destination');
   }
 
-  const preflightUser = await prisma.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
+  const preflightUser = await prisma.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, creditAccounts: ownerUnlimitedAccountsInclude, memberships: { include: vipEntitlementInclude } } });
   if (!preflightUser || !transferEntitlementAllowed({
     creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
     accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: preflightUser.memberships }),
@@ -135,7 +136,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
       include: { template: true },
     });
     if (!destination) return false;
-    const currentUser = await tx.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
+    const currentUser = await tx.user.findUnique({ where: { id: user.id }, include: { instructorProfile: true, creditAccounts: ownerUnlimitedAccountsInclude, memberships: { include: vipEntitlementInclude } } });
     if (!currentUser || !transferEntitlementAllowed({
       creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
       accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: currentUser.memberships }),

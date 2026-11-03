@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 import { WAITLIST_CAPACITY } from '@/lib/domain/bookings/booking-rules';
 import {
   buildMonthlyCalendar,
+  publicSlotIsPast,
   localDateKey,
   type PublicCalendarSlot,
 } from '@/lib/domain/schedule/public-calendar';
@@ -318,15 +319,21 @@ export function WeeklyCalendar({
                       </button>
                       <ThanksgivingNotice dateKey={day.dateKey} />
                       <div className="mt-2 space-y-2">
-                        {day.slots.map((slot) => (
-                          <Link key={slot.id} href={slot.bookingHref} data-schedule-slot={slot.id} className={cn('focus-ring block rounded-lg border p-2 text-rhyze-cream transition hover:border-rhyze-orange', slot.isEvent ? 'border-rhyze-coral/70 bg-rhyze-coral/20' : 'border-white/15 bg-rhyze-charcoal/75')}>
+                        {day.slots.map((slot) => {
+                          const past = publicSlotIsPast(slot);
+                          const contents = <>
                             <span className="flex flex-wrap items-center gap-1 text-[0.6rem] font-black uppercase text-rhyze-orange">
                               <span>{slot.category}</span>{slot.isEvent && <ScheduleEventBadge />}
                             </span>
                             <span className="mt-1 block text-xs font-black">{slot.timeLabel}</span>
                             <span className="mt-1 block break-words text-sm font-bold leading-tight">{slot.className}</span>
-                          </Link>
-                        ))}
+                            {past && <span className="mt-2 block text-[0.65rem] font-bold text-rhyze-cream/60">Past {slot.isEvent ? 'event' : 'class'} · Booking not available</span>}
+                          </>;
+                          const className = cn('block rounded-lg border p-2 text-rhyze-cream', slot.isEvent ? 'border-rhyze-coral/70 bg-rhyze-coral/20' : 'border-white/15 bg-rhyze-charcoal/75');
+                          return past
+                            ? <div key={slot.id} data-schedule-slot={slot.id} className={className}>{contents}</div>
+                            : <Link key={slot.id} href={slot.bookingHref} data-schedule-slot={slot.id} className={cn(className, 'focus-ring transition hover:border-rhyze-orange')}>{contents}</Link>;
+                        })}
                       </div>
                     </div>
                   );
@@ -347,6 +354,7 @@ function CustomerScheduleCard({
   slot: PublicCalendarSlot;
   compact?: boolean;
 }) {
+  const past = publicSlotIsPast(slot);
   const { soldOut: full, label: availabilityLabel } = bookingAvailability(slot.booked, slot.capacity, slot.waitlist);
   const bookingLabel = publicBookingCountLabel(slot.booked, slot.capacity);
 
@@ -393,15 +401,17 @@ function CustomerScheduleCard({
               </span>
             )}
           </p>
-          {full && <p className="mt-2 text-xs font-black uppercase tracking-wider text-rhyze-gold">{availabilityLabel}</p>}
-          {bookingLabel && (
+          {!past && full && <p className="mt-2 text-xs font-black uppercase tracking-wider text-rhyze-gold">{availabilityLabel}</p>}
+          {!past && bookingLabel && (
             <p className="mt-1 text-xs uppercase tracking-widest text-rhyze-gold">
               {bookingLabel}{full && slot.waitlist ? ` · ${slot.waitlist} waitlist` : ''}
             </p>
           )}
         </div>
       </div>
-      {full && slot.waitlist >= WAITLIST_CAPACITY ? (
+      {past ? (
+        <span className="text-xs font-bold text-rhyze-cream/60">Past {slot.isEvent ? 'event' : 'class'} · Booking not available</span>
+      ) : full && slot.waitlist >= WAITLIST_CAPACITY ? (
         <span className={cn(
           'inline-flex cursor-not-allowed items-center justify-center rounded-lg border border-white/20 bg-white/10 font-black uppercase tracking-wider text-rhyze-cream/45',
           compact ? 'w-full px-3 py-3 text-[0.7rem] md:w-auto md:py-2' : 'px-5 py-3 text-sm',

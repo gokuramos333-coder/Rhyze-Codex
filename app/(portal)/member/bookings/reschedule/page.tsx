@@ -1,3 +1,4 @@
+import { ownerUnlimitedAccountsInclude } from '@/lib/domain/credits/owner-unlimited-access';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -19,7 +20,7 @@ export default async function MemberReschedulePage(
   const user = await requireArea('member');
   const booking = await prisma.booking.findFirst({
     where: { id: searchParams.booking, userId: user.id, status: 'CONFIRMED' },
-    include: { occurrence: { include: { template: true, instructor: true } }, user: { include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } } },
+    include: { occurrence: { include: { template: true, instructor: true } }, user: { include: { instructorProfile: true, creditAccounts: ownerUnlimitedAccountsInclude, memberships: { include: vipEntitlementInclude } } } },
   });
   if (!booking) redirect('/member/bookings?result=reschedule-select-booking');
   if (!classTicketCanTransfer(booking.policySnapshot)) return <p className="border-l-4 border-rhyze-gold bg-white p-5 font-bold">This ticket is valid only for its original class and date. Contact the studio if you need help with this booking.</p>;

@@ -1132,3 +1132,22 @@ export async function assignAdminMembershipAction(formData: FormData) {
   revalidatePath('/schedule');
   redirect(`/admin/members/${userId}?membership=assigned#memberships`);
 }
+
+export async function grantOwnerUnlimitedAccessAction(formData: FormData) {
+  const { grantOwnerUnlimitedAccess } = await import('@/lib/domain/credits/grant-owner-unlimited-access');
+  const actor = await requireApprovedOwner();
+  const parsed = manualCreditGrantSchema.omit({ creditKind: true, quantity: true }).safeParse({
+    userId: formData.get('userId'), expirationDate: formData.get('expirationDate'), reason: formData.get('reason'),
+  });
+  if (!parsed.success) redirectManualCreditError(String(formData.get('userId') || ''));
+  const { userId, expirationDate, reason } = parsed.data;
+  try {
+    await prisma.$transaction(tx => grantOwnerUnlimitedAccess(tx, {
+      actor, userId, validUntil: manualCreditValidUntil(expirationDate), reason,
+    }));
+  } catch { redirectManualCreditError(userId); }
+  revalidatePath(`/admin/members/${userId}`);
+  revalidatePath('/member');
+  revalidatePath('/member/membership');
+  redirect(`/admin/members/${userId}?sent=owner-unlimited#credits`);
+}

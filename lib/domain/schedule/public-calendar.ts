@@ -2,6 +2,8 @@ import { expandWeeklyRecurrence } from './recurrence-service';
 
 export type PublicCalendarSlot = {
   id: string;
+  startsAt?: string;
+  isPast?: boolean;
   dateKey: string;
   dayLabel: string;
   shortDay: string;
@@ -127,4 +129,8 @@ export function buildMonthlyCalendar(
       };
     }),
   ];
+}
+
+export function publicSlotIsPast(slot: PublicCalendarSlot, now = new Date()) {
+  return slot.isPast === true || Boolean(slot.startsAt && new Date(slot.startsAt) <= now);
 }

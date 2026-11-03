@@ -42,6 +42,7 @@ import {
   assignAdminMembershipAction,
   deleteManualMemberCreditsAction,
   grantManualMemberCreditsAction,
+  grantOwnerUnlimitedAccessAction,
   refundMemberCommerceOrderAction,
   returnTransactionCreditAction,
   reviewMembershipChangeRequestAction,
@@ -320,7 +321,7 @@ export default async function AdminMemberDetailPage(
     }))
     .filter(
       (account) =>
-        account.balance > 0 &&
+        (account.isUnlimited || account.balance > 0) &&
         account.validFrom <= now &&
         (!account.validUntil || account.validUntil > now),
     );
@@ -490,6 +491,7 @@ export default async function AdminMemberDetailPage(
       {searchParams.sent === 'attendance-credit-restored' && (
         <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">Attendance credit restored. Credit must be applied within 2 weeks.</p>
       )}
+      {searchParams.sent === 'owner-unlimited' && <p className="mt-6 border-l-4 border-green-700 bg-green-100 p-4 font-bold text-green-900">Unlimited standard-class access granted. Billing and event credits were not changed.</p>}
       {searchParams.sent === 'manual-credit' && (
         <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">Manual credit grant saved. The member can use those credits until the custom expiration date.</p>
       )}
@@ -592,13 +594,20 @@ export default async function AdminMemberDetailPage(
           <button className="min-h-10 bg-rhyze-black px-4 text-[10px] font-black uppercase text-white">Grant credits</button>
           <p className="text-xs font-bold text-rhyze-black/50 md:col-span-5">Manual grants create a separate class-only or event-only credit account, ledger entry, and audit log under the signed-in admin.</p>
         </form>
+        {actor.role === 'OWNER' && <form action={grantOwnerUnlimitedAccessAction} className="mt-4 grid gap-3 border border-rhyze-gold/40 bg-yellow-50 p-4 md:grid-cols-[12rem_1fr_auto] md:items-end">
+          <input type="hidden" name="userId" value={member.id} />
+          <p className="text-sm font-bold md:col-span-3">Owner-approved unlimited standard classes · separate from membership billing; no event credits or payment recorded.</p>
+          <label className="grid gap-1 text-xs font-bold">Access through<input name="expirationDate" type="date" required className="min-h-10 border bg-white px-2" /></label>
+          <label className="grid gap-1 text-xs font-bold">Reason for unlimited access<input name="reason" minLength={5} maxLength={240} required className="min-h-10 border bg-white px-3" /></label>
+          <button className="min-h-10 bg-rhyze-black px-4 text-xs font-black text-white">Grant unlimited class access</button>
+        </form>}
         <div className="mt-4 grid gap-2">
           {activeCredits.map((credit) => (
             credit.manualGrant ? (
               <details key={credit.id} className="group border-l-4 border-rhyze-orange bg-orange-50 p-4">
                 <summary className="cursor-pointer list-none">
                   <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{credit.label}</p>
-                  <p className="mt-1 text-sm font-bold">{credit.balance} credit available · apply by {date(credit.validUntil)}</p>
+                  <p className="mt-1 text-sm font-bold">{credit.isUnlimited ? 'Unlimited standard classes' : `${credit.balance} credit available`} · apply by {date(credit.validUntil)}</p>
                   <p className="mt-1 text-xs font-bold text-rhyze-black/50">Manual admin grant · click to edit amount or expiration; unused grants can also be deleted</p>
                 </summary>
                 <form action={updateManualMemberCreditsAction} className="mt-4 grid gap-3 border border-rhyze-orange/30 bg-white p-4 md:grid-cols-[10rem_8rem_12rem_1fr_auto] md:items-end">
@@ -638,7 +647,7 @@ export default async function AdminMemberDetailPage(
             ) : (
               <div key={credit.id} className="border-l-4 border-rhyze-orange bg-orange-50 p-4">
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{credit.label}</p>
-                <p className="mt-1 text-sm font-bold">{credit.balance} credit available · apply by {date(credit.validUntil)}</p>
+                <p className="mt-1 text-sm font-bold">{credit.isUnlimited ? 'Unlimited standard classes' : `${credit.balance} credit available`} · apply by {date(credit.validUntil)}</p>
                 {credit.restored && <p className="mt-1 text-xs font-bold text-rhyze-black/50">Restored rollover credit</p>}
               </div>
             )

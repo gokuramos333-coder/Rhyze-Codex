@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const db = vi.hoisted(() => ({ findMany: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/db/prisma', () => ({ prisma: { classOccurrence: db } }));
-import { loadPublicScheduleSlots } from '@/lib/domain/schedule/public-schedule-query';
+import { loadPublicScheduleSlots, loadPublicScheduleFilterOptions } from '@/lib/domain/schedule/public-schedule-query';
 const from = new Date('2026-10-01T04:00:00Z');
 function occurrence(index: number, isEvent = false) {
   return { id: `date-${index}`, startAt: new Date(from.getTime() + (index + 1) * 3600000), endAt: new Date(from.getTime() + (index + 1) * 3600000 + 50 * 60000), timezone: 'America/New_York',
@@ -12,6 +12,16 @@ function occurrence(index: number, isEvent = false) {
 }
 beforeEach(() => vi.clearAllMocks());
 describe('public schedule event eligibility', () => {
+  it('loads history by default, excludes removed/cancelled dates, and includes completed dates', async () => {
+    db.findMany.mockResolvedValue([]);
+    await loadPublicScheduleSlots();
+    await loadPublicScheduleFilterOptions();
+    for (const [query] of db.findMany.mock.calls) {
+      expect(query.where.startAt).toBeUndefined();
+      expect(query.where.archivedAt).toBeNull();
+      expect(query.where.status).toEqual({ in: ['SCHEDULED', 'COMPLETED'] });
+    }
+  });
   it('shows the stored 50-minute override instead of the 30-minute template', async () => {
     const row = { ...occurrence(1), endAt: new Date(occurrence(1).startAt.getTime() + 50 * 60000) };
     row.template.durationMinutes = 30;
@@ -38,6 +48,6 @@ describe('public schedule event eligibility', () => {
   it('retains future scheduled, active, non-archived restrictions without excluding event templates', async () => {
     db.findMany.mockResolvedValue([]);
     await loadPublicScheduleSlots(from);
-    expect(db.findMany.mock.calls[0][0].where).toEqual({ status: 'SCHEDULED', startAt: { gte: from }, template: { isActive: true, archivedAt: null } });
+    expect(db.findMany.mock.calls[0][0].where).toEqual({ archivedAt: null, status: 'SCHEDULED', startAt: { gte: from }, template: { isActive: true, archivedAt: null } });
   });
 });

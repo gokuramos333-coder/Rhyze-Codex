@@ -20,14 +20,13 @@ export default async function PublicSchedulePage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const from = new Date();
   const [slots, filterOptions] = await Promise.all([
-    loadPublicScheduleSlots(from, {
+    loadPublicScheduleSlots(undefined, {
       classSlug: searchParams.class,
       categorySlug: searchParams.category,
       instructorId: searchParams.instructor,
     }),
-    loadPublicScheduleFilterOptions(from),
+    loadPublicScheduleFilterOptions(),
   ]);
 
   return (
@@ -41,8 +40,7 @@ export default async function PublicSchedulePage(
             FIND YOUR RHYTHM
           </h1>
           <p className="mt-4 max-w-2xl text-rhyze-cream/65">
-            Filter upcoming classes, see the price, then open the class to
-            reserve your place.
+            Browse past and upcoming classes. Booking is available for upcoming dates.
           </p>
         </div>
         <Link

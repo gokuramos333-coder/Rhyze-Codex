@@ -1,4 +1,5 @@
 'use server';
+import { ownerUnlimitedAccountsInclude } from '@/lib/domain/credits/owner-unlimited-access';
 import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
 
@@ -24,7 +25,7 @@ export async function transferBookingAction(formData: FormData) {
     include: {
       user: {
         include: {
-          instructorProfile: true,
+          instructorProfile: true, creditAccounts: ownerUnlimitedAccountsInclude,
           memberships: {
             include: vipEntitlementInclude,
           },
@@ -105,7 +106,7 @@ export async function transferBookingAction(formData: FormData) {
   ) {
     redirect(`/instructor/classes/${booking.occurrenceId}/transfers?booking=${booking.id}&error=destination`);
   }
-  const preflightUser = await prisma.user.findUnique({ where: { id: booking.userId }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
+  const preflightUser = await prisma.user.findUnique({ where: { id: booking.userId }, include: { instructorProfile: true, creditAccounts: ownerUnlimitedAccountsInclude, memberships: { include: vipEntitlementInclude } } });
   if (!preflightUser || !transferEntitlementAllowed({
     creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
     accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: preflightUser.memberships }),
@@ -150,7 +151,7 @@ export async function transferBookingAction(formData: FormData) {
       include: { template: true },
     });
     if (!destination || destination.startAt > new Date(booking.occurrence.startAt.getTime() + 14 * 24 * 60 * 60_000) || destination.startAt < new Date()) return false;
-    const currentUser = await tx.user.findUnique({ where: { id: booking.userId }, include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } } });
+    const currentUser = await tx.user.findUnique({ where: { id: booking.userId }, include: { instructorProfile: true, creditAccounts: ownerUnlimitedAccountsInclude, memberships: { include: vipEntitlementInclude } } });
     if (!currentUser || !transferEntitlementAllowed({
       creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,
       accessType: transferBookingAccessType({ policySnapshot: booking.policySnapshot, bookingSource: booking.source, reservation, memberships: currentUser.memberships }),

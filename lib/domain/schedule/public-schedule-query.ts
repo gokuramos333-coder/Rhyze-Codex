@@ -38,7 +38,7 @@ function isThisWeekIgniteSub(date: Date, timezone: string, templateName: string)
 }
 
 export async function loadPublicScheduleSlots(
-  from = new Date(),
+  from?: Date,
   filters: {
     classSlug?: string;
     categorySlug?: string;
@@ -47,10 +47,11 @@ export async function loadPublicScheduleSlots(
 ): Promise<PublicCalendarSlot[]> {
   const occurrences = await prisma.classOccurrence.findMany({
     where: {
-      status: 'SCHEDULED',
-      startAt: { gte: from },
+      archivedAt: null,
+      status: from ? 'SCHEDULED' : { in: ['SCHEDULED', 'COMPLETED'] },
+      ...(from ? { startAt: { gte: from } } : { OR: [{ startAt: { lt: new Date() } }, { template: { isActive: true } }] }),
       template: {
-        isActive: true,
+        ...(from ? { isActive: true } : {}),
         archivedAt: null,
         ...(filters.classSlug ? { slug: filters.classSlug } : {}),
         ...(filters.categorySlug
@@ -100,6 +101,8 @@ export async function loadPublicScheduleSlots(
 
     return {
       id: occurrence.id,
+      startsAt: occurrence.startAt.toISOString(),
+      isPast: occurrence.status === 'COMPLETED' || occurrence.startAt <= new Date(),
       dateKey,
       dayLabel: datePart(occurrence.startAt, timezone, { weekday: 'long' }),
       shortDay: datePart(occurrence.startAt, timezone, { weekday: 'short' }),
@@ -134,12 +137,13 @@ export async function loadPublicScheduleSlots(
   });
 }
 
-export async function loadPublicScheduleFilterOptions(from = new Date()) {
+export async function loadPublicScheduleFilterOptions(from?: Date) {
   const occurrences = await prisma.classOccurrence.findMany({
     where: {
-      status: 'SCHEDULED',
-      startAt: { gte: from },
-      template: { isActive: true, archivedAt: null },
+      archivedAt: null,
+      status: from ? 'SCHEDULED' : { in: ['SCHEDULED', 'COMPLETED'] },
+      ...(from ? { startAt: { gte: from } } : { OR: [{ startAt: { lt: new Date() } }, { template: { isActive: true } }] }),
+      template: { ...(from ? { isActive: true } : {}), archivedAt: null },
     },
     select: {
       instructor: { select: { id: true, name: true } },

@@ -1,3 +1,4 @@
+import { ownerUnlimitedAccessAllows, type OwnerUnlimitedAccount } from '@/lib/domain/credits/owner-unlimited-access';
 import { instructorStandardClassAccess } from '@/lib/domain/bookings/booking-rules';
 import { giftedVipThrough, vipCreditBenefit, vipMembershipPaidThrough, type VipEntitlementMembership } from '@/lib/domain/credits/vip-access';
 import { bookingAccessType } from '@/lib/domain/bookings/booking-access';
@@ -27,7 +28,7 @@ export function transferBookingAccessType(input: {
 export function transferEntitlementAllowed(input: {
   accessType: string;
   creditAccountId?: string | null;
-  user: { role: string; status: string; instructorProfile: { isActive: boolean } | null; memberships: (VipEntitlementMembership & { activatedAt?: Date | null })[] };
+  user: { creditAccounts?: OwnerUnlimitedAccount[]; role: string; status: string; instructorProfile: { isActive: boolean } | null; memberships: (VipEntitlementMembership & { activatedAt?: Date | null })[] };
   sourceIsEvent: boolean;
   destinationIsEvent: boolean;
   destinationStartsAt: Date;
@@ -71,6 +72,8 @@ export function transferEntitlementAllowed(input: {
     const end = vipMembershipPaidThrough(m, input.now) ?? (!input.destinationIsEvent ? giftedVipThrough(m, input.now) : null);
     return end && input.destinationStartsAt < end;
   });
+  if (input.accessType === 'COMPLIMENTARY' && input.creditAccountId?.startsWith('owner-unlimited:')) return !input.destinationIsEvent &&
+    Boolean(input.user.creditAccounts?.some(account => account.id === input.creditAccountId && ownerUnlimitedAccessAllows(account, input.now, input.destinationStartsAt)));
   if (input.accessType === 'COMPLIMENTARY') return input.user.role === 'OWNER' ||
     instructorStandardClassAccess({ user: input.user, isEvent: input.destinationIsEvent });
   return true;

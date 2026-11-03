@@ -1,4 +1,5 @@
 'use server';
+import { isOwnerUnlimitedAccess } from '@/lib/domain/credits/owner-unlimited-access';
 import { occurrenceDurationMinutes, occurrenceTitle, occurrenceInstructorName } from '@/lib/domain/schedule/occurrence-management';
 import { publicOccurrenceUrl, notifyWaitlistOpening, completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
@@ -268,7 +269,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     }
     const accessProductKind = instructorAccess ? null : (account && vipCreditBenefit(account) ? 'VIP' : currentCreditProduct(account)?.kind
       ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null));
-    const accessType = instructorAccess
+    const accessType = (instructorAccess || isOwnerUnlimitedAccess(account))
       ? 'COMPLIMENTARY'
       : accessTypeForProductKind(accessProductKind);
     const booking = await tx.booking.create({

@@ -1,3 +1,4 @@
+import { isOwnerUnlimitedAccess, ownerUnlimitedAccessAllows } from './owner-unlimited-access';
 import { recoveryForUser } from '@/lib/domain/memberships/somble-billing-recovery';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { manualAssignmentWindowAllows } from './manual-assignment-access';
@@ -72,6 +73,7 @@ export function vipCreditAccountCanBook(input: {
   now: Date;
   occurrenceStartsAt?: Date;
 }) {
+  if (isOwnerUnlimitedAccess(input.account)) return ownerUnlimitedAccessAllows(input.account, input.now, input.occurrenceStartsAt);
   const source = input.account.sourcePurchase;
   if (!manualAssignmentWindowAllows({
     policyAcceptance: source?.policyAcceptance,

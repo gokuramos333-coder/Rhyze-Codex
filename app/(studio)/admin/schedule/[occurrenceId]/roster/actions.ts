@@ -1,4 +1,5 @@
 'use server';
+import { isOwnerUnlimitedAccess } from '@/lib/domain/credits/owner-unlimited-access';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { classTicketPolicySnapshot } from '@/lib/payments/class-ticket';
@@ -156,7 +157,7 @@ export async function addMemberToClassAction(formData: FormData) {
     const accessProductKind = instructorAccess ? null : creditAccount && vipCreditBenefit(creditAccount) ? 'VIP' : currentCreditProduct(creditAccount)?.kind ?? null;
     const policySnapshot = bookingPolicySnapshotWithAccess({
       currentSnapshot: { creditAccountId: instructorAccess ? null : creditAccount?.id ?? null, ...(!instructorAccess ? classTicketPolicySnapshot(creditAccount?.sourcePurchase?.policyAcceptance) : {}) },
-      accessType: instructorAccess ? 'COMPLIMENTARY' : accessTypeForProductKind(accessProductKind),
+      accessType: (instructorAccess || isOwnerUnlimitedAccess(creditAccount)) ? 'COMPLIMENTARY' : accessTypeForProductKind(accessProductKind),
       accessProductKind,
     });
 
