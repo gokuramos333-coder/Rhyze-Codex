@@ -1,7 +1,8 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
-import { cancelOccurrenceAction, cancelSeriesAction, duplicateOccurrenceAction, updateOccurrenceAction } from './actions';
+import { deleteOccurrenceAction, cancelOccurrenceAction, cancelSeriesAction, duplicateOccurrenceAction, updateOccurrenceAction } from './actions';
 import { instructorPayLabel } from '@/lib/domain/instructors/pay-rates';
 import { occurrenceInstructorName, occurrenceLocalInputValue, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { assignableInstructorWhere, dedupeAssignableInstructors, instructorOptionLabel } from '@/lib/admin/assignable-instructors';
@@ -17,12 +18,13 @@ export default async function ManageOccurrencePage(
       include: {
         template: true,
         instructor: { include: { instructorProfile: true } },
-        _count: { select: { bookings: { where: confirmedRosterBookingWhere() } } },
+        _count: { select: { bookings: { where: confirmedRosterBookingWhere() }, waitlistEntries: { where: { status: 'WAITING' } } } },
       },
     }),
     prisma.user.findMany({ where: assignableInstructorWhere, orderBy: { name: 'asc' } }),
   ]);
   if (!item) notFound();
+  if (item.archivedAt) return <><h1 className="font-display text-5xl">Date removed from schedule</h1><p className="mt-4">This date is no longer visible or bookable. Historical booking and payment records are retained.</p><Link href="/admin/classes" className="mt-5 inline-block underline">Back to scheduled classes</Link></>;
   const assignableInstructors = dedupeAssignableInstructors(instructors);
   return (
     <>
@@ -34,6 +36,7 @@ export default async function ManageOccurrencePage(
       {searchParams.error === 'instructor' && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Choose an active instructor account with portal access. A display name alone does not assign a class.</p>}
       {searchParams.error === 'duration' && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">Enter a whole-number duration from 5 to 480 minutes.</p>}
       {searchParams.error === 'conflict' && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">This time overlaps another scheduled class in the same room or with the same instructor. No changes were saved.</p>}
+      {searchParams.error?.startsWith('delete-') && <p role="alert" className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 font-bold text-red-900">{({ 'delete-stale': 'This class changed while you were reviewing it. Review the current date and time below before trying again.', 'delete-confirm': 'Confirm the specific date and time before deleting.', 'delete-payment': 'An unresolved payment needs review before this date can be deleted. Open the event financial entries; no changes were made.', 'delete-history': 'This date has attendance or imported signup history. Review those records before removing it; no changes were made.', 'delete-missing': 'This date could not be found.' } as Record<string,string>)[searchParams.error] || 'Review this date before deleting.'}</p>}
       <form action={updateOccurrenceAction} className="mt-8 grid gap-4 border-t-4 border-rhyze-gold bg-white p-6 md:grid-cols-2">
         <input type="hidden" name="id" value={item.id}/>
         <Label text="Class title for this date"><input name="titleOverride" defaultValue={item.titleOverride || ''} placeholder={item.template.name} className="min-h-12 border px-3"/></Label>
@@ -90,6 +93,22 @@ export default async function ManageOccurrencePage(
         {item.status === 'SCHEDULED' && <a href="#cancel-class" className="border border-rhyze-coral px-4 py-3 text-xs font-black uppercase tracking-widest text-rhyze-coral">Cancel occurrence</a>}
         {item.seriesId && <form action={cancelSeriesAction}><input type="hidden" name="seriesId" value={item.seriesId}/><button className="bg-rhyze-black px-4 py-3 text-xs font-black uppercase tracking-widest text-white">Cancel future series</button></form>}
       </div>
+      <section id="delete-class" className="mt-8 scroll-mt-8 border-t-4 border-rhyze-coral bg-white p-6">
+        <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Delete one scheduled date</p>
+        <h2 className="mt-2 font-display text-4xl tracking-wider">Which date are you removing?</h2>
+        <p className="mt-3 text-lg font-bold">{occurrenceTitle(item)} · {occurrenceInstructorName(item)}</p>
+        <p className="mt-2 text-lg font-bold">{item.startAt.toLocaleString('en-US', { timeZone: item.timezone, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })} – {item.endAt.toLocaleTimeString('en-US', { timeZone: item.timezone, hour: 'numeric', minute: '2-digit' })}</p>
+        <p className="mt-3 text-sm">Only this date and time will disappear from the schedule. All other dates for this class stay unchanged. Booking and payment history is retained.</p>
+        <p className="mt-3 border-l-4 border-rhyze-gold bg-[#fff8dc] p-4 text-sm font-bold">{item._count.bookings + item._count.waitlistEntries === 0 ? 'No signups: no customer email will be sent.' : `${item._count.bookings} booked · ${item._count.waitlistEntries} waiting. Only these people will be notified. Reserved credits are returned once; cash payments are retained for staff refund review.`}</p>
+        <form action={deleteOccurrenceAction} className="mt-5 grid gap-4">
+          <input type="hidden" name="id" value={item.id}/>
+          <input type="hidden" name="expectedStartAt" value={item.startAt.toISOString()}/>
+          <input type="hidden" name="expectedUpdatedAt" value={item.updatedAt.toISOString()}/>
+          <label className="flex items-start gap-3 font-bold"><input name="confirmDelete" type="checkbox" value="yes" required className="mt-1 h-5 w-5"/> I confirm: delete only the date and time shown above.</label>
+          <button className="min-h-12 bg-rhyze-coral px-5 text-xs font-black uppercase tracking-widest text-white">Delete this date{item._count.bookings + item._count.waitlistEntries ? ' and notify signups' : ' — no email'}</button>
+        </form>
+        <Link href="/admin/classes#scheduled-classes" className="mt-4 inline-block text-sm font-bold underline">Choose a different date from the schedule</Link>
+      </section>
       {item.status === 'SCHEDULED' && (
         <section id="cancel-class" className={`mt-8 border-t-4 border-rhyze-coral bg-white p-6 ${searchParams.cancel ? 'ring-4 ring-rhyze-coral/20' : ''}`}>
           <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Cancel class</p>
@@ -115,7 +134,7 @@ export default async function ManageOccurrencePage(
               Email preview: We need to cancel {item.template.name}. We apologize for the inconvenience and appreciate your understanding. The selected reason will appear here in the email before credit-return language.
             </div>
             <button className="min-h-12 bg-rhyze-coral px-5 text-xs font-black uppercase tracking-widest text-white md:col-span-2">
-              Cancel class and send approved email
+              {item._count.bookings ? 'Cancel class and notify signups' : 'Cancel class — no email (no signups)'}
             </button>
           </form>
         </section>
