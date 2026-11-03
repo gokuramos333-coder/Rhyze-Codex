@@ -4,6 +4,9 @@ const newProgramSlugs = new Set([
   'work-tone-mswoy36a',
   'mommy-and-me-dennisse',
   'pound-mackenzie',
+  'rhyzology-reggaeton-choreo-step-by-step-mvv89s0x',
+  'rhyzology-reggaeton-choreo-step-by-step-mvv8dqhk',
+  'rhyzology-reggaeton-choreo-step-by-step-mvv8rjc3',
 ]);
 
 export function isNewProgram(slug: string) {
