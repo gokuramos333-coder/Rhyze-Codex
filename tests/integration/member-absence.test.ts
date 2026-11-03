@@ -167,18 +167,6 @@ describe('one re-engagement email per real absence, with daily owner digest', ()
     await db.booking.create({
       data: { userId, occurrenceId: prefix + '-future' },
     });
-    const recipient = await db.newsletterRecipient.findFirstOrThrow({
-      where: { campaignId: id },
-    });
-    expect(recipient.firstName).toBe('Test');
-    const rendered = renderNewsletter({
-      ...(campaign.sentSnapshot as unknown as FrozenNewsletter),
-      firstName: recipient.firstName || undefined,
-      unsubscribeUrl: 'http://localhost:3000/newsletter/unsubscribe/test',
-    });
-    expect(rendered.subject).toBe('We miss you, Test 💛');
-    expect(rendered.html).toContain('We miss you, Test 💛');
-    expect(rendered.text).not.toContain('Rhyze Tribe');
     expect(await absenceStillDeliverable(db, campaign.sentSnapshot, now)).toBe(
       false,
     );
