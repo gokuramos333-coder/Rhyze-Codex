@@ -6,6 +6,7 @@ import {
   label,
   marketingEligibilityLabel,
   easternDate,
+  outreachTimestamp,
   outcomes,
   localSendCandidates,
   type Customer,
@@ -22,6 +23,7 @@ type Entry = {
   outcome: string | null;
   note: string | null;
   occurredAt: string;
+  contactedAt: string | null;
 };
 const LEADS_PER_PAGE = 50;
 
@@ -113,11 +115,23 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
     try {
       const type = String(f.get('type'));
       const date = String(f.get('followUp') || '');
+      const contactLocal = String(f.get('contactedAt') || '');
+      const contactedNow = type === 'OUTREACH' && f.get('contactedNow') === 'on';
+      if (type === 'OUTREACH' && !contactLocal && !contactedNow)
+        throw Error('Enter the contact time or confirm the contact happened now.');
+      if (type === 'OUTREACH' && contactLocal && contactedNow)
+        throw Error('Choose either a contact time or contacted now, not both.');
+      const contactTimes = type === 'OUTREACH' && contactLocal
+        ? localSendCandidates(contactLocal, 'America/New_York') : [];
+      if (type === 'OUTREACH' && contactLocal && contactTimes.length !== 1)
+        throw Error('Contact time is missing or ambiguous during daylight saving time. Choose an unambiguous Eastern time.');
       const body = {
         userId: selected.id,
         version: selected.version,
         operationKey: crypto.randomUUID(),
         type,
+        contactedAt: contactTimes[0],
+        contactedNow,
         method: f.get('method') || undefined,
         outcome: f.get('outcome') || undefined,
         note: f.get('note'),
@@ -297,7 +311,7 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
                   <th>Customer</th>
                   <th>Membership / activity</th>
                   <th>Contact status</th>
-                  <th>Last personal contact</th>
+                  <th>Latest known contact</th>
                   <th>Why follow up?</th>
                   <th></th>
                 </tr>
@@ -349,11 +363,11 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
                           </span>
                           <small>{c.lastStaff}</small>
                           <small>
-                            {new Date(c.lastContactedAt).toLocaleString()}
+                            {outreachTimestamp(c.lastContactedAt)}
                           </small>
                         </>
                       ) : (
-                        'No personal contact logged'
+                        c.attempts ? 'Contact time unknown' : 'No personal contact logged'
                       )}
                     </td>
                     <td>
@@ -468,6 +482,14 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
                   </select>
                 </label>
                 <label>
+                  Contact happened (Eastern time; completed calls/texts only)
+                  <input type="datetime-local" name="contactedAt" step="60" />
+                  <small>Enter the actual contact time, or explicitly confirm below. Logging time is recorded separately.</small>
+                </label>
+                <label>
+                  <input type="checkbox" name="contactedNow" /> Contact happened now
+                </label>
+                <label>
                   Follow-up date
                   <input
                     type="date"
@@ -499,7 +521,7 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
                   />
                 </label>
                 <small>
-                  Staff identity and time are recorded automatically.
+                  Staff identity and logging time are recorded automatically. Updates do not change earlier contact times.
                   “Converted” does not activate a membership.
                 </small>
                 <button className="nl-primary" disabled={busy}>
@@ -523,9 +545,13 @@ export function LeadsWorkspace({ userId }: { userId?: string }) {
                           : label(e.type)}
                       </strong>
                       <small>
-                        {e.actorName} ·{' '}
-                        {new Date(e.occurredAt).toLocaleString()}
+                        {e.actorName} · Logged {outreachTimestamp(e.occurredAt)}
                       </small>
+                      {e.type === 'OUTREACH' && (
+                        <small>{e.contactedAt
+                          ? `Contacted ${outreachTimestamp(e.contactedAt)}`
+                          : 'Original contact time was not recorded; the logging time above is not proof of when contact happened.'}</small>
+                      )}
                       {e.outcome && (
                         <p>
                           <span

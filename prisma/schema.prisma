@@ -1459,6 +1459,7 @@ model CustomerOutreach {
   outcome       String?
   note          String?
   occurredAt    DateTime @default(now())
+  contactedAt   DateTime?
   operationKey  String   @unique
 
   @@index([userId, occurredAt])

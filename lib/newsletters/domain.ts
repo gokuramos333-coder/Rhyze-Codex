@@ -254,6 +254,12 @@ export function defaultWeek(sendAt: Date) {
   const day = new Date(date + 'T12:00:00Z').getUTCDay();
   return addDays(date, day === 0 ? 1 : 1 - day);
 }
+export function outreachTimestamp(value: string) {
+  return new Date(value).toLocaleString('en-US', {
+    timeZone: 'America/New_York', timeZoneName: 'short',
+  });
+}
+
 export function localSendCandidates(local: string, zone: string) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return [];
   const naive = Date.parse(local + 'Z');

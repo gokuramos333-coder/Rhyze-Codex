@@ -45,6 +45,8 @@ const schema = z
     method: z.enum(['CALL', 'TEXT']).optional(),
     outcome: z.enum(outcomes).optional(),
     note: z.string().max(4000).optional(),
+    contactedAt: z.string().datetime({ offset: true }).optional(),
+    contactedNow: z.boolean().optional(),
     followUpAt: z.string().datetime({ offset: true }).nullable().optional(),
     assignedToId: z.string().nullable().optional(),
   })

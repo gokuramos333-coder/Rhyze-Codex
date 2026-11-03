@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
+import { leadTransaction } from '@/lib/newsletters/lead-transaction';
 import { isTrustedAdminOrigin } from '@/lib/auth/request-origin';
 import { newsletterActor } from '@/lib/newsletters/access';
 import {
@@ -504,7 +505,7 @@ export async function POST(request: Request) {
         break;
       }
       case 'consent': {
-        await prisma.$transaction(async (tx) => {
+        await leadTransaction(input.userId, async (tx) => {
           await tx.customerLeadProfile.upsert({
             where: { userId: input.userId },
             update: {},

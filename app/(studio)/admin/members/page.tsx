@@ -61,7 +61,7 @@ export default async function AdminMembersPage(
     include: {
       sombleClientProfile: true,
       leadProfile: true,
-      outreachEntries: { where: { type: "OUTREACH" }, orderBy: { occurredAt: "desc" }, take: 1 },
+      outreachEntries: { where: { type: "OUTREACH", contactedAt: { not: null } }, orderBy: [{ contactedAt: "desc" }, { occurredAt: "desc" }, { id: "desc" }], take: 1 },
       memberships: {
         where: membership === 'active'
           ? qualifyingMembershipWhere
@@ -76,7 +76,7 @@ export default async function AdminMembersPage(
           occurrence: { select: { status: true } },
         },
       },
-      _count: { select: { bookings: true, sombleTransactions: true } },
+      _count: { select: { bookings: true, sombleTransactions: true, outreachEntries: { where: { type: 'OUTREACH' } } } },
     },
     orderBy,
     take: 200,
@@ -262,7 +262,7 @@ export default async function AdminMembersPage(
                     <span className="text-rhyze-black/45">No native plan</span>
                   )}
                 </td>
-                <td><ContactStatusControl userId={member.id} version={member.leadProfile?.version || 0} outcome={member.leadProfile?.outcome || "NOT_CONTACTED"} lastStaff={member.outreachEntries[0]?.actorName} lastContacted={member.leadProfile?.lastContactedAt?.toISOString()} /></td>
+                <td><ContactStatusControl userId={member.id} version={member.leadProfile?.version || 0} outcome={member.leadProfile?.outcome || "NOT_CONTACTED"} lastStaff={member.outreachEntries[0]?.actorName} lastContacted={member.outreachEntries[0]?.contactedAt?.toISOString()} hasOutreach={member._count.outreachEntries > 0} /></td>
                 <td>
                   <a
                     href={`mailto:${member.email}`}

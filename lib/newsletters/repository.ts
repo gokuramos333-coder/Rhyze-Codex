@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { leadTransaction } from './lead-transaction';
 import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { publicScheduleDetailHref } from '@/lib/domain/schedule/public-calendar';
 import { resolvePublicInstructorPhoto } from '@/lib/domain/schedule/public-instructor-photo';
@@ -146,6 +147,9 @@ export async function loadCustomers(
         : []),
     ];
     const outreach = u.outreachEntries.filter((e) => e.type === 'OUTREACH');
+    const latestContact = outreach.filter((e) => e.contactedAt !== null)
+      .sort((a, b) => b.contactedAt!.getTime() - a.contactedAt!.getTime() ||
+        b.occurredAt.getTime() - a.occurredAt.getTime() || b.id.localeCompare(a.id))[0];
     let consent = p?.consent || 'UNKNOWN';
     let source = p?.consentSource || '';
     if (u.notificationPreference?.marketingEmail === false) {
@@ -200,11 +204,11 @@ export async function loadCustomers(
       outcome: p?.outcome || 'NOT_CONTACTED',
       assignedToId: p?.assignedToId || '',
       followUpAt: p?.followUpAt?.toISOString() || null,
-      lastContactedAt: p?.lastContactedAt?.toISOString() || null,
+      lastContactedAt: latestContact?.contactedAt?.toISOString() || null,
       version: p?.version || 0,
       attempts: outreach.length,
-      lastStaff: outreach[0]?.actorName || '',
-      lastInitials: outreach[0]?.actorInitials || '',
+      lastStaff: latestContact?.actorName || '',
+      lastInitials: latestContact?.actorInitials || '',
     };
   });
   if (includeSubscribers) {
@@ -314,11 +318,13 @@ export async function logOutreach(
     method?: 'TEXT' | 'CALL';
     outcome?: string;
     note?: string;
+    contactedAt?: string;
+    contactedNow?: boolean;
     followUpAt?: string | null;
     assignedToId?: string | null;
   },
 ) {
-  return prisma.$transaction(
+  return leadTransaction(input.userId,
     async (tx) => {
       const duplicate = await tx.customerOutreach.findUnique({
         where: { operationKey: input.operationKey },
@@ -328,6 +334,16 @@ export async function logOutreach(
           throw Error('Operation belongs to another record.');
         return duplicate;
       }
+      const loggedAt = new Date();
+      if (input.contactedAt && input.contactedNow)
+        throw Error('Choose either a contact time or contacted now, not both.');
+      const contactedAt = input.type === 'OUTREACH'
+        ? input.contactedAt ? new Date(input.contactedAt) : input.contactedNow === true ? loggedAt : null
+        : null;
+      if (input.type !== 'OUTREACH' && (input.contactedAt || input.contactedNow))
+        throw Error('Contact time is only for completed calls or texts.');
+      if (contactedAt && (!Number.isFinite(contactedAt.getTime()) || contactedAt > loggedAt))
+        throw Error('Choose a valid contact time in the past or now.');
       const user = await tx.user.findUnique({
         where: { id: input.userId },
         select: { id: true, role: true },
@@ -357,6 +373,15 @@ export async function logOutreach(
         }))
       )
         throw Error('Choose active staff.');
+      // Legacy profile timestamps are logging times, not contact evidence.
+      const known = input.type === 'OUTREACH'
+        ? await tx.customerOutreach.aggregate({
+            where: { userId: input.userId, type: 'OUTREACH' },
+            _max: { contactedAt: true },
+          }) : null;
+      const previousContact = known?._max.contactedAt ?? null;
+      const lastContactedAt = contactedAt && (!previousContact || contactedAt > previousContact)
+        ? contactedAt : previousContact;
       const updated = await tx.customerLeadProfile.updateMany({
         where: { userId: input.userId, version: input.version },
         data: {
@@ -378,7 +403,7 @@ export async function logOutreach(
           ...(input.assignedToId !== undefined
             ? { assignedToId: input.assignedToId || null }
             : {}),
-          ...(input.type === 'OUTREACH' ? { lastContactedAt: new Date() } : {}),
+          ...(input.type === 'OUTREACH' ? { lastContactedAt } : {}),
         },
       });
       if (!updated.count)
@@ -406,17 +431,18 @@ export async function logOutreach(
           outcome: input.outcome,
           note: input.note || null,
           operationKey: input.operationKey,
+          occurredAt: loggedAt,
+          contactedAt,
         },
       });
       await audit(
         actor.id,
         'OUTREACH_' + input.type,
         input.userId,
-        { entryId: entry.id, method: entry.method, attempt },
+        { entryId: entry.id, method: entry.method, attempt, contactedAt, loggedAt },
         tx,
       );
       return entry;
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
 }

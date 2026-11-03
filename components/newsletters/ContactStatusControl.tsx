@@ -2,32 +2,35 @@
 import { contactStatusColors } from './status-colors';
 import { useState } from 'react';
 import Link from 'next/link';
-import { label, outcomes } from '@/lib/newsletters/domain';
+import { label, outcomes, outreachTimestamp } from '@/lib/newsletters/domain';
+import { useRouter } from 'next/navigation';
 export function ContactStatusControl({
   userId,
   version: initialVersion,
   outcome: initialOutcome,
   lastStaff,
   lastContacted,
+  hasOutreach,
 }: {
   userId: string;
   version: number;
   outcome: string;
   lastStaff?: string;
   lastContacted?: string;
+  hasOutreach?: boolean;
 }) {
+  const router = useRouter();
   const [version, setVersion] = useState(initialVersion),
     [outcome, setOutcome] = useState(initialOutcome),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState('');
   return (
     <div style={{ minWidth: 190, padding: 8 }}>
-      {lastStaff && (
+      {lastContacted ? (
         <small>
-          {lastStaff} ·{' '}
-          {lastContacted ? new Date(lastContacted).toLocaleDateString() : ''}
+          Latest known contact: {lastStaff} · {outreachTimestamp(lastContacted)}
         </small>
-      )}
+      ) : hasOutreach ? <small>Contact time unknown</small> : null}
       <select
         aria-label="Contact status or log completed outreach"
         disabled={busy}
@@ -47,7 +50,7 @@ export function ContactStatusControl({
                 operationKey: crypto.randomUUID(),
                 type: outreach ? 'OUTREACH' : 'STATUS',
                 ...(outreach
-                  ? { method: value === 'LOG_TEXT' ? 'TEXT' : 'CALL' }
+                  ? { method: value === 'LOG_TEXT' ? 'TEXT' : 'CALL', contactedNow: true }
                   : { outcome: value }),
               }),
             });
@@ -55,6 +58,7 @@ export function ContactStatusControl({
             if (!r.ok) throw Error(x.error);
             setVersion((v) => v + 1);
             if (!outreach) setOutcome(value);
+            router.refresh();
             setMessage(
               outreach ? 'Outreach logged. No message sent.' : 'Status saved.',
             );
@@ -73,9 +77,9 @@ export function ContactStatusControl({
             </option>
           ))}
         </optgroup>
-        <optgroup label="Log a completed action">
-          <option value="LOG_TEXT">Log completed text</option>
-          <option value="LOG_CALL">Log completed call</option>
+        <optgroup label="Confirm contact happened now">
+          <option value="LOG_TEXT">Texted now — log contact</option>
+          <option value="LOG_CALL">Called now — log contact</option>
         </optgroup>
       </select>
       <small role="status">{message}</small>
@@ -83,7 +87,7 @@ export function ContactStatusControl({
         href={'/admin/members/' + userId + '#outreach'}
         className="text-xs underline"
       >
-        Shared timeline / notes
+        Past contact / shared timeline / notes
       </Link>
     </div>
   );
