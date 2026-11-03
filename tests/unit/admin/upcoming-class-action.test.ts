@@ -39,7 +39,10 @@ describe('upcoming edit server boundary', () => {
     expect(mock.edit).not.toHaveBeenCalled();
   });
   it('whitelists opted-in fields, ignores forged timestamps and refreshes public/admin views', async () => {
-    expect(await editUpcomingClassesAction({}, form())).toEqual({ saved: 1 });
+    expect(await editUpcomingClassesAction({}, form())).toEqual({
+      saved: 1,
+      savedAt: expect.any(String),
+    });
     expect(mock.edit).toHaveBeenCalledWith(
       {},
       {
@@ -51,6 +54,24 @@ describe('upcoming edit server boundary', () => {
     );
     expect(mock.revalidate).toHaveBeenCalledWith('/schedule');
     expect(mock.revalidate).toHaveBeenCalledWith('/admin/classes/format');
+  });
+  it('passes exact selected times and explicit new dates through the guarded service', async () => {
+    const f = form();
+    f.set('start:one', '2026-11-10T19:10');
+    f.append('newStartAt', '2026-11-17T19:10');
+    f.append('newStartAt', '2026-11-24T19:10');
+    f.set('sourceId', 'one');
+    await editUpcomingClassesAction({}, f);
+    expect(mock.edit).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        selected: [
+          { id: 'one', updatedAt: 'version', startLocal: '2026-11-10T19:10' },
+        ],
+        newStarts: ['2026-11-17T19:10', '2026-11-24T19:10'],
+        sourceId: 'one',
+      }),
+    );
   });
   it('explains conflicts without reporting success or invalidating cached views', async () => {
     mock.edit.mockRejectedValue(new UpcomingClassEditError('stale'));

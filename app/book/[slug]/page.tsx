@@ -328,7 +328,7 @@ export default async function BookingPage(
                 Class Details
               </h2>
               <p className="mt-3 text-base leading-relaxed text-rhyze-cream/75">
-                {cls.description}
+                {occurrence?.publicNotes || cls.description}
               </p>
           </div>
 

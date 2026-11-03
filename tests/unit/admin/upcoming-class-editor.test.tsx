@@ -6,14 +6,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/app/(studio)/admin/classes/[templateId]/upcoming-actions', () => ({
   editUpcomingClassesAction: vi.fn(),
 }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import {
   UpcomingClassEditor,
   type EditableClassDate,
 } from '@/components/admin/UpcomingClassEditor';
 const dates: EditableClassDate[] = [
   ['today', '2026-11-03T23:00:00Z'],
-  ['week', '2026-11-07T16:00:00Z'],
   ['later', '2026-11-10T23:00:00Z'],
+  ['next-month', '2026-12-01T23:00:00Z'],
 ].map(([id, startAt]) => ({
   id,
   startAt,
@@ -21,7 +22,7 @@ const dates: EditableClassDate[] = [
   updatedAt: '2026-11-03T12:00:00Z',
   title: 'Original ' + id,
   instructorId: null,
-  instructor: 'Instructor TBA',
+  instructor: 'TBA',
   capacity: 20,
   priceCents: 2500,
   publicNotes: null,
@@ -29,66 +30,77 @@ const dates: EditableClassDate[] = [
 const props = {
   templateId: 'format',
   dates,
-  weekEnd: '2026-11-09T05:00:00Z',
-  nowLabel: 'Tue, Nov 3, 2026, 12:00 PM EST',
+  nowLabel: 'Nov 3, 2026',
+  nowLocal: '2026-11-03T12:00',
   instructors: [],
 };
 afterEach(cleanup);
-describe('upcoming class date selector', () => {
-  it('starts with this week and the nearest date; name-only submission has no rescheduling fields', () => {
+const data = () => new FormData(screen.getByRole('form') as HTMLFormElement);
+describe('one-page monthly class editor', () => {
+  it('shows editable details and current month; only dirty fields are submitted as changes', () => {
     render(<UpcomingClassEditor {...props} />);
-    expect(screen.getByRole('button', { name: 'This week' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    const form = screen.getByRole('form', {
-      name: 'Edit upcoming classes',
-    }) as HTMLFormElement;
-    const data = new FormData(form);
-    expect(data.getAll('occurrenceId')).toEqual(['today']);
-    expect(data.get('title')).toBe('Original today');
-    expect(data.get('changeName')).toBe('on');
-    for (const key of [
-      'startAt',
-      'endAt',
-      'durationMinutes',
-      'price',
-      'capacity',
-      'instructorId',
-      'tags',
-    ])
-      expect(data.has(key)).toBe(false);
+    expect(screen.getByLabelText('Month')).toHaveValue('2026-11');
+    expect(screen.getByLabelText('Class name')).toHaveValue('Original today');
     expect(
-      screen.getByRole('button', { name: 'Save 1 selected date' }),
+      screen.getByLabelText('Class description / information'),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Date and time for today')).toHaveValue(
+      '2026-11-03T18:00',
+    );
+    expect(data().getAll('occurrenceId')).toEqual(['today']);
+    expect(data().has('changeName')).toBe(false);
+    fireEvent.change(screen.getByLabelText('Class name'), {
+      target: { value: 'Monthly name' },
+    });
+    expect(data().get('changeName')).toBe('on');
+    expect(data().has('changeCapacity')).toBe(false);
+    expect(data().has('start:today')).toBe(false);
+    expect(
+      screen.getByRole('button', { name: 'Save class & schedule' }),
     ).toBeEnabled();
   });
-  it('supports an exact date range and explicitly includes only selected dates; preserves a typed new name', () => {
+  it('selects the month and sends only explicitly changed New Jersey dates/times', () => {
     render(<UpcomingClassEditor {...props} />);
-    fireEvent.change(screen.getByLabelText('New class name'), {
-      target: { value: 'New name' },
-    });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Choose dates' }),
+      screen.getByRole('button', { name: 'Select all dates in this month' }),
     );
-    fireEvent.change(screen.getByLabelText('From (New Jersey)'), {
-      target: { value: '2026-11-10' },
+    expect(data().getAll('occurrenceId')).toEqual(['today', 'later']);
+    fireEvent.change(screen.getByLabelText('Date and time for later'), {
+      target: { value: '2026-11-12T19:10' },
     });
-    fireEvent.change(screen.getByLabelText('Through (New Jersey)'), {
-      target: { value: '2026-11-10' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Select shown dates' }));
-    const data = new FormData(screen.getByRole('form') as HTMLFormElement);
-    expect(data.getAll('occurrenceId')).toEqual(['later']);
-    expect(data.get('title')).toBe('New name');
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(
-      screen.getByRole('button', { name: 'Save 0 selected dates' }),
-    ).toBeDisabled();
+    expect(data().get('start:later')).toBe('2026-11-12T19:10');
+    expect(data().has('start:today')).toBe(false);
+    expect(screen.getByText(/2026-11-12 at 19:10/)).toBeVisible();
   });
-  it('points an empty upcoming schedule to the real schedule-creation page', () => {
-    render(<UpcomingClassEditor {...props} dates={[]} />);
-    expect(
-      screen.getByRole('link', { name: 'Add a scheduled date' }),
-    ).toHaveAttribute('href', '/admin/schedule');
+  it('expands weekly dates, skips already scheduled slots and does not overwrite existing details just to add dates', () => {
+    render(<UpcomingClassEditor {...props} />);
+    fireEvent.change(screen.getByLabelText('First date & time'), {
+      target: { value: '2026-11-03T18:00' },
+    });
+    fireEvent.change(screen.getByLabelText('Repeat weekly through'), {
+      target: { value: '2026-11-30' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add weekly dates' }));
+    expect(data().getAll('newStartAt')).toEqual([
+      '2026-11-17T18:00',
+      '2026-11-24T18:00',
+    ]);
+    expect(data().has('changePrice')).toBe(false);
+  });
+  it('allows exact new dates when a class has no upcoming schedule', () => {
+    render(
+      <UpcomingClassEditor
+        {...props}
+        dates={[]}
+        defaults={{ title: 'New class', publicNotes: 'Details' }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '+ Add one date' }));
+    fireEvent.change(screen.getByLabelText('New date 1'), {
+      target: { value: '2026-11-20T17:00' },
+    });
+    expect(data().getAll('newStartAt')).toEqual(['2026-11-20T17:00']);
+    expect(data().get('title')).toBe('New class');
+    expect(data().get('changeName')).toBe('on');
   });
 });

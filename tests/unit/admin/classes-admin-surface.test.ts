@@ -124,14 +124,12 @@ describe('admin class and client surfaces', () => {
     expect(source).toContain('href={`/admin/schedule/${occurrence.id}/roster`}');
   });
 
-  it('shows manage and cancel controls on each class template next occurrence card', () => {
+  it('keeps the class chooser to one edit action', () => {
     const source = classesPageSource();
-
-    expect(source).toContain('href={`/admin/schedule/${template.occurrences[0].id}`}');
-    expect(source).toContain('href={`/admin/schedule/${template.occurrences[0].id}?cancel=1`}');
-    expect(source).toContain('Edit this date');
-    expect(source).toContain('Choose dates & edit');
-    expect(source).toContain('Cancel next class');
+    expect(source).toContain('href={`/admin/classes/${template.id}`}');
+    expect(source).toContain('Edit class');
+    expect(source).not.toContain('Cancel next class');
+    expect(source).not.toContain('href={`/admin/schedule/${template.occurrences[0].id}?cancel=1`}');
   });
 
   it('uses date navigation instead of a separate Past Classes section', () => {

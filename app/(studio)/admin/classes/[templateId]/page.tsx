@@ -10,6 +10,7 @@ import {
   occurrenceInstructorName,
   occurrenceTitle,
   occurrenceLocalTimeZone,
+  occurrenceLocalInputValue,
 } from '@/lib/domain/schedule/occurrence-management';
 import { resolveScheduleOccurrenceRange } from '@/lib/admin/schedule-occurrence-range';
 import {
@@ -90,6 +91,15 @@ export default async function EditTemplatePage({
         templateId={item.id}
         weekEnd={week.end.toISOString()}
         nowLabel={format(now)}
+        nowLocal={occurrenceLocalInputValue(now)}
+        defaults={{
+          title: item.name,
+          publicNotes: item.description,
+          imageUrl: item.imageUrl || '',
+          durationMinutes: String(item.durationMinutes),
+          capacity: String(item.defaultCapacity),
+          price: ((item.dropInPriceCents ?? 2500) / 100).toFixed(2),
+        }}
         instructors={dedupeAssignableInstructors(instructors).map((i) => ({
           id: i.id,
           name: instructorOptionLabel(i),
@@ -105,11 +115,12 @@ export default async function EditTemplatePage({
           capacity: o.capacity,
           priceCents: o.priceCents ?? item.dropInPriceCents ?? 2500,
           publicNotes: o.publicNotes,
+          imageUrl: o.imageUrl,
         }))}
       />
       <details className="mt-8 border-t border-black/15 bg-white/60 p-5">
         <summary className="cursor-pointer font-bold">
-          Shared format settings & artwork
+          Advanced class-format settings & artwork
         </summary>
         <p className="mt-3 border-l-4 border-rhyze-orange bg-orange-50 p-4 text-sm">
           These settings belong to the whole class format, not your selected

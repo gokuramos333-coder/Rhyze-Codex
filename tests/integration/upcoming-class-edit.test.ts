@@ -165,6 +165,108 @@ describe.skipIf(!url)(
         ).toBe(0);
       },
     );
+    it('moves only chosen future dates and creates explicit additional dates with the same details', async () => {
+      const f = await fixture();
+      const teacher = prefix + '-teacher-' + counter;
+      await db.user.create({
+        data: {
+          id: teacher,
+          email: teacher + '@example.test',
+          role: 'INSTRUCTOR',
+          status: 'ACTIVE',
+          passwordHash: 'synthetic-only',
+          instructorProfile: { create: { isActive: true } },
+        },
+      });
+      try {
+        const count = await editUpcomingClasses(
+          db,
+          {
+            actorId: prefix,
+            templateId: f.templateId,
+            selected: f
+              .selected(['today'])
+              .map((x) => ({ ...x, startLocal: '2026-11-04T19:10' })),
+            newStarts: ['2026-11-11T19:10', '2026-11-18T19:10'],
+            patch: {
+              titleOverride: 'Monthly format',
+              publicNotes: 'New class description',
+              instructorId: teacher,
+              durationMinutes: 60,
+              capacity: 18,
+              priceCents: 2000,
+            },
+          },
+          clock,
+        );
+        expect(count).toBe(3);
+        const changed = await db.classOccurrence.findMany({
+          where: { templateId: f.templateId, titleOverride: 'Monthly format' },
+          orderBy: { startAt: 'asc' },
+        });
+        expect(
+          changed.map((r) => occurrenceLocalInputValue(r.startAt)),
+        ).toEqual(['2026-11-04T19:10', '2026-11-11T19:10', '2026-11-18T19:10']);
+        expect(
+          changed.every(
+            (r) =>
+              +r.endAt - +r.startAt === 3600000 &&
+              r.publicNotes === 'New class description',
+          ),
+        ).toBe(true);
+        expect(changed[0].id).toBe(f.rows[1].id);
+        expect(
+          await db.classOccurrence.findUnique({ where: { id: f.rows[0].id } }),
+        ).toEqual(f.rows[0]);
+        await expect(
+          editUpcomingClasses(
+            db,
+            {
+              actorId: prefix,
+              templateId: f.templateId,
+              selected: [],
+              newStarts: ['2026-11-11T19:10'],
+              patch: { instructorId: teacher },
+            },
+            clock,
+          ),
+        ).rejects.toMatchObject({ code: 'conflict' });
+      } finally {
+        await db.classOccurrence.updateMany({
+          where: { instructorId: teacher },
+          data: { instructorId: null },
+        });
+        await db.instructorProfile.deleteMany({ where: { userId: teacher } });
+        await db.user.delete({ where: { id: teacher } });
+      }
+    });
+    it('rejects past, impossible and nonexistent DST local times without writes', async () => {
+      const f = await fixture();
+      for (const startLocal of [
+        '2026-11-02T18:00',
+        '2027-02-30T18:00',
+        '2027-03-14T02:30',
+        '2027-11-07T01:30',
+      ]) {
+        await expect(
+          editUpcomingClasses(
+            db,
+            {
+              actorId: prefix,
+              templateId: f.templateId,
+              selected: f
+                .selected(['today'])
+                .map((x) => ({ ...x, startLocal })),
+              patch: { titleOverride: 'Do not save' },
+            },
+            clock,
+          ),
+        ).rejects.toBeInstanceOf(Error);
+      }
+      expect(
+        await db.classOccurrence.findUnique({ where: { id: f.rows[1].id } }),
+      ).toEqual(f.rows[1]);
+    });
     it('rejects stale versions and mismatched templates without overwriting another admin', async () => {
       const f = await fixture();
       await db.classOccurrence.update({

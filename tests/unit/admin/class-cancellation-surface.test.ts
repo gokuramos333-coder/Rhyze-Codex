@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('admin class cancellation controls', () => {
   it('puts a cancel class control directly next to each admin class occurrence without immediately sending emails', () => {
-    const classesPage = readFileSync('app/(studio)/admin/classes/page.tsx', 'utf8');
+    const classesPage = readFileSync('components/admin/AdminClassesCalendar.tsx', 'utf8');
     const schedulePage = readFileSync('app/(studio)/admin/schedule/page.tsx', 'utf8');
 
     for (const source of [classesPage, schedulePage]) {

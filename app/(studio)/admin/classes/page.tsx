@@ -4,9 +4,7 @@ import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-mana
 import { resolveClassArtwork } from '@/lib/domain/schedule/class-artwork';
 import { confirmedRosterBookingWhere } from '@/lib/domain/bookings/known-cancellations';
 import {
-  archiveClassTemplateAction,
   createClassTemplateAction,
-  deleteClassTemplateAction,
 } from './actions';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -347,6 +345,7 @@ export default async function AdminClassesPage(
         <h2 className="mt-2 font-display text-4xl tracking-wider">
           EDIT A CLASS
         </h2>
+        <p className="mt-3 text-black/65">Choose your class. Edit its name, details, dates and times together on the next page.</p>
         <div className="mt-5 grid gap-3">
           {templates.map((template) => (
           <article key={template.id} className="grid gap-3 bg-white p-5 md:grid-cols-[1fr_auto] md:items-center">
@@ -374,28 +373,7 @@ export default async function AdminClassesPage(
               </p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {template.occurrences[0] && (
-                <>
-                  <Link href={`/admin/schedule/${template.occurrences[0].id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Edit this date</Link>
-                  <Link href={`/admin/schedule/${template.occurrences[0].id}?cancel=1`} className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Cancel next class</Link>
-                  <Link href={`/admin/schedule/${template.occurrences[0].id}/roster`} className="border border-rhyze-orange px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Attendees</Link>
-                </>
-              )}
-              <Link href={`/admin/classes/${template.id}`} className="border border-rhyze-black px-4 py-2 text-xs font-black uppercase tracking-widest">Choose dates & edit</Link>
-              {template.isActive ? (
-                <form action={archiveClassTemplateAction}>
-                <input type="hidden" name="id" value={template.id} />
-                <button className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">
-                  Archive
-                </button>
-                </form>
-              ) : <span className="self-center text-xs font-black uppercase tracking-widest text-rhyze-black/35">Archived</span>}
-              <form action={deleteClassTemplateAction}>
-                <input type="hidden" name="id" value={template.id} />
-                <button className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral">Delete</button>
-              </form>
-            </div>
+            <Link href={`/admin/classes/${template.id}`} className="inline-flex min-h-12 items-center justify-center rounded bg-rhyze-gradient px-6 py-3 text-sm font-black uppercase tracking-widest">Edit class</Link>
           </article>
           ))}
         </div>

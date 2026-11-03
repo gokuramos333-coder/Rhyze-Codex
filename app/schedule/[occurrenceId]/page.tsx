@@ -40,7 +40,7 @@ export default async function ClassOccurrencePage(
           {occurrenceTitleWithInstructor(occurrenceTitle(occurrence), instructorName)}
         </h1>
         <p className="mt-5 max-w-3xl text-lg leading-8 text-rhyze-cream/70">
-          {occurrence.template.description}
+          {occurrence.publicNotes || occurrence.template.description}
         </p>
         <dl className="mt-8 grid gap-4 border-y border-white/10 py-6 sm:grid-cols-2">
           <div>
