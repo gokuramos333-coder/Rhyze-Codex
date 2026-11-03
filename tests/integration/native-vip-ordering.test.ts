@@ -27,15 +27,15 @@ describe.skipIf(!url)('native VIP overlapping PostgreSQL events', () => {
     await db.product.deleteMany({ where: { id: { startsWith: prefix } } });
     await db.$disconnect();
   });
-  async function fixture() {
+  async function fixture(kind: 'VIP' | 'LIMITED_MEMBERSHIP' | 'MONTHLY_UNLIMITED' = 'VIP') {
     const id = `${prefix}-${randomUUID()}`;
     await db.user.create({ data: { id, email: `${id}@example.test` } });
-    await db.product.create({ data: { id, name: 'Synthetic VIP', slug: id, description: 'Test only', kind: 'VIP',
-      priceCents: 22200, billingInterval: 'MONTHLY', isUnlimited: true, eligibleCategoryIds: [] } });
+    await db.product.create({ data: { id, name: 'Synthetic VIP', slug: id, description: 'Test only', kind,
+      priceCents: 22200, billingInterval: 'MONTHLY', includedCredits: kind === 'LIMITED_MEMBERSHIP' ? 4 : null, isUnlimited: kind !== 'LIMITED_MEMBERSHIP', eligibleCategoryIds: [] } });
     await db.purchase.create({ data: { id, userId: id, productId: id, status: 'PAID', amountCents: 22200, paidAt: new Date(sep * 1000) } });
     await db.membership.create({ data: { id, userId: id, productId: id, purchaseId: id, stripeSubscriptionId: id,
       status: 'ACTIVE', currentPeriodStart: new Date(sep * 1000), currentPeriodEnd: new Date(oct * 1000) } });
-    await db.creditAccount.create({ data: { userId: id, sourcePurchaseId: id, label: 'Synthetic VIP', isUnlimited: true,
+    await db.creditAccount.create({ data: { userId: id, sourcePurchaseId: id, label: 'Synthetic membership', isUnlimited: kind !== 'LIMITED_MEMBERSHIP',
       validFrom: new Date(sep * 1000), validUntil: new Date(oct * 1000) } });
     const invoice = (suffix: string, start: number, end: number) => ({ id: `${id}-${suffix}`, subscription: id, status: 'paid',
       amount_paid: 22200, amount_due: 22200, currency: 'usd', status_transitions: { paid_at: start + 10 },
@@ -117,8 +117,65 @@ describe.skipIf(!url)('native VIP overlapping PostgreSQL events', () => {
     expect(account.validUntil).toEqual(new Date(nov * 1000));
     expect(await db.creditLedgerEntry.count({ where: { creditAccountId: account.id } })).toBe(0);
   }, 20000);
-  it.each(['failed-first', 'paid-first'])('settles a same-second failure/payment pair once (%s), including concurrent replays', async order => {
+  it('fulfills a paid renewal even when its accounting receipt exists before its access update', async () => {
     const f = await fixture();
+    await db.paymentRecord.create({ data: {
+      userId: f.id, purchaseId: f.id, membershipId: f.id, kind: 'MEMBERSHIP_RENEWAL',
+      status: 'SUCCEEDED', amountCents: 22200, currency: 'usd',
+      stripeEventId: `${f.id}-accounting`, stripeInvoiceId: `${f.id}-new`,
+      stripeSubscriptionId: f.id, occurredAt: new Date((oct + 10) * 1000),
+    } });
+    await f.process(f.paid);
+    await f.process({ ...f.paid, id: `${f.id}-repeated-paid` });
+    const membership = await db.membership.findUniqueOrThrow({ where: { id: f.id }, include: { purchase: { include: { creditAccount: true } } } });
+    expect(membership.currentPeriodEnd).toEqual(new Date(nov * 1000));
+    expect(membership.purchase?.creditAccount?.validUntil).toEqual(new Date(nov * 1000));
+    expect(membership.purchase?.creditAccount?.isUnlimited).toBe(true);
+    expect(await db.paymentRecord.count({ where: { userId: f.id } })).toBe(1);
+    const events = await db.creditAccount.findMany({ where: { userId: f.id, label: { contains: 'VIP complimentary event credit' } }, include: { entries: true } });
+    expect(events).toHaveLength(1);
+    expect(events[0].entries.reduce((n, entry) => n + entry.quantity, 0)).toBe(1);
+  }, 20000);
+  it('does not roll a limited membership back when an older paid invoice arrives late', async () => {
+    const f = await fixture();
+    await db.product.update({ where: { id: f.id }, data: { kind: 'LIMITED_MEMBERSHIP', isUnlimited: false, includedCredits: 4 } });
+    await db.creditAccount.update({ where: { sourcePurchaseId: f.id }, data: { isUnlimited: false } });
+    await f.process(f.paid);
+    const account = await db.creditAccount.findUniqueOrThrow({ where: { sourcePurchaseId: f.id } });
+    await db.creditLedgerEntry.create({ data: { creditAccountId: account.id, type: 'RESERVE', quantity: -1 } });
+    await f.process(f.event('invoice.paid', 'late-old', sep + 10, f.invoice('old', sep, oct)));
+    expect((await db.membership.findUniqueOrThrow({ where: { id: f.id } })).currentPeriodEnd).toEqual(new Date(nov * 1000));
+    await f.process(f.event('customer.subscription.updated', 'late-status', sep + 20, {
+      id: f.id, status: 'past_due', current_period_start: sep, current_period_end: oct,
+    }));
+    await f.process(f.paid);
+    const membership = await db.membership.findUniqueOrThrow({ where: { id: f.id } });
+    expect(membership.currentPeriodEnd).toEqual(new Date(nov * 1000));
+    expect(membership.status).toBe('ACTIVE');
+    const after = await db.creditAccount.findUniqueOrThrow({ where: { sourcePurchaseId: f.id }, include: { entries: true } });
+    expect(after.validUntil).toEqual(new Date(nov * 1000));
+    expect(after.entries.reduce((n, entry) => n + entry.quantity, 0)).toBe(3);
+  }, 20000);
+  it.each(['LIMITED_MEMBERSHIP', 'MONTHLY_UNLIMITED'] as const)('does not reactivate or overwrite a paid %s after an old checkout replay', async kind => {
+    for (const status of ['PAUSED', 'CANCELLED'] as const) {
+      const f = await fixture(kind);
+      await f.process(f.paid);
+      await db.membership.update({ where: { id: f.id }, data: { status } });
+      await db.purchase.update({ where: { id: f.id }, data: { stripePaymentIntentId: `${f.id}-current-payment` } });
+      await f.process(f.event('checkout.session.completed', 'old-checkout', sep + 50, {
+        id: `${f.id}-checkout`, subscription: f.id, payment_status: 'paid',
+        amount_total: 19900, currency: 'usd', metadata: { purchaseId: f.id },
+      }));
+      const membership = await db.membership.findUniqueOrThrow({ where: { id: f.id }, include: { purchase: true } });
+      expect(membership.status).toBe(status);
+      expect(membership.currentPeriodEnd).toEqual(new Date(nov * 1000));
+      expect(membership.purchase?.stripePaymentIntentId).toBe(`${f.id}-current-payment`);
+      expect(membership.purchase?.amountCents).toBe(22200);
+    }
+  }, 20000);
+  it.each(['VIP', 'LIMITED_MEMBERSHIP', 'MONTHLY_UNLIMITED'] as const)('settles %s same-second payment/failure deliveries without duplicate grants', async kind => {
+   for (const order of ['failed-first', 'paid-first']) {
+    const f = await fixture(kind);
     const failure = f.event('invoice.payment_failed', 'failed-event', oct + 10, f.invoice('new', oct, nov));
     if (order === 'failed-first') { await f.process(failure); await f.process(f.paid); }
     else { await f.process(f.paid); await f.process(failure); }
@@ -129,9 +186,13 @@ describe.skipIf(!url)('native VIP overlapping PostgreSQL events', () => {
     expect(membership.purchase?.creditAccount?.validUntil).toEqual(new Date(nov * 1000));
     expect(await db.paymentRecord.count({ where: { userId: f.id } })).toBe(1);
     expect((await db.paymentRecord.findUniqueOrThrow({ where: { stripeInvoiceId: `${f.id}-new` } })).status).toBe('SUCCEEDED');
+    const account = await db.creditAccount.findUniqueOrThrow({where:{sourcePurchaseId:f.id},include:{entries:true}});
+    expect(account.entries.reduce((sum,e)=>sum+e.quantity,0)).toBe(kind === 'LIMITED_MEMBERSHIP' ? 4 : 0);
+   }
   }, 20000);
   it.each(['CANCELLED', 'PAUSED', 'EXPIRED'] as const)('keeps explicit %s across later failure/payment and concurrent replays', async status => {
-    const f = await fixture();
+   for (const kind of ['VIP', 'LIMITED_MEMBERSHIP', 'MONTHLY_UNLIMITED'] as const) {
+    const f = await fixture(kind);
     await db.membership.update({ where: { id: f.id }, data: { status } });
     const failure = f.event('invoice.payment_failed', 'failed-event', oct + 5, f.invoice('new', oct, nov));
     await f.process(failure);
@@ -142,5 +203,6 @@ describe.skipIf(!url)('native VIP overlapping PostgreSQL events', () => {
     expect(membership.status).toBe(status);
     expect(membership.purchase?.creditAccount?.validUntil).toEqual(new Date(oct * 1000));
     expect((await db.paymentRecord.findUniqueOrThrow({ where: { stripeInvoiceId: `${f.id}-new` } })).status).toBe('SUCCEEDED');
+   }
   }, 20000);
 });

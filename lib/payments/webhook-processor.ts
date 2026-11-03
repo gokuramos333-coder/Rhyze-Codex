@@ -201,12 +201,12 @@ async function notifyPaymentFailure(
   });
 }
 
-/** Native VIP only. Purchase locking also covers invoice-before-checkout and sync races.
+/** Purchase-backed recurring access. Purchase locking also covers invoice-before-checkout and sync races.
  * Keep ordering markers beside policy acceptance without replacing accepted terms.
  * Webhook serializable retries handle snapshot conflicts; default-isolation sync
  * checkout UPDATEs lock this same purchase row before touching membership state.
  */
-async function nativeVipEntitlementDecision(
+async function nativeMembershipEntitlementDecision(
   tx: Prisma.TransactionClient,
   event: Stripe.Event,
   action: Extract<
@@ -271,7 +271,7 @@ async function nativeVipEntitlementDecision(
     });
     const settled = Boolean(
       recorded &&
-      ['SUCCEEDED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(
+      ['REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(
         recorded.status,
       ),
     );
@@ -303,6 +303,14 @@ async function nativeVipEntitlementDecision(
       )
     ) {
       return { apply: false, settled: false, periodStart: null };
+    }
+    // Accounting and fulfillment are separate. A receipt alone must not suppress
+    // the paid access update; duplicates are complete only when access covers
+    // this invoice. Reversed funding remains blocked above.
+    if (recorded?.status === 'SUCCEEDED' && purchase.creditAccount?.isUnlimited &&
+        purchase.creditAccount.validUntil && purchase.creditAccount.validUntil.getTime() >= end * 1000 &&
+        fresh.currentPeriodEnd && fresh.currentPeriodEnd.getTime() >= end * 1000) {
+      return { apply: false, settled: true, periodStart: null };
     }
     // Paid proof can clear dunning, including a failure/settlement in the same
     // Stripe timestamp second. It never overrides an explicit lifecycle block.
@@ -417,7 +425,7 @@ async function fulfillProductPurchase(
   if (classTicket && prior?.paidAt && classTicketFulfillment(prior.policyAcceptance)) return;
   // A paid receipt replay must never overwrite an admin-switched entitlement.
   if (prior?.paidAt && prior.membership?.planChangeState) return;
-  if (prior?.product.kind === 'VIP') {
+  if (prior && (prior.product.kind === 'VIP' || prior.product.billingInterval !== 'ONE_TIME')) {
     await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${action.purchaseId} FOR UPDATE`;
     prior = await tx.purchase.findUnique({
       where: { id: action.purchaseId },
@@ -425,7 +433,7 @@ async function fulfillProductPurchase(
     });
   }
   const settledNative =
-    prior?.product.kind === 'VIP' && prior.paidAt ? prior : null;
+    prior && (prior.product.kind === 'VIP' || prior.product.billingInterval !== 'ONE_TIME') && prior.paidAt ? prior : null;
   const financials = settledNative
     ? { amountCents: settledNative.amountCents, currency: settledNative.currency }
     : checkoutFinancialData(action);
@@ -456,7 +464,7 @@ async function fulfillProductPurchase(
     const membership = await tx.membership.upsert({
       where: { purchaseId: purchase.id },
       update: {
-        ...(purchase.product.kind === 'VIP'
+        ...(purchase.product.kind === 'VIP' || purchase.product.billingInterval !== 'ONE_TIME'
           ? {}
           : {
               status:
@@ -988,13 +996,11 @@ export async function processStripeEvent(
     }
     if (!membership) return;
     const nativeVip = membership.product.kind === 'VIP';
-    const entitlement = nativeVip
-      ? await nativeVipEntitlementDecision(tx, event, action, membership)
-      : null;
-    if (entitlement?.settled) return;
+    const entitlement = await nativeMembershipEntitlementDecision(tx, event, action, membership);
+    if (entitlement.settled) return;
     const paidPeriodEnd = entitlement?.periodEnd ?? action.currentPeriodEnd;
     if (
-      (!nativeVip || entitlement?.apply) &&
+      entitlement?.apply &&
       membership.purchaseId &&
       action.paymentIntentId
     ) {
@@ -1003,7 +1009,7 @@ export async function processStripeEvent(
         data: { stripePaymentIntentId: action.paymentIntentId },
       });
     }
-    if (!nativeVip || entitlement?.apply)
+    if (entitlement.apply)
       await tx.membership.update({
         where: { id: membership.id },
         data: {
@@ -1014,7 +1020,7 @@ export async function processStripeEvent(
       });
     const invoiceCredits = creditGrantForPayment(membership.product, 'INVOICE');
     if (
-      (!nativeVip || entitlement?.apply) &&
+      entitlement?.apply &&
       membership.purchaseId &&
       (invoiceCredits || membership.product.isUnlimited)
     ) {
@@ -1131,12 +1137,12 @@ export async function processStripeEvent(
       include: { user: true, product: true },
     });
     if (!membership) return;
-    const nativeVip = membership.product?.kind === 'VIP';
-    const entitlement = nativeVip
-      ? await nativeVipEntitlementDecision(tx, event, action, membership)
+    const guardedMembership = Boolean(membership.purchaseId) || membership.product?.kind === 'VIP';
+    const entitlement = guardedMembership
+      ? await nativeMembershipEntitlementDecision(tx, event, action, membership)
       : null;
     if (entitlement?.settled) return;
-    if (!nativeVip) {
+    if (!guardedMembership) {
       const existing = await tx.paymentRecord.findUnique({
         where: { stripeInvoiceId: action.invoiceId },
       });
@@ -1148,7 +1154,7 @@ export async function processStripeEvent(
     // Notification eligibility depends on invoice settlement, not whether this
     // event is newer than a subscription lifecycle update affecting access.
     await queuePaymentFailureEmail(tx, membership.user, event.data.object as Stripe.Invoice);
-    if (!nativeVip)
+    if (!guardedMembership)
       await tx.membership.update({
         where: { id: membership.id },
         data: { status: 'PAST_DUE' },
@@ -1179,7 +1185,7 @@ export async function processStripeEvent(
         occurredAt: action.occurredAt,
       },
     });
-    if (!nativeVip || entitlement?.apply)
+    if (!guardedMembership || entitlement?.apply)
       await notifyPaymentFailure(tx, membership.user, action.amountCents);
     return;
   }
@@ -1188,8 +1194,8 @@ export async function processStripeEvent(
       where: { stripeSubscriptionId: action.subscriptionId },
       include: { product: true },
     });
-    if (membership?.product.kind === 'VIP') {
-      await nativeVipEntitlementDecision(tx, event, action, membership);
+    if (membership && (membership.purchaseId || membership.product.kind === 'VIP')) {
+      await nativeMembershipEntitlementDecision(tx, event, action, membership);
       return;
     }
     await tx.membership.updateMany({
