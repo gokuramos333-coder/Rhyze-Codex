@@ -35,11 +35,11 @@ export function absenceKey(userId: string, attendanceId: string) {
 export const absenceDocument = documentSchema.parse({
   version: 1,
   blocks: [
-    { id: 'hello', type: 'heading', text: 'We miss you, Rhyze Tribe!' },
+    { id: 'hello', type: 'heading', text: 'We miss you, {{first_name}} 💛' },
     {
       id: 'note',
       type: 'text',
-      text: 'It’s been a little while since your last class, and we’d love to see you again. Make a little time for yourself this week—your Rhyze Tribe is here for you. Browse the schedule to book your next class, or reply and we’ll help you find the right one.',
+      text: 'It’s been a little while since your last class, and we’d love to see you again. Make a little time for yourself this week—we’re here for you. Browse the schedule to book your next class, or reply and we’ll help you find the right one.',
     },
     {
       id: 'book',
@@ -228,7 +228,7 @@ export async function prepareAbsenceFollowUp(
           input.outreachEnabled
         ) {
           const snapshot = {
-            subject: 'We miss you at Rhyze 💛',
+            subject: 'We miss you, {{first_name}} 💛',
             previewText: 'Let’s make time for your next class.',
             document: absenceDocument,
             schedule: [],
@@ -265,7 +265,7 @@ export async function prepareAbsenceFollowUp(
                 create: {
                   userId: member.id,
                   email: member.email.trim().toLowerCase(),
-                  firstName: member.name.split(' ')[0],
+                  firstName: member.name.trim().split(/\s+/)[0],
                   membershipAtSend: customers[0].membership,
                   nextAttemptAt: input.now,
                 },

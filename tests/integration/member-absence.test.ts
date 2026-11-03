@@ -7,6 +7,8 @@ import {
   absenceStillDeliverable,
   prepareAbsenceFollowUp,
 } from '@/lib/domain/engagement/member-absence';
+import { renderNewsletter } from '@/lib/newsletters/render';
+import type { FrozenNewsletter } from '@/lib/newsletters/delivery';
 import type { Customer } from '@/lib/newsletters/domain';
 const url = process.env.NEWSLETTER_TEST_DATABASE_URL;
 if (
@@ -24,7 +26,7 @@ const visitId = prefix + '-visit';
 const last = new Date(+now - 7 * 86400000 - 1000);
 const customer = {
   id: userId,
-  name: 'Test Member',
+  name: '  Test   Member  ',
   email: userId + '@example.test',
   membership: 'Active member',
   accountStatus: 'ACTIVE',
@@ -138,6 +140,18 @@ describe('one re-engagement email per real absence, with daily owner digest', ()
     const campaign = await db.emailCampaign.findUniqueOrThrow({
       where: { id },
     });
+    const recipient = await db.newsletterRecipient.findFirstOrThrow({
+      where: { campaignId: id },
+    });
+    expect(recipient.firstName).toBe('Test');
+    const rendered = renderNewsletter({
+      ...(campaign.sentSnapshot as unknown as FrozenNewsletter),
+      firstName: recipient.firstName || undefined,
+      unsubscribeUrl: 'http://localhost:3000/newsletter/unsubscribe/test',
+    });
+    expect(rendered.subject).toBe('We miss you, Test 💛');
+    expect(rendered.html).toContain('We miss you, Test 💛');
+    expect(rendered.text).not.toContain('Rhyze Tribe');
     expect(await absenceStillDeliverable(db, campaign.sentSnapshot, now)).toBe(
       true,
     );
@@ -153,6 +167,18 @@ describe('one re-engagement email per real absence, with daily owner digest', ()
     await db.booking.create({
       data: { userId, occurrenceId: prefix + '-future' },
     });
+    const recipient = await db.newsletterRecipient.findFirstOrThrow({
+      where: { campaignId: id },
+    });
+    expect(recipient.firstName).toBe('Test');
+    const rendered = renderNewsletter({
+      ...(campaign.sentSnapshot as unknown as FrozenNewsletter),
+      firstName: recipient.firstName || undefined,
+      unsubscribeUrl: 'http://localhost:3000/newsletter/unsubscribe/test',
+    });
+    expect(rendered.subject).toBe('We miss you, Test 💛');
+    expect(rendered.html).toContain('We miss you, Test 💛');
+    expect(rendered.text).not.toContain('Rhyze Tribe');
     expect(await absenceStillDeliverable(db, campaign.sentSnapshot, now)).toBe(
       false,
     );

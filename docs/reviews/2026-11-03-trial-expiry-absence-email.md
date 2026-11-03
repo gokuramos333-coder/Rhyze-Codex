@@ -1,17 +1,11 @@
-# Trial expiry and absence email review
+# Approved absence email release — November 3, 2026
 
-Baseline: 10430cea83945369a07f69687ae76ab16e8f1084. Local candidate only; owner requests email preview before deployment. No production mutation or sending authorized by this review.
+Base: production source `10430cea83945369a07f69687ae76ab16e8f1084`.
 
-Independent reviewer: `/root/trial_absence_review`, November 3, 2026. Review covered current tracked/untracked diffs, migration guards and read-only isolated diagnostic execution. The primary agent ran regression/integration checks; the reviewer did not claim a full-suite run.
+Owner approved the absence email to send, with the recipient’s name after “We miss you” instead of “Rhyze Tribe”. The subject and heading now use the existing escaped first-name personalization. Once per absence, re-eligible after another checked-in standard class; existing opt-outs/suppression, future-booking checks and delivery gates remain.
 
-Resolved findings:
-- Pausing absence outreach now excludes queued absence campaigns from delivery without interfering with other newsletters.
-- Hourly recovery is allowed from 9 AM through 5 PM Eastern, but an atomic daily-report guard prevents additional same-day outreach after successful preparation.
-- Owner CSV uses recipient status and exclusion reason, prioritizing current contact restrictions; campaign SENT alone is never represented as delivery.
-- Trial diagnostics distinguish untagged historical admin attendance from explicitly separately funded attendance. Both positive and negative regression cases are present.
+This branch contains ONLY the absence-email candidate plus personalization. The pending trial repair, class editor, and unapproved membership booking-policy changes are excluded.
 
-The reviewer found no remaining implementation blocker after correction. A final requested negative assertion for separately funded attendance was added. The actual diagnostic query ran successfully against an isolated database in a read-only transaction.
+The former independent absence review resolved pause-gate, daily deduplication and status-reporting issues. Current verification adds actual queued-recipient rendering and HTML escaping tests. Tests use isolated databases with outbound providers captured/mocked. No customer communication is a diagnostic test.
 
-Behavioral verification includes first admin trial activation, exact seven-day expiry, repeat advance booking within the window, trial event rejection, reminder singleton, legacy repair idempotency/competing-access rejection, absence concurrency, return reset, historical/opt-out exclusion, provider-pause protection, accurate exclusion reporting, job authentication and Eastern timing. No real customer booking, email or financial action was used as a test.
-
-Guarded release, approved copy, owner-report template approval, configured launch boundary and independent production readback remain required. Full logs and preview artifacts are under `~/Inbox/rhyze-trial-absence-20261103/`.
+Initial catch-up audience decision, launch flags, guarded release, owner-report approval and real delivery readback are tracked in `~/Inbox/rhyze-absence-launch-20261103/`. Names/contact data remain in private audience evidence, not source.
