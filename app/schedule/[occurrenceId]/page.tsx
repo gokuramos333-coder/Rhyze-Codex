@@ -21,7 +21,7 @@ export default async function ClassOccurrencePage(
       _count: { select: { bookings: { where: confirmedRosterBookingWhere() }, waitlistEntries: { where: { status: 'WAITING' } } } },
     },
   });
-  if (!occurrence || occurrence.archivedAt || occurrence.status === 'CANCELLED') notFound();
+  if (!occurrence) notFound();
   const bookedCount = occurrence._count.bookings + occurrence.historicalSignupCount;
   const soldOut = bookedCount >= occurrence.capacity;
   const waitlistFull = occurrence._count.waitlistEntries >= WAITLIST_CAPACITY;

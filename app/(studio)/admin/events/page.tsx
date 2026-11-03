@@ -30,7 +30,6 @@ export default async function AdminEventsPage(
       where: publicEventClassificationWhere(),
       include: {
         occurrences: {
-          where: { archivedAt: null },
           orderBy: { startAt: 'asc' },
           take: 1,
           include: {

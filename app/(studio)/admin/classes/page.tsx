@@ -41,7 +41,7 @@ import {
 
 export default async function AdminClassesPage(
   props: {
-    searchParams: Promise<{ deleted?: string; saved?: string; error?: string; range?: string; date?: string; from?: string; to?: string; kind?: string }>;
+    searchParams: Promise<{ saved?: string; error?: string; range?: string; date?: string; from?: string; to?: string; kind?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -112,7 +112,6 @@ export default async function AdminClassesPage(
     }),
     prisma.classOccurrence.findMany({
       where: {
-        archivedAt: null,
         startAt: { gte: occurrenceQueryRange.start, lt: occurrenceQueryRange.end },
       },
       include: {
@@ -217,7 +216,6 @@ export default async function AdminClassesPage(
       <h1 className="mt-3 font-display text-6xl tracking-wider">
         CLASS TEMPLATES
       </h1>
-      {searchParams.deleted && <p role="status" className="mt-5 border-l-4 border-rhyze-gold bg-white p-4 font-bold">The selected date was deleted from the schedule. Other dates are unchanged. Only people signed up for that date are notified.</p>}
       <div className="mt-7 grid gap-3 sm:grid-cols-3">
         <Metric label={`Class revenue · ${range.label}`} value={`$${(summary.totalCents / 100).toFixed(0)}`} href="/admin/payments" />
         <Metric label="Active class clients" value={`${activeClients.length}`} href="/admin/members" />

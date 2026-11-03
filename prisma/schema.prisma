@@ -385,7 +385,6 @@ model ClassSeries {
 }
 
 model ClassOccurrence {
-  archivedAt            DateTime?
   id                    String           @id @default(cuid())
   templateId            String
   seriesId              String?

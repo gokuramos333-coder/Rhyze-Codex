@@ -21,7 +21,6 @@ export default async function EditTemplatePage(
       where: { id: params.templateId },
       include: {
         occurrences: {
-          where: { archivedAt: null },
           orderBy: { startAt: 'asc' },
           include: {
             instructor: { select: { id: true, name: true, instructorProfile: true } },

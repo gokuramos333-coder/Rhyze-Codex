@@ -79,7 +79,6 @@ export default async function InstructorReviewPage(
           orderBy: { earnedAt: 'desc' },
         },
         classOccurrences: {
-          where: { archivedAt: null },
           include: {
             template: true,
             bookings: {

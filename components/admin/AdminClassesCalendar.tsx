@@ -566,12 +566,6 @@ function AdminClassCard({
           </Link>
         )}
         <Link
-          href={`/admin/schedule/${occurrence.id}#delete-class`}
-          className="border border-rhyze-coral px-4 py-2 text-xs font-black uppercase tracking-widest text-rhyze-coral"
-        >
-          Delete this date
-        </Link>
-        <Link
           href={`/admin/schedule/${occurrence.id}/roster`}
           className="focus-ring rounded-lg border border-rhyze-gold/70 px-4 py-2 text-center text-[0.65rem] font-black uppercase tracking-widest text-rhyze-gold transition hover:bg-rhyze-gold hover:text-rhyze-black"
         >
