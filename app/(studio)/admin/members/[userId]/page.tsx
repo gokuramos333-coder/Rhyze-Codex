@@ -655,99 +655,7 @@ export default async function AdminMemberDetailPage(
           {activeCredits.length === 0 && <p className="text-sm font-bold text-rhyze-black/45">No active credits are currently available.</p>}
         </div>
       </section>
-      <div className="mt-8 grid items-start gap-6 xl:grid-cols-[1fr_1.35fr]">
-        <div className="grid gap-6">
-          <InfoSection title="PROFILE PHOTO">
-            <div id="profile-photo" className="flex flex-wrap items-center gap-4 scroll-mt-24">
-              <div className="relative grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-rhyze-black text-3xl font-black text-white">
-                {member.memberProfile?.photoUrl || member.image ? (
-                  <Image
-                    src={member.memberProfile?.photoUrl || member.image || ''}
-                    alt={`${member.name || member.email} profile photo`}
-                    fill
-                    sizes="6rem"
-                    className="object-cover"
-                    unoptimized={(member.memberProfile?.photoUrl || member.image || '').startsWith('/api/media/')}
-                  />
-                ) : (
-                  (member.name || member.email || 'R').charAt(0)
-                )}
-              </div>
-              <form action={updateAdminMemberProfilePhotoAction} className="grid flex-1 gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                <input type="hidden" name="userId" value={member.id} />
-                <label className="grid gap-1 text-[10px] font-black uppercase">
-                  Upload photo
-                  <input type="file" name="photo" accept=".heic,.heif,.jpeg,.jpg,.png,.webp,image/heic,image/heif,image/jpeg,image/png,image/webp" required className="min-h-10 border bg-orange-50 p-2 text-sm font-normal" />
-                </label>
-                <button className="min-h-10 bg-rhyze-black px-4 text-[10px] font-black uppercase text-white">Save photo</button>
-                <p className="text-xs font-bold text-rhyze-black/50 sm:col-span-2">Updates both the member profile photo and the default account photo used across Rhyze.</p>
-              </form>
-            </div>
-          </InfoSection>
-          {(member.role === 'MEMBER' || member.id === actor.id) && <AccountIdentityForm name={member.name} email={member.email} userId={member.id} reauthenticate={member.id === actor.id} nameAction={updateAdminAccountNameAction} emailAction={requestAdminAccountEmailChangeAction} error={searchParams.identityError} saved={searchParams.identitySaved} />}
-          <InfoSection title="CONTACT + PROFILE">
-            <Info label="Email" value={member.email} />
-            <Info label="Phone" value={member.memberProfile?.phone || 'Not provided'} />
-            <Info
-              label="Emergency contact"
-              value={
-                [member.memberProfile?.emergencyContactName, member.memberProfile?.emergencyContactPhone]
-                  .filter(Boolean)
-                  .join(' · ') || 'Not provided'
-              }
-            />
-            <Info
-              label="Address"
-              value={
-                [
-                  member.memberProfile?.addressLine1,
-                  member.memberProfile?.city,
-                  member.memberProfile?.region,
-                  member.memberProfile?.postalCode,
-                ]
-                  .filter(Boolean)
-                  .join(', ') || 'Not provided'
-              }
-            />
-            <Info label="Last login" value={date(member.lastLoginAt || member.sombleClientProfile?.lastLoginAt)} />
-            <Info
-              label="Instructor referral used"
-              value={
-                referralCommission
-                  ? `${referralCommission.instructor.name || referralCommission.instructor.email} · ${referralCommission.purchase.product.name} · ${money(referralCommission.amountCents)} commission`
-                  : member.referralAttribution
-                    ? `${member.referralAttribution.referralCode.instructor.name || member.referralAttribution.referralCode.instructor.email} · code ${member.referralAttribution.referralCode.code} · awaiting qualifying paid purchase`
-                    : 'None'
-              }
-            />
-          </InfoSection>
-
-          <InfoSection title="WAIVER + PREFERENCES">
-            <div className="flex items-center justify-between gap-4 border-b border-black/10 py-3">
-              <span className="flex items-center gap-2 text-sm font-bold">
-                <FileSignature className="h-4 w-4 text-rhyze-coral" />
-                Current policy waiver
-              </span>
-              <AdminStatusBadge status={currentWaiver ? 'Complete' : 'Missing'} />
-            </div>
-            <Info
-              label="Signed"
-              value={
-                currentWaiver
-                  ? `${date(currentWaiver.signedDate)} · version ${currentWaiver.waiverVersion.version}`
-                  : 'Requires signature before booking'
-              }
-            />
-            <Info
-              label="Class reminders"
-              value={member.notificationPreference?.classReminders === false ? 'Off' : 'On'}
-            />
-            <Info
-              label="Studio news + offers"
-              value={member.notificationPreference?.marketingEmail === false ? 'Opted out' : 'Subscribed'}
-            />
-          </InfoSection>
-
+      <div className="mt-8 min-w-0">
           <InfoSection id="memberships" title="MEMBERSHIPS">
             {clientPricingHistory.some(change => (change.quote as {pricingLabel?: string}).pricingLabel) && <details className="mb-4 border border-rhyze-orange/30 bg-orange-50 p-3 text-sm"><summary className="cursor-pointer font-bold">Client pricing history</summary>
               <p className="mt-2 text-xs">Saved arrangements, not a live invoice quote. Expired discounts return to regular pricing automatically. Review a new quote before making a billing change.</p>
@@ -882,6 +790,102 @@ export default async function AdminMemberDetailPage(
               </p>
             )}
           </InfoSection>
+      </div>
+
+      <div className="mt-8 grid items-start gap-6 xl:grid-cols-[1fr_1.35fr]">
+        <div className="grid gap-6">
+          <InfoSection title="PROFILE PHOTO">
+            <div id="profile-photo" className="flex flex-wrap items-center gap-4 scroll-mt-24">
+              <div className="relative grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-rhyze-black text-3xl font-black text-white">
+                {member.memberProfile?.photoUrl || member.image ? (
+                  <Image
+                    src={member.memberProfile?.photoUrl || member.image || ''}
+                    alt={`${member.name || member.email} profile photo`}
+                    fill
+                    sizes="6rem"
+                    className="object-cover"
+                    unoptimized={(member.memberProfile?.photoUrl || member.image || '').startsWith('/api/media/')}
+                  />
+                ) : (
+                  (member.name || member.email || 'R').charAt(0)
+                )}
+              </div>
+              <form action={updateAdminMemberProfilePhotoAction} className="grid flex-1 gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <input type="hidden" name="userId" value={member.id} />
+                <label className="grid gap-1 text-[10px] font-black uppercase">
+                  Upload photo
+                  <input type="file" name="photo" accept=".heic,.heif,.jpeg,.jpg,.png,.webp,image/heic,image/heif,image/jpeg,image/png,image/webp" required className="min-h-10 border bg-orange-50 p-2 text-sm font-normal" />
+                </label>
+                <button className="min-h-10 bg-rhyze-black px-4 text-[10px] font-black uppercase text-white">Save photo</button>
+                <p className="text-xs font-bold text-rhyze-black/50 sm:col-span-2">Updates both the member profile photo and the default account photo used across Rhyze.</p>
+              </form>
+            </div>
+          </InfoSection>
+          {(member.role === 'MEMBER' || member.id === actor.id) && <AccountIdentityForm name={member.name} email={member.email} userId={member.id} reauthenticate={member.id === actor.id} nameAction={updateAdminAccountNameAction} emailAction={requestAdminAccountEmailChangeAction} error={searchParams.identityError} saved={searchParams.identitySaved} />}
+          <InfoSection title="CONTACT + PROFILE">
+            <Info label="Email" value={member.email} />
+            <Info label="Phone" value={member.memberProfile?.phone || 'Not provided'} />
+            <Info
+              label="Emergency contact"
+              value={
+                [member.memberProfile?.emergencyContactName, member.memberProfile?.emergencyContactPhone]
+                  .filter(Boolean)
+                  .join(' · ') || 'Not provided'
+              }
+            />
+            <Info
+              label="Address"
+              value={
+                [
+                  member.memberProfile?.addressLine1,
+                  member.memberProfile?.city,
+                  member.memberProfile?.region,
+                  member.memberProfile?.postalCode,
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'Not provided'
+              }
+            />
+            <Info label="Last login" value={date(member.lastLoginAt || member.sombleClientProfile?.lastLoginAt)} />
+            <Info
+              label="Instructor referral used"
+              value={
+                referralCommission
+                  ? `${referralCommission.instructor.name || referralCommission.instructor.email} · ${referralCommission.purchase.product.name} · ${money(referralCommission.amountCents)} commission`
+                  : member.referralAttribution
+                    ? `${member.referralAttribution.referralCode.instructor.name || member.referralAttribution.referralCode.instructor.email} · code ${member.referralAttribution.referralCode.code} · awaiting qualifying paid purchase`
+                    : 'None'
+              }
+            />
+          </InfoSection>
+
+          <InfoSection title="WAIVER + PREFERENCES">
+            <div className="flex items-center justify-between gap-4 border-b border-black/10 py-3">
+              <span className="flex items-center gap-2 text-sm font-bold">
+                <FileSignature className="h-4 w-4 text-rhyze-coral" />
+                Current policy waiver
+              </span>
+              <AdminStatusBadge status={currentWaiver ? 'Complete' : 'Missing'} />
+            </div>
+            <Info
+              label="Signed"
+              value={
+                currentWaiver
+                  ? `${date(currentWaiver.signedDate)} · version ${currentWaiver.waiverVersion.version}`
+                  : 'Requires signature before booking'
+              }
+            />
+            <Info
+              label="Class reminders"
+              value={member.notificationPreference?.classReminders === false ? 'Off' : 'On'}
+            />
+            <Info
+              label="Studio news + offers"
+              value={member.notificationPreference?.marketingEmail === false ? 'Opted out' : 'Subscribed'}
+            />
+          </InfoSection>
+
+
         </div>
 
         <div className="grid gap-6">

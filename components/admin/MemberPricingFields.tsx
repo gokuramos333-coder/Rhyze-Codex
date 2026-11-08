@@ -1,14 +1,16 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 
 export function MemberPricingFields() {
+  const durationId = useId();
   const [enabled, setEnabled] = useState(false);
   const [duration, setDuration] = useState('repeating');
   return (
-    <fieldset className="grid gap-3 border border-rhyze-orange/30 bg-orange-50 p-3 sm:col-span-2">
+    <fieldset className="grid min-w-0 w-full break-words gap-3 border border-rhyze-orange/30 bg-orange-50 p-3 sm:col-span-2">
       <label className="flex items-center gap-2 font-bold">
         <input
           type="checkbox"
+          className="shrink-0"
           checked={enabled}
           onChange={(e) => setEnabled(e.target.checked)}
         />{' '}
@@ -21,7 +23,7 @@ export function MemberPricingFields() {
             remove a previous Rhyze client discount. The public price stays the
             same.
           </p>
-          <label className="grid gap-1 font-bold">
+          <label className="grid min-w-0 gap-1 font-bold">
             Client price per month (USD)
             <input
               name="monthlyPrice"
@@ -30,23 +32,28 @@ export function MemberPricingFields() {
               step="0.01"
               required
               placeholder="199.00"
-              className="min-h-11 border border-black/20 bg-white px-3 font-normal"
+              className="min-h-11 min-w-0 w-full border border-black/20 bg-white px-3 font-normal"
             />
           </label>
-          <label className="grid gap-1 font-bold">
+          <label className="grid min-w-0 gap-1 font-bold">
             Discount lasts
             <select
+              id={durationId}
+              aria-describedby={`${durationId}-label`}
               name="discountDuration"
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
-              className="min-h-11 border border-black/20 bg-white px-3 font-normal"
+              className="min-h-11 min-w-0 w-full border border-black/20 bg-white px-3 font-normal"
             >
               <option value="repeating">A set number of months</option>
               <option value="forever">Until changed</option>
             </select>
+            <output id={`${durationId}-label`} htmlFor={durationId} className="min-w-0 break-words text-xs font-normal">
+              {duration === 'repeating' ? 'A set number of months' : 'Until changed'}
+            </output>
           </label>
           {duration === 'repeating' && (
-            <label className="grid gap-1 font-bold">
+            <label className="grid min-w-0 gap-1 font-bold">
               Number of months from activation
               <input
                 name="discountMonths"
@@ -55,7 +62,7 @@ export function MemberPricingFields() {
                 max="36"
                 step="1"
                 required
-                className="min-h-11 border border-black/20 bg-white px-3 font-normal"
+                className="min-h-11 min-w-0 w-full border border-black/20 bg-white px-3 font-normal"
               />
             </label>
           )}
@@ -64,16 +71,17 @@ export function MemberPricingFields() {
             regular price. A partial starting month is included in the discount
             window.
           </p>
-          <label className="grid gap-1 font-bold">
+          <label className="grid min-w-0 gap-1 font-bold">
             Reason
             <input
               name="discountReason"
               minLength={3}
               maxLength={240}
               required
-              placeholder="Owner-approved membership offer"
-              className="min-h-11 border border-black/20 bg-white px-3 font-normal"
+              aria-label="Reason"
+              className="min-h-11 min-w-0 w-full border border-black/20 bg-white px-3 font-normal"
             />
+            <span className="text-xs font-normal">Example: Owner-approved membership offer</span>
           </label>
         </>
       )}
