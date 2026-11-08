@@ -79,6 +79,9 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 # NEWSLETTER_TEST_DATABASE_URL uses rhyze_newsletter_preview (separate isolated
 # suite with synthetic fixtures and mocked/captured outbound email).
 # Only localhost/127.0.0.1 and those exact test databases are accepted.
+# TRIAL_TEST_DATABASE_DIR must identify your own cluster's absolute data directory;
+# the trial suite requires an explicit 127.0.0.1 port and checks server identity
+# before fixture writes. Never reuse another worker's database directory.
 # Tests require the current schema and the case-insensitive User-email index.
 # The script does not migrate, seed, reset, or recreate any database.
 

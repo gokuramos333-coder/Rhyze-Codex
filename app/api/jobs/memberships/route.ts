@@ -6,6 +6,33 @@ import { ERIKA_GIFTED_VIP } from '@/lib/domain/memberships/gifted-vip';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
 import { recoveryVipMaintenance } from '@/lib/domain/memberships/somble-billing-recovery';
 import { vipEntitlementInclude, vipMembershipPaidThrough } from '@/lib/domain/credits/vip-access';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
+
+// One-time trial freezes share cancellation's locks and re-read their state.
+// The scheduled job's earlier selection is not permission to resume access.
+async function applyIntroTrialFreeze(id: string, membershipId: string, userId: string, phase: 'start' | 'end', now: Date) {
+  return prisma.$transaction(async (tx) => {
+    await lockMembershipEntitlements(tx, userId);
+    await tx.$queryRaw`SELECT id FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
+    const freeze = await tx.membershipFreeze.findUnique({
+      where: { id }, include: { membership: { include: { product: true } } },
+    });
+    if (!freeze || freeze.membershipId !== membershipId || freeze.membership.userId !== userId ||
+        freeze.membership.product.kind !== 'INTRO_TRIAL' || freeze.membership.stripeSubscriptionId ||
+        freeze.membership.billingLockToken || freeze.membership.billingLockNeedsReview ||
+        freeze.cancelledAt || freeze.resumedAt ||
+        (phase === 'start'
+          ? freeze.activatedAt || freeze.startAt > now || !['ACTIVE', 'TRIALING'].includes(freeze.membership.status)
+          : !freeze.activatedAt || freeze.endAt > now || freeze.membership.status !== 'PAUSED')) return false;
+    if (await tx.auditLog.findFirst({
+      where: { action: 'membership.intro_trial_cancelled', entityType: 'Membership', entityId: membershipId },
+      select: { id: true },
+    })) return false;
+    await tx.membership.update({ where: { id: membershipId }, data: { status: phase === 'start' ? 'PAUSED' : 'ACTIVE' } });
+    await tx.membershipFreeze.update({ where: { id }, data: phase === 'start' ? { activatedAt: now } : { resumedAt: now } });
+    return true;
+  });
+}
 
 export async function POST(request: Request) {
   if (
@@ -19,12 +46,12 @@ export async function POST(request: Request) {
   const [startingFreezes, endingFreezes] = await Promise.all([
     prisma.membershipFreeze.findMany({
       where: { cancelledAt: null, activatedAt: null, startAt: { lte: now }, membership: { planChanges: { none: { activeMembershipId: { not: null } } } } },
-      include: { membership: true },
+      include: { membership: { include: { product: true } } },
       orderBy: { startAt: 'asc' },
     }),
     prisma.membershipFreeze.findMany({
       where: { cancelledAt: null, activatedAt: { not: null }, resumedAt: null, endAt: { lte: now }, membership: { planChanges: { none: { activeMembershipId: { not: null } } } } },
-      include: { membership: true },
+      include: { membership: { include: { product: true } } },
       orderBy: { endAt: 'asc' },
     }),
   ]);
@@ -34,6 +61,10 @@ export async function POST(request: Request) {
 
   for (const freeze of startingFreezes) {
     try {
+      if (freeze.membership.product.kind === 'INTRO_TRIAL') {
+        if (await applyIntroTrialFreeze(freeze.id, freeze.membershipId, freeze.membership.userId, 'start', now)) freezesStarted += 1;
+        continue;
+      }
       if (freeze.membership.stripeSubscriptionId) {
         if (!stripeIsConfigured()) throw new Error('Stripe is not configured');
         await getStripe().subscriptions.update(
@@ -54,6 +85,10 @@ export async function POST(request: Request) {
 
   for (const freeze of endingFreezes) {
     try {
+      if (freeze.membership.product.kind === 'INTRO_TRIAL') {
+        if (await applyIntroTrialFreeze(freeze.id, freeze.membershipId, freeze.membership.userId, 'end', now)) freezesResumed += 1;
+        continue;
+      }
       if ((freeze.membership.planChangeState as { fundingReversedAt?: number } | null)?.fundingReversedAt) throw new Error('Current membership payment was reversed; billing review required before resume');
       if (freeze.membership.stripeSubscriptionId) {
         if (!stripeIsConfigured()) throw new Error('Stripe is not configured');

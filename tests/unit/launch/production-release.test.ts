@@ -59,6 +59,7 @@ const environment = () =>
     }),
   );
 const localEnv = {
+  TRIAL_TEST_DATABASE_DIR: '/private/tmp/owned-trial-cluster',
   NEWSLETTER_TEST_DATABASE_URL:
     'postgresql://tester@127.0.0.1:55439/rhyze_newsletter_preview',
   DATABASE_URL: 'postgresql://tester@127.0.0.1:55439/callback_test',
@@ -243,6 +244,12 @@ describe('release input and production isolation', () => {
         DATABASE_URL: 'postgresql://tester@localhost/real_customers',
       }),
     ).toThrow();
+  });
+  it('retains an explicit owned trial cluster directory and rejects missing or relative declarations', () => {
+    expect(releaseTestEnvironment(localEnv).TRIAL_TEST_DATABASE_DIR).toBe('/private/tmp/owned-trial-cluster');
+    for (const directory of [undefined, '', 'relative/cluster', '/']) {
+      expect(() => releaseTestEnvironment({ ...localEnv, TRIAL_TEST_DATABASE_DIR: directory })).toThrow(/TRIAL_TEST_DATABASE_DIR/);
+    }
   });
   it('publishes only a freshly built production context, without arbitrary overrides', () => {
     const args = productionDeployArgs(

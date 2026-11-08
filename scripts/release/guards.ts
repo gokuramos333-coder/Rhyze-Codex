@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 
 export const SITE_ID = 'e7002b82-50f2-4760-8a35-e4f9591bec4f';
 export const SITE_NAME = 'rhyze-fitness-rhyze-2';
@@ -190,6 +190,11 @@ export function releaseTestEnvironment(
     NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
     NEXT_TELEMETRY_DISABLED: '1',
   };
+  const ownedTrialDirectory = source.TRIAL_TEST_DATABASE_DIR;
+  if (!ownedTrialDirectory || !isAbsolute(ownedTrialDirectory) || resolve(ownedTrialDirectory) === '/') {
+    throw Error('Set TRIAL_TEST_DATABASE_DIR to the absolute data directory of your own disposable PostgreSQL cluster.');
+  }
+  env.TRIAL_TEST_DATABASE_DIR = ownedTrialDirectory;
   const databases: Record<string, string[]> = {
     DATABASE_URL: [
       'callback_test',

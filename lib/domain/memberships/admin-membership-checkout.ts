@@ -4,6 +4,7 @@ import {
   type MemberPricing,
 } from './member-pricing';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
+import { requireTrialUpgradeCheckout } from './trial-upgrade';
 import type { BillingInterval, ProductKind } from '@prisma/client';
 import {
   attributionMetadata,
@@ -31,6 +32,7 @@ type CheckoutDependencies = {
   findClient(id: string): Promise<CheckoutClient | null>;
   findProduct(id: string): Promise<CheckoutProduct | null>;
   hasCurrentMembership(userId: string): Promise<boolean>;
+  hasIntroTrialHistory(userId: string): Promise<boolean>;
   createPurchase(input: {
     userId: string;
     productId: string;
@@ -86,6 +88,8 @@ export async function startAdminMembershipCheckout(
   } & MemberPricingInput,
   dependencies: CheckoutDependencies,
 ) {
+  // Never substitute immediate-start billing for the deferred trial-upgrade policy.
+  if (await dependencies.hasIntroTrialHistory(input.clientId)) requireTrialUpgradeCheckout();
   const [client, product, hasCurrentMembership] = await Promise.all([
     dependencies.findClient(input.clientId),
     dependencies.findProduct(input.productId),

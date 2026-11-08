@@ -975,6 +975,7 @@ export async function startAdminMembershipCheckoutAction(formData: FormData) {
           billingInterval: true, stripePriceId: true, priceCents: true,
         },
       }),
+      hasIntroTrialHistory: async (id) => Boolean(await prisma.membership.findFirst({ where: { userId: id, product: { kind: 'INTRO_TRIAL' } }, select: { id: true } })),
       hasCurrentMembership: async (id) => Boolean(await prisma.membership.findFirst({
         where: { userId: id, ...qualifyingMembershipWhere },
         select: { id: true },

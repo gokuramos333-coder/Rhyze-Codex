@@ -40,6 +40,11 @@ export async function linkStripePaymentRecordToMember(
   let creditAccountId: string | null = null;
 
   if (input.grantIntroTrial) {
+    // Granting is a one-time repair of an unmatched payment. A replay must not
+    // reset an existing trial's cancellation, activation or expiry.
+    if (payment.purchaseId || payment.membershipId) {
+      return { ok: false as const, reason: 'intro-trial-already-granted' as const };
+    }
     if (payment.amountCents !== 700) {
       return { ok: false as const, reason: 'intro-payment-amount' as const };
     }
@@ -55,6 +60,17 @@ export async function linkStripePaymentRecordToMember(
     const existingPurchase = payment.stripePaymentIntentId
       ? await tx.purchase.findUnique({ where: { stripePaymentIntentId: payment.stripePaymentIntentId } })
       : null;
+    if (existingPurchase) {
+      // A stale unmatched-payment read can precede another grant/cancellation.
+      // The admin caller holds this lock until its transaction completes.
+      await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${existingPurchase.id} FOR UPDATE`;
+      const fresh = await tx.purchase.findUnique({
+        where: { id: existingPurchase.id }, include: { membership: true },
+      });
+      if (!fresh || fresh.membership || fresh.refundedAmountCents > 0 || ['REFUNDED', 'PARTIALLY_REFUNDED'].includes(fresh.status)) {
+        return { ok: false as const, reason: 'intro-trial-already-granted' as const };
+      }
+    }
     const purchase = existingPurchase
       ? await tx.purchase.update({
           where: { id: existingPurchase.id },

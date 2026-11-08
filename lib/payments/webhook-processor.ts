@@ -425,12 +425,24 @@ async function fulfillProductPurchase(
   if (classTicket && prior?.paidAt && classTicketFulfillment(prior.policyAcceptance)) return;
   // A paid receipt replay must never overwrite an admin-switched entitlement.
   if (prior?.paidAt && prior.membership?.planChangeState) return;
-  if (prior && (prior.product.kind === 'VIP' || prior.product.billingInterval !== 'ONE_TIME')) {
+  if (prior && (prior.product.kind === 'INTRO_TRIAL' || prior.product.kind === 'VIP' || prior.product.billingInterval !== 'ONE_TIME')) {
     await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${action.purchaseId} FOR UPDATE`;
     prior = await tx.purchase.findUnique({
       where: { id: action.purchaseId },
       include: { product: true, membership: true },
     });
+  }
+  // Cancellation takes this same purchase row lock before writing its receipt.
+  // Read after the lock: a delayed/replayed checkout cannot restore trial access
+  // or rewrite settled/refunded financial records after local cancellation.
+  if (prior?.product.kind === 'INTRO_TRIAL') {
+    const cancelled = prior.membership && await tx.auditLog.findFirst({
+      where: { action: 'membership.intro_trial_cancelled', entityType: 'Membership', entityId: prior.membership.id },
+      select: { id: true },
+    });
+    if (cancelled ||
+        (prior.membership && !['ACTIVE', 'TRIALING'].includes(prior.membership.status)) ||
+        prior.refundedAmountCents > 0 || ['REFUNDED', 'PARTIALLY_REFUNDED'].includes(prior.status)) return;
   }
   const settledNative =
     prior && (prior.product.kind === 'VIP' || prior.product.billingInterval !== 'ONE_TIME') && prior.paidAt ? prior : null;

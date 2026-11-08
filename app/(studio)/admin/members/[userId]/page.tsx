@@ -55,6 +55,9 @@ import {
   updateMemberMembershipAction,
 } from './actions';
 import { AdminMembershipStartForm } from '@/components/admin/AdminMembershipStartForm';
+import { TrialUpgradePanel, CancelIntroTrialForm } from '@/components/admin/TrialUpgradePanel';
+import { canCancelIntroTrial, trialBookingScope } from '@/lib/domain/memberships/intro-trial-cancellation-policy';
+import { cancelAdminIntroTrialAction } from './trial-actions';
 import { AdminMembershipChangeForm, AdminMembershipChangeRecovery } from '@/components/admin/AdminMembershipChangeForm';
 import { quoteMembershipChangeAction, confirmMembershipChangeAction, reconcileMembershipChangeAction } from './membership-change-actions';
 import { correctManualMembershipAssignmentAction } from './manual-assignment-actions';
@@ -129,13 +132,13 @@ function paymentIntentLabel(value: string | null | undefined) {
 export default async function AdminMemberDetailPage(
   props: {
     params: Promise<{ userId: string }>;
-    searchParams: Promise<{ sent?: string; error?: string; membership?: string; identityError?: string; identitySaved?: string }>;
+    searchParams: Promise<{ sent?: string; error?: string; membership?: string; trial?: string; identityError?: string; identitySaved?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
   const actor = await requireArea('admin');
-  const [member, activeWaiver, membershipProducts] = await Promise.all([
+  const [member, activeWaiver, membershipProducts, trialBookingHistory] = await Promise.all([
     prisma.user.findUnique({
       where: { id: params.userId },
       include: {
@@ -238,9 +241,12 @@ export default async function AdminMemberDetailPage(
     }),
     prisma.product.findMany({
       where: { isActive: true, kind: { in: qualifyingMembershipProductKinds } },
-      select: { id: true, name: true, priceCents: true, stripePriceId: true, billingInterval: true, kind: true, customPlanType: true, isUnlimited: true, isPublic: true },
+      select: { id: true, name: true, priceCents: true, stripePriceId: true, billingInterval: true, kind: true, customPlanType: true, isUnlimited: true, isPublic: true, isActive: true },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     }),
+    // The visible history is capped at 100; cancellation eligibility must inspect
+    // every booking, including old cancelled rows with possible legacy writers.
+    prisma.booking.findMany({ where: { userId: params.userId }, select: { policySnapshot: true } }),
   ]);
   if (!member) notFound();
   const clientPricingHistory = await prisma.membershipPlanChange.findMany({
@@ -657,6 +663,8 @@ export default async function AdminMemberDetailPage(
       </section>
       <div className="mt-8 min-w-0">
           <InfoSection id="memberships" title="MEMBERSHIPS">
+            {searchParams.trial === 'cancelled' && <p role="status" className="mb-4 bg-emerald-50 p-3 text-sm font-bold">Trial cancelled. Trial access ended; no bookings were changed. No payment, refund or customer email was created.</p>}
+            {searchParams.trial === 'review' && <p role="alert" className="mb-4 bg-amber-50 p-3 text-sm font-bold">Trial cancellation was not applied. Confirm this is an active 7-day trial, enter a reason, and review trial or ambiguous booking history, pending freezes, billing actions and any email already sending. Trials with trial booking history cannot be cancelled here, even when those bookings are already cancelled. No partial cancellation was saved.</p>}
             {clientPricingHistory.some(change => (change.quote as {pricingLabel?: string}).pricingLabel) && <details className="mb-4 border border-rhyze-orange/30 bg-orange-50 p-3 text-sm"><summary className="cursor-pointer font-bold">Client pricing history</summary>
               <p className="mt-2 text-xs">Saved arrangements, not a live invoice quote. Expired discounts return to regular pricing automatically. Review a new quote before making a billing change.</p>
               {clientPricingHistory.map(change => { const label=(change.quote as {pricingLabel?: string}).pricingLabel;return label ? <p className="mt-2" key={change.id}>{label} · {change.status.replaceAll('_',' ')} · starts {date(change.effectiveAt)}</p> : null; })}
@@ -668,6 +676,7 @@ export default async function AdminMemberDetailPage(
                 checkoutAction={startAdminMembershipCheckoutAction}
                 assignmentAction={assignAdminMembershipAction}
                 minimumEndDate={new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)}
+                trialUpgrade={member.memberships.some(item => item.product.kind === 'INTRO_TRIAL') ? <TrialUpgradePanel email={member.email} products={membershipProducts} /> : undefined}
               />
             )}
             {member.memberships.map((membership) => (
@@ -685,6 +694,11 @@ export default async function AdminMemberDetailPage(
                   </p>
                 )}
                 {membership.cancelAtPeriodEnd && <p className="mt-2 bg-red-100 p-2 text-xs font-black uppercase text-red-900">Cancels at period end</p>}
+                {canCancelIntroTrial(membership, now) && <CancelIntroTrialForm userId={member.id} membershipId={membership.id} action={cancelAdminIntroTrialAction} blocker={
+                  membership.freezes.some((freeze) => !freeze.resumedAt) ? 'A pending or active freeze needs review before cancellation.' :
+                  trialBookingHistory.some((booking) => trialBookingScope(booking.policySnapshot, membership.purchase?.creditAccount?.id ?? '', member.memberships.filter((m) => m.product.kind === 'INTRO_TRIAL').length) !== 'preserve')
+                    ? 'Trial or ambiguous booking history needs review. Cancellation is unavailable here; no bookings will be removed.' : undefined
+                } />}
                 {actor.role === 'OWNER' && membership.status === 'ACTIVE' && !membership.stripeSubscriptionId &&
                   (membership.purchase?.policyAcceptance as { source?: string } | null)?.source === 'ADMIN_ASSIGNMENT' &&
                   membership.product.customPlanType !== 'COMPLIMENTARY_STANDARD' && (
