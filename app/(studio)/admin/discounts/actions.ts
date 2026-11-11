@@ -1,7 +1,7 @@
 'use server';
 import { requireApprovedOwner } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { campaignProductEligible, parseCampaignForm } from '@/lib/domain/discounts/campaign';
+import { campaignProductEligible, campaignValueQuote, parseCampaignForm } from '@/lib/domain/discounts/campaign';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -14,6 +14,7 @@ export async function createDiscountCampaignAction(form: FormData) {
     await prisma.$transaction(async tx => {
       const products = await tx.product.findMany({ where: { id: { in: terms.productIds }, isActive: true } });
       if (products.length !== terms.productIds.length || !products.every(campaignProductEligible)) throw Error('Select active monthly memberships or one-time class packs.');
+      for (const product of products) campaignValueQuote(terms, product);
       const campaign = await tx.discountCampaign.create({ data: { ...terms, enabled: false } });
       await tx.auditLog.create({ data: { actorId: owner.id, action: 'DISCOUNT_CAMPAIGN_CREATED', entityType: 'DiscountCampaign', entityId: campaign.id, after: { ...terms, startsAt: terms.startsAt.toISOString(), endsAt: terms.endsAt.toISOString(), enabled: false } } });
     });

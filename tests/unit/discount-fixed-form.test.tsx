@@ -1,0 +1,6 @@
+// @vitest-environment jsdom
+import {afterEach,it,expect,vi} from 'vitest';
+import {cleanup,render,screen,fireEvent,waitFor} from '@testing-library/react';
+import {DiscountCampaignForm} from '@/components/admin/DiscountCampaignForm';
+afterEach(cleanup);
+it('fixed selection submits only cents input and retains choice on server error',async()=>{const action=vi.fn().mockResolvedValue({error:'Retry'});const {container}=render(<DiscountCampaignForm products={[{id:'p',name:'Pack'}]} action={action}/>);fireEvent.change(screen.getByLabelText('Discount type'),{target:{value:'FIXED'}});fireEvent.change(screen.getByLabelText('Amount off (USD)'),{target:{value:'13.75'}});fireEvent.click(screen.getByLabelText('Pack'));fireEvent.submit(container.querySelector('form')!);await screen.findByRole('alert');expect(action.mock.calls[0][0].get('amountOff')).toBe('13.75');expect(action.mock.calls[0][0].get('percentOff')).toBeNull();expect((screen.getByLabelText('Amount off (USD)') as HTMLInputElement).value).toBe('13.75');fireEvent.change(screen.getByLabelText('Discount type'),{target:{value:'PERCENT'}});await waitFor(()=>expect(screen.queryByLabelText('Amount off (USD)')).toBeNull());expect(screen.getByLabelText('Percent off')).toBeTruthy()});

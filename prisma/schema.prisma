@@ -656,6 +656,7 @@ model Purchase {
   failedAt                DateTime?
   refundedAmountCents     Int            @default(0)
   discountCents           Int            @default(0)
+  discountQuote           Json?
   policyAcceptedAt        DateTime?
   policyAcceptance        Json?
   createdAt               DateTime       @default(now())
@@ -1369,7 +1370,8 @@ model DiscountCampaign {
   purchases  Purchase[]
   id         String   @id @default(cuid())
   code       String   @unique
-  percentOff Int
+  percentOff Int?
+  amountOffCents Int?
   productIds String[]
   startsAt   DateTime
   endsAt     DateTime

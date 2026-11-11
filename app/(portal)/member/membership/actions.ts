@@ -2,7 +2,7 @@
 import { discountCodeIsAmbiguous } from '@/lib/domain/discounts/namespace';
 import { runDiscountCheckout, DiscountCheckoutExpiryError } from '@/lib/domain/discounts/admission';
 import type Stripe from 'stripe';
-import { campaignCheckout, ensureCampaignCoupon } from '@/lib/domain/discounts/campaign';
+import { campaignCheckout, campaignValueQuote, ensureCampaignCoupon } from '@/lib/domain/discounts/campaign';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 
 import { attributionMetadata, sourceAttributionSelect } from '@/lib/attribution/first-touch';
@@ -220,7 +220,8 @@ export async function startCheckoutAction(formData: FormData) {
     : null;
   let campaignQuote: ReturnType<typeof campaignCheckout> | null = null;
   if (campaign) {
-    campaignQuote = { discountCents: Math.round(product.priceCents * campaign.percentOff / 100), expiresAt: 0 };
+    try { campaignQuote = { discountCents: campaignValueQuote(campaign, product).discountCents, expiresAt: 0 }; }
+    catch { /* Existing committed checkout recovery precedes fresh quote validation in admission. */ }
   }
   if (usesRhyze2026Promo) {
     if (!isRhyze2026PromoWindow()) redirect('/member/membership?result=rhyze2026-expired');
@@ -355,7 +356,7 @@ export async function startCheckoutAction(formData: FormData) {
       cancel_url: `${origin}/member/membership?result=cancelled&plan=${trackingPlan}`,
     };
   };
-  if (discountCents > 0) {
+  if (discountCents > 0 || campaign) {
     let url: string;
     try {
       url = await runDiscountCheckout({ userId: user.id, productId: product.id, code: referralCodeInput, purchaseData, build: buildParams, create: (params, options) => stripe.checkout.sessions.create(params, options), retrieve: id => stripe.checkout.sessions.retrieve(id) });

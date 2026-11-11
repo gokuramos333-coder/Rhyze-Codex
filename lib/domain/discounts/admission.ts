@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type Stripe from 'stripe';
-import { campaignCheckout } from './campaign';
+import { campaignCheckout, campaignQuoteSnapshot } from './campaign';
 export type DiscountCheckoutInput = {
  userId:string; productId:string; code:string; purchaseData:Prisma.PurchaseUncheckedCreateInput;
  build:(purchaseId:string)=>Promise<Stripe.Checkout.SessionCreateParams>;
@@ -25,16 +25,20 @@ export async function runDiscountCheckout(input:DiscountCheckoutInput):Promise<s
    }
   }
   const campaignId = input.purchaseData.discountCampaignId;
+  let quote: ReturnType<typeof campaignQuoteSnapshot> | undefined;
   if (campaignId) {
    // Conflicts with disable's UPDATE: the winner establishes the admission order.
    await tx.$queryRaw`SELECT "id" FROM "DiscountCampaign" WHERE "id"=${campaignId} FOR SHARE`;
    const campaign = await tx.discountCampaign.findUniqueOrThrow({where:{id:campaignId}});
    const product = await tx.product.findUniqueOrThrow({where:{id:input.productId}});
    campaignCheckout(campaign, product);
+   quote = campaignQuoteSnapshot(campaign, product);
+   if (input.purchaseData.amountCents !== quote.amountCents || input.purchaseData.discountCents !== quote.discountCents) throw Error('Discount price changed before admission; retry checkout.');
    const used = await tx.$queryRaw<{purchaseId:string}[]>`SELECT "purchaseId" FROM "CampaignRedemption" WHERE "userId"=${input.userId} AND "campaignId"=${campaignId}`;
    if (used.length || await tx.purchase.findFirst({where:{userId:input.userId,discountCents:{gt:0},status:'PENDING'}})) throw Error('Discount already used or checkout already in progress.');
   } else if (await tx.discountRedemption.findFirst({where:{userId:input.userId}}) || await tx.purchase.findFirst({where:{userId:input.userId,discountCents:{gt:0},status:{in:['PAID','PARTIALLY_REFUNDED','PENDING']}}})) throw Error('Discount already used or checkout already in progress.');
-  const purchase = await tx.purchase.create({data:input.purchaseData});
+  const purchase = await tx.purchase.create({data:{...input.purchaseData,...(quote ? {amountCents:quote.amountCents,discountCents:quote.discountCents,discountQuote:quote} : {})}});
+  if (quote) await tx.auditLog.create({data:{actorId:input.userId,action:'DISCOUNT_QUOTED',entityType:'Purchase',entityId:purchase.id,after:quote}});
   const [created] = await tx.$queryRaw<Admission[]>`INSERT INTO "DiscountCheckoutAdmission" ("userId","purchaseId","productId","code","createdAt") VALUES (${input.userId},${purchase.id},${input.productId},${input.code},clock_timestamp() AT TIME ZONE 'UTC') RETURNING *`;
   return created;
  });
@@ -66,7 +70,13 @@ export async function runDiscountCheckout(input:DiscountCheckoutInput):Promise<s
    await tx.$queryRaw`SELECT "id" FROM "DiscountCampaign" WHERE "id"=${purchase.discountCampaignId} FOR SHARE`;
    // Final issuance authorization under the campaign lock, after coupon work.
    // This immutable payload is reused even when an outcome is unknown.
-   built.expires_at = campaignCheckout(await tx.discountCampaign.findUniqueOrThrow({where:{id:purchase.discountCampaignId}}), await tx.product.findUniqueOrThrow({where:{id:input.productId}})).expiresAt;
+   const campaign=await tx.discountCampaign.findUniqueOrThrow({where:{id:purchase.discountCampaignId}});
+   const product=await tx.product.findUniqueOrThrow({where:{id:input.productId}});
+   const quote=campaignQuoteSnapshot(campaign,product);
+   if (input.purchaseData.amountCents !== quote.amountCents || input.purchaseData.discountCents !== quote.discountCents) throw Error('Discount payload price changed; reconciliation required.');
+   if (purchase.discountQuote && JSON.stringify(purchase.discountQuote, Object.keys(quote).sort()) !== JSON.stringify(quote, Object.keys(quote).sort())) throw Error('Discount quote changed; reconciliation required.');
+   if (purchase.amountCents!==quote.amountCents || purchase.discountCents!==quote.discountCents) throw Error('Discount price changed; reconciliation required.');
+   built.expires_at = campaignCheckout(campaign, product).expiresAt;
   }
   // Persist the exact wire payload BEFORE session creation, including expiry.
   const serialized = JSON.stringify(built);
