@@ -38,7 +38,15 @@ must match the managed connection; credentials are not included in that identity
 or in the public build receipt.
 
 Only the exact READY **production-context** Git artifact with the matching
-`/_rhyze-release.json` receipt may be published. Live/configuration pins and PAT
+`/_rhyze-release.json` receipt may be published. Before publication, the full HTTP
+verifier checks public routes, authenticated OWNER/INSTRUCTOR/MEMBER boundaries,
+LIVE runtime configuration and discovered JS/CSS on that exact deploy-ID origin.
+The candidate-bound result is retained as `candidateHttp` alongside the pinned
+receipt. Auth requests and callbacks use the immutable origin; cross-origin
+redirects (including canonical production) fail closed, with no fallback. Only
+existing automation accounts log in; no customer operations are performed.
+Missing credentials or auth/asset failures block publication and still run cleanup.
+Live/configuration pins and PAT
 restriction are rechecked before publication. This is not preview promotion.
 The new production deploy is locked immediately, authenticated live checks run,
 and the temporary approval is removed. Cleanup attempts approval removal,

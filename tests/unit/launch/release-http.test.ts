@@ -1,16 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+const {
+  runHostedWorkflow,
+} = require('../../../scripts/release/hosted-workflow.cjs');
 import { verifyLiveHttp } from '../../../scripts/release/http-smoke';
 
 // The transport is the only fake: exercise the real cookie, identity, role,
 // content and asset checks without contacting clients or charging a card.
 function transport(fault = '') {
-  const requests: { path: string; method: string }[] = [];
+  const requests: {
+    path: string;
+    method: string;
+    origin: string;
+    init?: RequestInit;
+  }[] = [];
   const page =
     '<html><main>Rhyze Fitness — classes and memberships</main><link href="/_next/static/app.css" rel="stylesheet"><script src="/_next/static/app.js"></script></html>';
   const fetcher: typeof fetch = async (input, options) => {
     const path = new URL(String(input)).pathname;
     const method = options?.method || 'GET';
-    requests.push({ path, method });
+    requests.push({
+      path,
+      method,
+      origin: new URL(String(input)).origin,
+      init: options,
+    });
     const cookie = new Headers(options?.headers).get('cookie') || '';
     const email = cookie.replace('session=', '');
     const role = email.includes('admin')
@@ -23,11 +37,19 @@ function transport(fault = '') {
     if (path === '/api/auth/csrf') return Response.json({ csrfToken: 'csrf' });
     if (path === '/api/auth/callback/credentials') {
       const form = new URLSearchParams(String(options?.body));
-      return new Response('{}', {
-        headers: {
-          'set-cookie': `session=${form.get('email')}; HttpOnly; Path=/`,
+      return new Response(
+        JSON.stringify({
+          url:
+            fault === 'login-origin'
+              ? 'https://www.rhyzefitness.com/member'
+              : form.get('callbackUrl'),
+        }),
+        {
+          headers: {
+            'set-cookie': `session=${form.get('email')}; HttpOnly; Path=/`,
+          },
         },
-      });
+      );
     }
     if (path === '/api/auth/session')
       return Response.json({
@@ -41,7 +63,12 @@ function transport(fault = '') {
       if (!cookie)
         return new Response(null, {
           status: 307,
-          headers: { location: '/sign-in' },
+          headers: {
+            location:
+              fault === 'denied-origin'
+                ? 'https://www.rhyzefitness.com/sign-in'
+                : '/sign-in',
+          },
         });
       if (
         (path.startsWith('/admin') && role !== 'OWNER') ||
@@ -83,6 +110,136 @@ function transport(fault = '') {
   };
   return { fetcher, requests };
 }
+const immutableDeploy = {
+  id: 'a'.repeat(24),
+  site_id: 'e7002b82-50f2-4760-8a35-e4f9591bec4f',
+};
+const immutableOrigin = `https://${immutableDeploy.id}--rhyze-fitness-rhyze-2.netlify.app`;
+describe('immutable candidate HTTP checks', () => {
+  it('wires the full candidate gate after pinned receipt validation inside prepare, before publication', () => {
+    const source = readFileSync('scripts/release/hosted.ts', 'utf8');
+    const prepare = source.slice(
+      source.indexOf('async prepare()'),
+      source.indexOf('async publish()'),
+    );
+    expect(prepare).toMatch(
+      /evidence\.candidateHttp = await verifyLiveHttp\(\{\s*immutableDeploy: candidate,?\s*\}\)/,
+    );
+    expect(
+      prepare.indexOf('assertHostedReceipt(receipt, approval)'),
+    ).toBeLessThan(prepare.indexOf('evidence.candidateHttp'));
+    expect(prepare.slice(prepare.indexOf('evidence.candidateHttp'))).toContain(
+      'await unchanged()',
+    );
+    expect(prepare.slice(prepare.indexOf('evidence.candidateHttp'))).toContain(
+      'assertHostedCandidate(await deploy(candidateId)',
+    );
+  });
+  it.each([
+    'identity',
+    'role',
+    'asset-html',
+    'asset-404',
+    'login-origin',
+    'denied-origin',
+    'credentials',
+  ])(
+    'blocks publication and retains cleanup on candidate %s failure',
+    async (fault) => {
+      const { fetcher, requests } = transport(fault);
+      const steps = {
+        prepare: () =>
+          verifyLiveHttp({
+            immutableDeploy,
+            fetcher,
+            passwordFor: () => {
+              if (fault === 'credentials') throw Error('missing');
+              return 'test-only';
+            },
+          }),
+        publish: vi.fn(),
+        lock: vi.fn(),
+        verify: vi.fn(),
+        removeApproval: vi.fn(),
+        ensureLocked: vi.fn(),
+        patOff: vi.fn(),
+      };
+      const result = await runHostedWorkflow(steps);
+      expect(result.status).toBe('BLOCKED');
+      expect(result.publicationAttempted).toBe(false);
+      expect(result.failures).toEqual(['prepare']);
+      expect(steps.publish).not.toHaveBeenCalled();
+      expect(steps.verify).not.toHaveBeenCalled();
+      for (const cleanup of [
+        steps.removeApproval,
+        steps.ensureLocked,
+        steps.patOff,
+      ])
+        expect(cleanup).toHaveBeenCalledOnce();
+      expect(new Set(requests.map((r) => r.origin))).toEqual(
+        new Set([immutableOrigin]),
+      );
+    },
+  );
+  it('binds every request, auth origin and callback to the exact immutable ID', async () => {
+    const { fetcher, requests } = transport();
+    const report = await verifyLiveHttp({
+      immutableDeploy,
+      fetcher,
+      passwordFor: () => 'test-only',
+    });
+    expect(report.origin).toBe(immutableOrigin);
+    expect(report.roles).toEqual(['OWNER', 'INSTRUCTOR', 'MEMBER']);
+    expect(report.assets).toBe(2);
+    expect(new Set(requests.map((r) => r.origin))).toEqual(
+      new Set([immutableOrigin]),
+    );
+    for (const r of requests) expect(r.init?.redirect).toBe('manual');
+    for (const r of requests.filter((r) => r.method !== 'GET')) {
+      expect(r.path).toBe('/api/auth/callback/credentials');
+      expect(new Headers(r.init?.headers).get('origin')).toBe(immutableOrigin);
+      expect(
+        new URL(new URLSearchParams(String(r.init?.body)).get('callbackUrl')!)
+          .origin,
+      ).toBe(immutableOrigin);
+    }
+  });
+  it.each(['login-origin', 'denied-origin'])(
+    'rejects %s without canonical fallback',
+    async (fault) => {
+      const { fetcher, requests } = transport(fault);
+      await expect(
+        verifyLiveHttp({
+          immutableDeploy,
+          fetcher,
+          passwordFor: () => 'test-only',
+        }),
+      ).rejects.toThrow();
+      expect(new Set(requests.map((r) => r.origin))).toEqual(
+        new Set([immutableOrigin]),
+      );
+    },
+  );
+  it.each([
+    { ...immutableDeploy, id: 'production-reviewed' },
+    { ...immutableDeploy, site_id: 'wrong' },
+  ])(
+    'rejects invalid immutable identity before credentials or requests',
+    async (invalid) => {
+      const { fetcher, requests } = transport();
+      await expect(
+        verifyLiveHttp({
+          immutableDeploy: invalid,
+          fetcher,
+          passwordFor: () => {
+            throw Error('credentials must not be read');
+          },
+        }),
+      ).rejects.toThrow(/immutable/);
+      expect(requests).toEqual([]);
+    },
+  );
+});
 describe('post-release live HTTP checks', () => {
   it('verifies real role-policy boundaries, production mode and generated assets without purchase actions', async () => {
     const { fetcher, requests } = transport();

@@ -328,6 +328,12 @@ async function main() {
               throw Error('Hosted application HTML missing.');
           }
           evidence.hostedApplicationRoutes = true;
+          // Same verifier as canonical production, bound to this receipt-pinned
+          // immutable artifact. Any auth/role/asset failure blocks publication.
+          evidence.candidateHttp = await verifyLiveHttp({
+            immutableDeploy: candidate,
+          });
+          save();
           if ((await patOff()) !== databaseId)
             throw Error('Site database identity changed.');
           await unchanged();

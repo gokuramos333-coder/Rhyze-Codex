@@ -5,6 +5,7 @@ import {
 } from '../../lib/automation/test-accounts';
 import { verifyPortalAccess } from '../../lib/automation/portal-smoke-policy';
 import { ORIGIN } from './guards';
+const { immutableDeployOrigin } = require('./hosted-guard.cjs');
 
 function securePassword(account: AutomationTestAccount) {
   try {
@@ -29,15 +30,20 @@ function securePassword(account: AutomationTestAccount) {
 
 export async function verifyLiveHttp(
   options: {
+    immutableDeploy?: { id: string; site_id: string };
     fetcher?: typeof fetch;
     passwordFor?: (account: AutomationTestAccount) => string;
   } = {},
 ) {
+  const origin: string =
+    options.immutableDeploy === undefined
+      ? ORIGIN
+      : immutableDeployOrigin(options.immutableDeploy);
   const fetcher = options.fetcher || fetch;
   const assets = new Set<string>();
   const roles: string[] = [];
   const request = (path: string, init: RequestInit = {}) =>
-    fetcher(ORIGIN + path, {
+    fetcher(origin + path, {
       ...init,
       redirect: 'manual',
       signal: AbortSignal.timeout(30000),
@@ -82,12 +88,12 @@ export async function verifyLiveHttp(
   }
   function denied(response: Response, path: string, anonymous = false) {
     const location = response.headers.get('location');
-    const target = location ? new URL(location, ORIGIN) : null;
+    const target = location ? new URL(location, origin) : null;
     if (
       response.status < 300 ||
       response.status >= 400 ||
       !target ||
-      target.origin !== ORIGIN ||
+      target.origin !== origin ||
       target.pathname.startsWith(path) ||
       (anonymous && target.pathname !== '/sign-in')
     )
@@ -129,18 +135,24 @@ export async function verifyLiveHttp(
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         'X-Auth-Return-Redirect': '1',
-        origin: ORIGIN,
+        origin,
       },
       body: new URLSearchParams({
         csrfToken: csrf.csrfToken,
         email: account.email,
         password,
-        callbackUrl: ORIGIN + account.expectedPath,
+        callbackUrl: origin + account.expectedPath,
       }),
     });
-    await login.body?.cancel();
     if (login.status >= 400)
       throw Error(`${account.role}: authentication failed.`);
+    // Never follow Auth.js redirects onto canonical production (or another host).
+    const location = login.headers.get('location');
+    const destination =
+      location || ((await login.json()) as { url?: string }).url;
+    if (!destination || new URL(destination, origin).origin !== origin)
+      throw Error(`${account.role}: authentication callback origin mismatch.`);
+    if (location) await login.body?.cancel();
     const sessionResponse = await authenticated('/api/auth/session');
     const session = (await sessionResponse.json()) as {
       user?: { email?: string; role?: string; status?: string };
@@ -197,6 +209,7 @@ export async function verifyLiveHttp(
       throw Error(`Generated asset failed: ${path}`);
   }
   return {
+    origin,
     roles,
     assets: assets.size,
     stripeMode: 'live' as const,
