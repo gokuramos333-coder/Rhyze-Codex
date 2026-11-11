@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { releaseTestEnvironment } from '@/scripts/release/guards';
 const source = {
+ TRIAL_TEST_DATABASE_DIR:'/tmp/owned-discount-pg',
  DATABASE_URL:'postgresql://tester@127.0.0.1:55439/callback_test',
  CALLBACK_TEST_DATABASE_URL:'postgresql://tester@127.0.0.1:55439/callback_test',
  IDENTITY_TEST_DATABASE_URL:'postgresql://tester@127.0.0.1:55439/identity_migration',

@@ -98,7 +98,8 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 
 # Tests require the current schema and the case-insensitive User-email index.
 # For discount_campaign_test, initialize the pinned pre-campaign baseline
-# schema then apply all four exact mirrored campaign migrations in order;
+# schema then apply all five exact mirrored campaign migrations in order,
+# including 20261111190000_discount_fixed_value;
 # schema push alone omits SQL-only CHECKs and triggers and is not sufficient.
 # The script does not migrate, seed, reset, or recreate any database.
 
