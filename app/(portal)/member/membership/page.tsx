@@ -49,8 +49,10 @@ const resultMessages: Record<string, string> = {
   unavailable: 'That plan is no longer available.',
   'trial-ineligible': 'The 7-day intro trial is available once to first-time Rhyze clients only.',
   'trial-policy': 'Review and accept the intro-trial cancellation and no-show policy before checkout.',
-  'referral-invalid': 'That instructor referral code is not active. Check the code and try again.',
-  'referral-used': 'Only one promo code can be used per new customer—choose either an instructor referral code or the Labor Day sale code.',
+  'campaign-unavailable': 'That discount is disabled, not started, expired, or not valid for this product. New discounted checkouts must be authorized before the advertised sale end.',
+  'campaign-checkout-expiry': 'This checkout could not open or resume within its original time limit. The deadline cannot be extended. Do not keep retrying; contact the studio to check any existing payment attempt.',
+  'referral-invalid': 'That referral or discount code is not active. Check the code and try again.',
+  'referral-used': 'A previous paid discount is already on this account. Codes cannot be combined or used for another discounted purchase.',
   'referral-ineligible': 'Referral codes apply to paid monthly memberships and the $25 single class, but not the $7 intro offer.',
   'rhyze2026-expired': 'RHYZE2026 is only available September 1–7, 2026.',
   'rhyze2026-ineligible': 'RHYZE2026 is valid only for paid memberships. It does not apply to class packs, single classes, events, or the 7-day trial.',
@@ -58,7 +60,7 @@ const resultMessages: Record<string, string> = {
   requested: 'Your request was sent to Admin. Your current plan stays active until management reviews it.',
   'request-pending': 'This membership already has a request waiting for management review.',
   'request-invalid': 'Choose a valid plan change or cancellation request.',
-  'checkout-error': 'Secure checkout could not start. Nothing was charged. Please try again or contact the studio.',
+  'checkout-error': 'Secure checkout could not be confirmed. If you already attempted payment, contact the studio to check its status before starting another checkout.',
 };
 
 function date(value: Date | null) {
@@ -298,9 +300,10 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
                 <form action={startCheckoutAction} className="grid min-w-56 gap-2">
                   <input type="hidden" name="productId" value={product.id}/>
                   {privateAccess && <input type="hidden" name="privatePlan" value={product.slug} />}
-                  {isReferralEligibleProduct(product.kind) && (
+                  {(isReferralEligibleProduct(product.kind) || product.kind === 'CLASS_PACK') && (
                     <label className="grid gap-1 text-[10px] font-black uppercase tracking-widest text-rhyze-black/55">
                       Instructor referral code or promo code <span className="normal-case tracking-normal">{membershipPromoCodeInputHelp(now)} Single-class referrals include a $5 instructor commission.</span>
+                      <span className="normal-case tracking-normal">Sale codes: one use per customer per sale. New checkouts must be authorized before closing. Complete Checkout by 30 minutes after the sale closes or your original session expiry if earlier (at most 24 hours). Requests processed too late can fail; deadlines do not extend. Settlement and payment confirmations may arrive later.</span>
                       <input
                         name="referralCode"
                         autoComplete="off"

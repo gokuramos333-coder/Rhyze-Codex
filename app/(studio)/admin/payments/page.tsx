@@ -96,6 +96,7 @@ export default async function PaymentsPage({
           <h1 className="mt-3 font-display text-6xl tracking-wider">SALES</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/admin/discounts" className="inline-flex items-center border border-rhyze-black px-5 py-3 text-xs font-black uppercase">Discounts</Link>
           <form action={refreshStripePaymentsAction}>
             <button
               type="submit"

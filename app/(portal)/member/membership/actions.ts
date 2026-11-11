@@ -1,4 +1,8 @@
 'use server';
+import { discountCodeIsAmbiguous } from '@/lib/domain/discounts/namespace';
+import { runDiscountCheckout, DiscountCheckoutExpiryError } from '@/lib/domain/discounts/admission';
+import type Stripe from 'stripe';
+import { campaignCheckout, ensureCampaignCoupon } from '@/lib/domain/discounts/campaign';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 
 import { attributionMetadata, sourceAttributionSelect } from '@/lib/attribution/first-touch';
@@ -209,13 +213,21 @@ export async function startCheckoutAction(formData: FormData) {
   }
   if (!stripeIsConfigured() || (product.billingInterval !== 'ONE_TIME' && !product.stripePriceId)) redirect('/member/membership?result=stripe');
 
+  if (referralCodeInput && await discountCodeIsAmbiguous(referralCodeInput)) redirect('/member/membership?result=referral-invalid');
   const referralEligible = isReferralEligibleProduct(product.kind);
+  const campaign = referralCodeInput && !usesRhyze2026Promo
+    ? await prisma.discountCampaign.findUnique({ where: { code: referralCodeInput } })
+    : null;
+  let campaignQuote: ReturnType<typeof campaignCheckout> | null = null;
+  if (campaign) {
+    campaignQuote = { discountCents: Math.round(product.priceCents * campaign.percentOff / 100), expiresAt: 0 };
+  }
   if (usesRhyze2026Promo) {
     if (!isRhyze2026PromoWindow()) redirect('/member/membership?result=rhyze2026-expired');
     if (!isRhyze2026PromoEligibleProduct(product)) redirect('/member/membership?result=rhyze2026-ineligible');
     if (customer?.memberships?.length) redirect('/member/membership?result=rhyze2026-current-member');
   }
-  const [redeemedDiscount, previousDiscountedPurchase] = referralCodeInput
+  const [redeemedDiscount, previousDiscountedPurchase] = referralCodeInput && !campaign
     ? await Promise.all([
         prisma.discountRedemption.findFirst({ where: { userId: user.id }, select: { id: true } }),
         prisma.purchase.findFirst({
@@ -229,10 +241,10 @@ export async function startCheckoutAction(formData: FormData) {
       ])
     : [null, null];
   if (redeemedDiscount || previousDiscountedPurchase) redirect('/member/membership?result=referral-used');
-  if (referralCodeInput && !usesRhyze2026Promo && !referralEligible) {
+  if (referralCodeInput && !usesRhyze2026Promo && !campaign && !referralEligible) {
     redirect('/member/membership?result=referral-ineligible');
   }
-  const referral = referralCodeInput && !usesRhyze2026Promo
+  const referral = referralCodeInput && !usesRhyze2026Promo && !campaign
     ? await prisma.referralCode.findFirst({
         where: {
           code: referralCodeInput,
@@ -241,7 +253,7 @@ export async function startCheckoutAction(formData: FormData) {
         },
       })
     : null;
-  if (referralCodeInput && !usesRhyze2026Promo && !referral) {
+  if (referralCodeInput && !usesRhyze2026Promo && !campaign && !referral) {
     redirect('/member/membership?result=referral-invalid');
   }
   const attribution = referral
@@ -251,7 +263,7 @@ export async function startCheckoutAction(formData: FormData) {
         create: { referredUserId: user.id, referralCodeId: referral.id },
       })
     : null;
-  const discountCents = usesRhyze2026Promo
+  const discountCents = campaignQuote ? campaignQuote.discountCents : usesRhyze2026Promo
     ? rhyze2026PromoDiscountCents(product)
     : referral && referralEligible
       ? referralDiscountCents(product.priceCents)
@@ -259,21 +271,20 @@ export async function startCheckoutAction(formData: FormData) {
   const trialPolicyConsent = product.kind === 'INTRO_TRIAL'
     ? parseTrialPolicyConsent(formData.get('trialPolicyAccepted'))
     : null;
-  const purchase = await prisma.purchase.create({
-    data: {
+  const purchaseData = {
       userId: user.id,
       productId: product.id,
       amountCents: product.priceCents - discountCents,
       discountCents,
+      ...(campaign ? { discountCampaignId: campaign.id } : {}),
       ...(trialPolicyConsent || {}),
-    },
-  });
+  };
   const stripe = getStripe();
   const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
   const trackingPlan = encodeURIComponent(checkoutPlanValue(product.slug));
-  let checkout;
-  try {
-    const coupon = usesRhyze2026Promo
+  const buildParams = async (purchaseId: string): Promise<Stripe.Checkout.SessionCreateParams> => {
+    const purchase = { id: purchaseId };
+    const coupon = campaign ? await ensureCampaignCoupon(stripe, campaign) : usesRhyze2026Promo
       ? await stripe.coupons.create(
           {
             percent_off: RHYZE_2026_PROMO_PERCENT_OFF,
@@ -289,8 +300,16 @@ export async function startCheckoutAction(formData: FormData) {
             { idempotencyKey: `referral-coupon-${purchase.id}` },
           )
         : null;
-    checkout = await stripe.checkout.sessions.create({
-      mode: product.billingInterval === 'ONE_TIME' ? 'payment' : 'subscription',
+    // Recheck after provider coupon work: slow calls must not extend the lease
+    // or issue a checkout after a disable/window boundary observed here.
+    if (campaign) {
+      const current = await prisma.discountCampaign.findUnique({ where: { id: campaign.id } });
+      if (!current) throw Error('Campaign unavailable.');
+      campaignQuote = campaignCheckout(current, product);
+    }
+    return {
+      ...(campaignQuote ? { expires_at: campaignQuote.expiresAt } : {}),
+      mode: product.billingInterval === 'ONE_TIME' ? 'payment' as const : 'subscription' as const,
       ...buildCheckoutWalletParameters(),
       ...buildCheckoutCustomerParameters({
         customerId: customer?.stripeCustomerId || null,
@@ -317,6 +336,7 @@ export async function startCheckoutAction(formData: FormData) {
         productId: product.id,
         userId: user.id,
         referralCodeId: attribution?.referralCodeId || '',
+        ...(campaign ? { discountCampaignId: campaign.id, discountCampaignCode: campaign.code } : {}),
         ...attributionMetadata(customer),
         customerName: user.name || '',
         customerEmail: user.email,
@@ -333,7 +353,22 @@ export async function startCheckoutAction(formData: FormData) {
         ? `${origin}/api/checkout/membership/success?session_id={CHECKOUT_SESSION_ID}&plan=${trackingPlan}`
         : `${origin}/member/membership?result=success&plan=${trackingPlan}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/member/membership?result=cancelled&plan=${trackingPlan}`,
-    }, { idempotencyKey: `checkout-${purchase.id}` });
+    };
+  };
+  if (discountCents > 0) {
+    let url: string;
+    try {
+      url = await runDiscountCheckout({ userId: user.id, productId: product.id, code: referralCodeInput, purchaseData, build: buildParams, create: (params, options) => stripe.checkout.sessions.create(params, options), retrieve: id => stripe.checkout.sessions.retrieve(id) });
+    } catch (error) {
+      if (error instanceof DiscountCheckoutExpiryError) redirect('/member/membership?result=campaign-checkout-expiry');
+      redirect('/member/membership?result=checkout-error');
+    }
+    redirect(url);
+  }
+  const purchase = await prisma.purchase.create({ data: purchaseData });
+  let checkout;
+  try {
+    checkout = await stripe.checkout.sessions.create(await buildParams(purchase.id), { idempotencyKey: `checkout-${purchase.id}` });
   } catch (error) {
     console.error('Stripe membership checkout failed', {
       purchaseId: purchase.id,

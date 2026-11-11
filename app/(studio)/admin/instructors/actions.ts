@@ -363,7 +363,7 @@ export async function approveInstructorAction(formData: FormData) {
       where: { instructorId: application.userId, isActive: true },
     });
     if (!referral) {
-      const existing = await tx.referralCode.findMany({ select: { code: true } });
+      const existing = await tx.$queryRaw<{code:string}[]>`SELECT "code" FROM "DiscountCodeNamespace"`;
       referral = await tx.referralCode.create({
         data: {
           instructorId: application.userId,

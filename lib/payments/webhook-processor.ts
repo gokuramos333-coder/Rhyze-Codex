@@ -416,6 +416,29 @@ async function fulfillProductPurchase(
     where: { id: action.purchaseId },
     include: { product: true, membership: true },
   });
+  // Pack settlement and reversal share Purchase -> PaymentRecord lock order.
+  // Reread after waiting: a distinct/delayed success is not authority to undo
+  // a refund or dispute, nor to rewrite the receipt or grant credits again.
+  if (prior?.product.kind === 'CLASS_PACK' && prior.product.billingInterval === 'ONE_TIME') {
+    await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${action.purchaseId} FOR UPDATE`;
+    prior = await tx.purchase.findUnique({
+      where: { id: action.purchaseId },
+      include: { product: true, membership: true },
+    });
+    const payments = await tx.$queryRaw<Array<{ status: string; refundedAmountCents: number }>>`
+      SELECT status, "refundedAmountCents" FROM "PaymentRecord"
+      WHERE "purchaseId" = ${action.purchaseId}
+         OR "stripePaymentIntentId" = ${action.paymentIntentId}
+         OR "stripeCheckoutSessionId" = ${action.sessionId}
+      ORDER BY id FOR UPDATE`;
+    if (prior && (
+      prior.refundedAmountCents > 0 ||
+      ['REFUNDED', 'PARTIALLY_REFUNDED'].includes(prior.status) ||
+      (prior.paidAt && prior.status === 'FAILED') ||
+      payments.some(payment => payment.refundedAmountCents > 0 ||
+        ['REFUNDED', 'PARTIALLY_REFUNDED', 'DISPUTED'].includes(payment.status))
+    )) return;
+  }
   const classTicket = classTicketBinding(prior?.policyAcceptance);
   if (classTicket && (action.amountCents !== classTicket.amountCents || action.currency !== 'usd')) {
     throw new Error('Class ticket payment amount or currency does not match its occurrence binding.');
@@ -615,7 +638,7 @@ async function fulfillProductPurchase(
       }
     }
   }
-  if (purchase.discountCents > 0) {
+  if (purchase.discountCents > 0 && !purchase.discountCampaignId) {
     const attribution = await tx.referralAttribution.findUnique({
       where: { referredUserId: purchase.userId },
       include: { referralCode: true },
@@ -1226,11 +1249,18 @@ export async function processStripeEvent(
       action.type === 'PAYMENT_DISPUTED') &&
     action.paymentIntentId
   ) {
-    const record = await tx.paymentRecord.findUnique({
+    let record = await tx.paymentRecord.findUnique({
       where: { stripePaymentIntentId: action.paymentIntentId },
     });
     if (!record) return;
     if (action.type === 'PAYMENT_REFUNDED' && record.commerceOrderId) return;
+    // Checkout and native invoice consumers lock Purchase first. Never hold
+    // its payment row while waiting for that purchase (the reverse deadlocks).
+    if (record.purchaseId) {
+      await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${record.purchaseId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "PaymentRecord" WHERE id = ${record.id} FOR UPDATE`;
+      record = await tx.paymentRecord.findUniqueOrThrow({ where: { id: record.id } });
+    }
     const status =
       action.type === 'PAYMENT_DISPUTED'
         ? 'DISPUTED'

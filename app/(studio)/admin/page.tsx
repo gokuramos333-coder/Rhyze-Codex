@@ -490,7 +490,7 @@ export default async function AdminHomePage(
           </div>
         )}
 
-        {panel === 'sales' && <div className="p-5"><FinancialReportView report={report} basePath="/admin" preservedParams={{ panel: 'sales', analytics: 'earnings' }} summary={analytics !== 'earnings'} /></div>}
+        {panel === 'sales' && <div className="p-5"><Link href="/admin/discounts" className="mb-4 inline-block border px-4 py-2 font-bold">Discounts (owner only)</Link><FinancialReportView report={report} basePath="/admin" preservedParams={{ panel: 'sales', analytics: 'earnings' }} summary={analytics !== 'earnings'} /></div>}
       </section>
 
       <div className="mt-8 grid gap-5 xl:grid-cols-2">

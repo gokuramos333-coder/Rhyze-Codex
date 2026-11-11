@@ -157,6 +157,11 @@ function fixture() {
       },
     },
     paymentRecord: {
+      findUniqueOrThrow: async ({ where }: any) => {
+        const record = state.records.find((r: any) => r.id === where.id);
+        if (!record) throw new Error('Missing payment record');
+        return record;
+      },
       findUnique: async ({ where }: any) =>
         state.records.find(
           (r: any) => r.stripePaymentIntentId === where.stripePaymentIntentId,

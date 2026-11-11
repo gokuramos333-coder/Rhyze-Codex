@@ -642,6 +642,8 @@ model Product {
 }
 
 model Purchase {
+  discountCampaignId      String?
+  discountCampaign        DiscountCampaign? @relation(fields: [discountCampaignId], references: [id], onDelete: Restrict)
   id                      String         @id @default(cuid())
   userId                  String
   productId               String
@@ -1360,6 +1362,19 @@ model WaiverAcceptance {
 
   @@unique([waiverVersionId, userId])
   @@index([userId, acceptedAt])
+}
+
+// Immutable campaign terms; only enabled may change after creation.
+model DiscountCampaign {
+  purchases  Purchase[]
+  id         String   @id @default(cuid())
+  code       String   @unique
+  percentOff Int
+  productIds String[]
+  startsAt   DateTime
+  endsAt     DateTime
+  enabled    Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }
 
 model AuditLog {

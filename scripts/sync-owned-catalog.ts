@@ -91,7 +91,7 @@ async function main() {
       where: { instructorId: user.id, isActive: true },
     });
     if (!referral) {
-      const existingCodes = await prisma.referralCode.findMany({ select: { code: true } });
+      const existingCodes = await prisma.$queryRaw<{code:string}[]>`SELECT "code" FROM "DiscountCodeNamespace"`;
       await prisma.referralCode.create({
         data: {
           instructorId: user.id,

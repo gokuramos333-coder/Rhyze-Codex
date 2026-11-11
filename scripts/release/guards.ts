@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
+import { discountDatabaseDeclaration } from './disposable-discount-database';
 
 export const SITE_ID = 'e7002b82-50f2-4760-8a35-e4f9591bec4f';
 export const SITE_NAME = 'rhyze-fitness-rhyze-2';
@@ -226,6 +227,9 @@ export function releaseTestEnvironment(
       );
     }
   }
+  const discount = discountDatabaseDeclaration({ ...source, NODE_ENV: 'test' });
+  env.DISCOUNT_TEST_DATABASE_URL = discount.url;
+  env.DISCOUNT_TEST_DATA_DIRECTORY = discount.dir;
   return env;
 }
 

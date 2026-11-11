@@ -90,7 +90,16 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 # TRIAL_TEST_DATABASE_DIR must identify your own cluster's absolute data directory;
 # the trial suite requires an explicit 127.0.0.1 port and checks server identity
 # before fixture writes. Never reuse another worker's database directory.
+# Also set DISCOUNT_TEST_DATABASE_URL to the separately owned
+# postgresql://USER@127.0.0.1:PORT/discount_campaign_test connection (explicit
+# port, no query/fragment), and DISCOUNT_TEST_DATA_DIRECTORY to the absolute
+# canonical data_directory of that newly provisioned cluster. The discount
+# suites verify server database/address/port/directory before fixture writes.
+
 # Tests require the current schema and the case-insensitive User-email index.
+# For discount_campaign_test, initialize the pinned pre-campaign baseline
+# schema then apply all four exact mirrored campaign migrations in order;
+# schema push alone omits SQL-only CHECKs and triggers and is not sufficient.
 # The script does not migrate, seed, reset, or recreate any database.
 
 # Read the actual currently published deploy ID and its source commit first.
