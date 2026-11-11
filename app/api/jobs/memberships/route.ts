@@ -73,8 +73,11 @@ export async function POST(request: Request) {
           { idempotencyKey: `scheduled-freeze-start-${freeze.id}` },
         );
       }
+      // A stale selection (including an earlier product classification) cannot
+      // overwrite cancellation or another membership change. The freeze marker
+      // rolls back with a failed conditional membership update.
       await prisma.$transaction([
-        prisma.membership.update({ where: { id: freeze.membershipId }, data: { status: 'PAUSED' } }),
+        prisma.membership.update({ where: { id: freeze.membershipId, status: freeze.membership.status, updatedAt: freeze.membership.updatedAt }, data: { status: 'PAUSED' } }),
         prisma.membershipFreeze.update({ where: { id: freeze.id }, data: { activatedAt: now } }),
       ]);
       freezesStarted += 1;
@@ -98,8 +101,11 @@ export async function POST(request: Request) {
           { idempotencyKey: `scheduled-freeze-end-${freeze.id}` },
         );
       }
+      // A stale selection (including an earlier product classification) cannot
+      // overwrite cancellation or another membership change. The freeze marker
+      // rolls back with a failed conditional membership update.
       await prisma.$transaction([
-        prisma.membership.update({ where: { id: freeze.membershipId }, data: { status: 'ACTIVE' } }),
+        prisma.membership.update({ where: { id: freeze.membershipId, status: freeze.membership.status, updatedAt: freeze.membership.updatedAt }, data: { status: 'ACTIVE' } }),
         prisma.membershipFreeze.update({ where: { id: freeze.id }, data: { resumedAt: now } }),
       ]);
       freezesResumed += 1;

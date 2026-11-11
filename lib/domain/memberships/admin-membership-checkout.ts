@@ -4,7 +4,6 @@ import {
   type MemberPricing,
 } from './member-pricing';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
-import { requireTrialUpgradeCheckout } from './trial-upgrade';
 import type { BillingInterval, ProductKind } from '@prisma/client';
 import {
   attributionMetadata,
@@ -88,8 +87,9 @@ export async function startAdminMembershipCheckout(
   } & MemberPricingInput,
   dependencies: CheckoutDependencies,
 ) {
-  // Never substitute immediate-start billing for the deferred trial-upgrade policy.
-  if (await dependencies.hasIntroTrialHistory(input.clientId)) requireTrialUpgradeCheckout();
+  // Preserve the existing trial-history boundary; cancellation does not authorize billing.
+  if (await dependencies.hasIntroTrialHistory(input.clientId))
+    throw Error('Checkout unavailable: trial-to-paid billing needs separate review. Cancelling a trial does not authorize a paid plan.');
   const [client, product, hasCurrentMembership] = await Promise.all([
     dependencies.findClient(input.clientId),
     dependencies.findProduct(input.productId),

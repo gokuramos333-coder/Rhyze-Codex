@@ -1,4 +1,5 @@
 'use server';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { restoredCancellationAt } from '@/lib/domain/bookings/restored-cancellation-at';
 import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 
@@ -149,9 +150,13 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
 
   try {
     await prisma.$transaction(async (tx) => {
-      if (transition.bookingStatus === 'LATE_CANCELLED') {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
-      }
+      // Studio cancellation takes occurrence/booking rows before notification
+      // FKs reach the member row. Take the occurrence row before entitlements
+      // but after the booking advisory lock used first by legacy payment writers.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+      await tx.$queryRaw`SELECT id FROM "ClassOccurrence" WHERE id = ${occurrenceId} FOR UPDATE`;
+      await lockMembershipEntitlements(tx, booking.userId);
       if (transition.action === 'CLEAR') {
         await tx.attendanceRecord.deleteMany({
           where: { occurrenceId, userId: booking.userId },
@@ -249,7 +254,9 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
   const occurrenceId = String(formData.get('occurrenceId') || '');
   const bookingId = String(formData.get('bookingId') || '');
   const restored = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+    await tx.$queryRaw`SELECT id FROM "ClassOccurrence" WHERE id = ${occurrenceId} FOR UPDATE`;
     const booking = await tx.booking.findFirst({
       where: { id: bookingId, occurrenceId },
       select: {
@@ -262,6 +269,13 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
       },
     });
     if (!booking) return null;
+    await lockMembershipEntitlements(tx, booking.userId);
+    // The cancellation receipt binds preserved history even if a later roster
+    // edit changes its snapshot. Never mint a fallback credit from that history.
+    if (await tx.auditLog.findFirst({ where: {
+      action: 'membership.intro_trial_cancelled', entityType: 'Membership',
+      after: { path: ['preservedBookingIds'], array_contains: [booking.id] },
+    }, select: { id: true } })) throw Error('Cancelled trial credit restoration needs review.');
     await assertNoCashRefundForBooking(tx, booking);
 
     const reservation = await tx.creditLedgerEntry.findFirst({

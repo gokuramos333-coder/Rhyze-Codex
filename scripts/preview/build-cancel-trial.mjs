@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const output = resolve(root, '../owner-preview');
+const output = resolve(root, '../cancel-trial-owner-preview');
 await mkdir(output, { recursive: true });
 await build({
   configFile: false,
@@ -20,8 +20,8 @@ await build({
     emptyOutDir: false,
     sourcemap: false,
     lib: {
-      entry: resolve(root, 'tests/fixtures/trial-upgrade-preview.tsx'),
-      name: 'TrialUpgradePreview',
+      entry: resolve(root, 'tests/fixtures/cancel-trial-preview.tsx'),
+      name: 'CancelTrialPreview',
       formats: ['iife'],
       fileName: () => 'preview.js',
     },
@@ -36,7 +36,7 @@ execFileSync(
     '-i',
     resolve(root, 'app/globals.css'),
     '--content',
-    './components/**/*.tsx,./tests/fixtures/trial-upgrade-preview.tsx',
+    './components/admin/CancelIntroTrialForm.tsx,./tests/fixtures/cancel-trial-preview.tsx',
     '-o',
     resolve(output, 'preview.css'),
     '--minify',
@@ -47,7 +47,7 @@ const csp =
   "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'";
 await writeFile(
   resolve(output, 'index.html'),
-  `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta http-equiv="Content-Security-Policy" content="${csp}"><title>Rhyze trial upgrade · NONPRODUCTION review</title><link rel="stylesheet" href="preview.css"></head><body><div id="root"></div><script src="preview.js" defer></script></body></html>`,
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta http-equiv="Content-Security-Policy" content="${csp}"><title>Rhyze Cancel trial · NONPRODUCTION review</title><link rel="stylesheet" href="preview.css"></head><body><div id="root"></div><script src="preview.js" defer></script></body></html>`,
 );
 await writeFile(
   resolve(output, '_headers'),
@@ -69,7 +69,7 @@ const files = await Promise.all(
   }),
 );
 await writeFile(
-  resolve(root, '../evidence/preview-allowlist.json'),
+  resolve(root, '../evidence/cancel-trial-preview-allowlist.json'),
   JSON.stringify(
     { nonproduction: true, synthetic: true, inert: true, files },
     null,

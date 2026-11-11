@@ -37,9 +37,8 @@ export async function cancelAdminIntroTrial(db: PrismaClient, input: Input) {
               !canAccessArea(actor.role, 'admin')
             )
               throw Error('Not authorized to cancel trials.');
-            // Any trial booking history can have an in-flight fee, attendance or
-            // restore writer. Until those writers share durable ownership, refuse
-            // this subset regardless of booking status or occurrence date.
+            // Historical bookings remain unchanged. Lock their rosters and funding
+            // before proving ownership, including concurrent restoration writers.
             const bookingWhere = { userId: input.userId };
             const initial = await tx.booking.findMany({
               where: bookingWhere,
@@ -52,8 +51,15 @@ export async function cancelAdminIntroTrial(db: PrismaClient, input: Input) {
             // Never acquire another occurrence lock after acquiring the entitlement lock.
             for (const id of occurrenceIds)
               await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+            // Event fulfillment holds the booking advisory lock before its admission
+            // trigger locks the occurrence row. Match that order to avoid deadlocks.
             for (const id of initial.map((b) => b.id).sort())
               await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+            for (const id of occurrenceIds) {
+              // Schedule edits also use row locks; the occurrence date must stay
+              // historical for the duration of this decision.
+              await tx.$queryRaw`SELECT id FROM "ClassOccurrence" WHERE id = ${id} FOR UPDATE NOWAIT`;
+            }
             await lockMembershipEntitlements(tx, input.userId);
             const identity = await tx.membership.findFirst({
               where: { id: input.membershipId, userId: input.userId },
@@ -91,7 +97,7 @@ export async function cancelAdminIntroTrial(db: PrismaClient, input: Input) {
             const now = new Date();
             if (!canCancelIntroTrial(membership, now))
               throw Error(
-                'Only an active 7-day intro trial can be cancelled here.',
+                'Only an active or paused unexpired 7-day intro trial can be cancelled here.',
               );
             if (
               membership.billingLockToken ||
@@ -142,45 +148,41 @@ export async function cancelAdminIntroTrial(db: PrismaClient, input: Input) {
               throw new RosterChanged(
                 'The booking roster changed. Retry cancellation.',
               );
+            const entries = await tx.creditLedgerEntry.findMany({
+              where: { OR: [
+                { bookingId: { in: bookings.map((b) => b.id) } },
+                { sourceReturnKey: `returned-credit:RHYZE:${purchase.id}` },
+              ] },
+            });
+            if (entries.some((e) => e.sourceReturnKey === `returned-credit:RHYZE:${purchase.id}`))
+              throw Error('A returned trial purchase credit needs review before cancellation.');
+            const preservedBookingIds: string[] = [];
             for (const booking of bookings) {
-              const scope = trialBookingScope(
-                booking.policySnapshot,
-                account.id,
-                trialCount,
-              );
-              if (scope !== 'preserve')
-                throw Error(
-                  'Trial or ambiguous booking history needs review. Cancellation is unavailable; no bookings or trial access were changed.',
-                );
-              if (scope === 'preserve') {
-                const snapshot = booking.policySnapshot as {
-                  creditAccountId?: string;
-                  accessType?: string;
-                };
-                if (snapshot.creditAccountId) {
-                  const other = await tx.creditAccount.findFirst({
-                    where: {
-                      id: snapshot.creditAccountId,
-                      userId: input.userId,
-                    },
-                    include: {
-                      sourcePurchase: {
-                        include: { membership: true, product: true },
-                      },
-                    },
-                  });
-                  if (
-                    !other ||
-                    (snapshot.accessType === 'INTRO_TRIAL' &&
-                      (other.sourcePurchase?.product.kind !== 'INTRO_TRIAL' ||
-                        !other.sourcePurchase.membership ||
-                        other.sourcePurchase.membership.id === membership.id))
-                  )
-                    throw Error(
-                      'Unrelated booking funding cannot be proven. Review before cancelling the trial.',
-                    );
-                }
+              const scope = trialBookingScope(booking.policySnapshot, account.id, trialCount);
+              const funding = entries.filter((e) => e.bookingId === booking.id);
+              if (scope === 'review' ||
+                  (scope === 'preserve' && funding.some((e) => e.creditAccountId === account.id)))
+                throw Error('Ambiguous booking funding needs review before cancellation.');
+              if (scope === 'cancel') {
+                // Dates, not stale SCHEDULED/CONFIRMED labels, identify history.
+                // Future and in-progress classes need their own booking policy.
+                if (booking.occurrence.endAt > now || booking.occurrence.startAt >= now)
+                  throw Error('Future or in-progress trial booking history needs review before cancellation.');
+                if (funding.some((e) => e.creditAccountId !== account.id))
+                  throw Error('Conflicting or restored booking credits need review before cancellation.');
+                preservedBookingIds.push(booking.id);
                 continue;
+              }
+              const snapshot = booking.policySnapshot as { creditAccountId?: string; accessType?: string };
+              if (snapshot.creditAccountId) {
+                const other = await tx.creditAccount.findFirst({
+                  where: { id: snapshot.creditAccountId, userId: input.userId },
+                  include: { sourcePurchase: { include: { membership: true, product: true } } },
+                });
+                if (!other || (snapshot.accessType === 'INTRO_TRIAL' &&
+                    (other.sourcePurchase?.product.kind !== 'INTRO_TRIAL' ||
+                     !other.sourcePurchase.membership || other.sourcePurchase.membership.id === membership.id)))
+                  throw Error('Unrelated booking funding cannot be proven. Review before cancelling the trial.');
               }
             }
             const messagesWhere: Prisma.EmailMessageWhereInput = {
@@ -225,7 +227,7 @@ export async function cancelAdminIntroTrial(db: PrismaClient, input: Input) {
             });
             await tx.creditAccount.update({
               where: { id: account.id },
-              data: { validUntil: now },
+              data: { validUntil: account.validUntil && account.validUntil < now ? account.validUntil : now },
             });
             await tx.emailMessage.updateMany({
               where: {
@@ -254,6 +256,7 @@ export async function cancelAdminIntroTrial(db: PrismaClient, input: Input) {
                   cancelledAt: now.toISOString(),
                   reason,
                   bookingIds: [],
+                  preservedBookingIds: preservedBookingIds.sort(),
                   feeCharged: false,
                   refundIssued: false,
                   emailSent: false,

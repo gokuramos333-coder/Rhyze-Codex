@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { findSombleMembershipForImport } from '@/lib/import/somble-membership-ownership';
 
 const sourceFile = 'Somble live activity verified 2026-08-02';
 const tcjOccurrenceId = 'owned-event-tcj-hip-hop-happy-hour-tricia';
@@ -120,7 +121,9 @@ export async function reconcileSombleAug2(apply = process.argv.includes('--apply
       if (item.email === 'witchness56@gmail.com') {
         const product = await tx.product.findFirst({ where: { kind: 'INTRO_TRIAL', priceCents: 700 } });
         if (!product) throw new Error('Intro Offer 7-Days product was not found.');
-        const existingMembership = await tx.membership.findFirst({ where: { userId: user.id, productId: product.id } });
+        const existingMembership = await findSombleMembershipForImport(tx, {
+          userId: user.id, productId: product.id, purchasedAt: item.occurredAt,
+        });
         const activatedAt = item.occurredAt;
         const currentPeriodEnd = new Date(activatedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
         if (existingMembership) {

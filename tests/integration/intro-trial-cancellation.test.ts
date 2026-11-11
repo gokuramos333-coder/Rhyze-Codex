@@ -5,8 +5,30 @@ import { randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { PrismaClient, type Prisma, type Role } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
+// Only external/request boundaries are replaced. Every database operation,
+// transaction, audit, queue write, and lock below uses this test's real server.
+const runtime = vi.hoisted(() => ({ db: null as unknown as PrismaClient, actorId: '' }));
+vi.mock('@/lib/db/prisma', () => ({ prisma: new Proxy({}, {
+  get: (_, key) => { const value = runtime.db[key as keyof PrismaClient]; return typeof value === 'function' ? value.bind(runtime.db) : value; },
+}) }));
+vi.mock('@/lib/auth/session', () => ({
+  requireArea: async () => ({ id: runtime.actorId, email: 'owner@example.test', role: 'OWNER', status: 'ACTIVE' }),
+  requireApprovedOwner: async () => ({ id: runtime.actorId, email: 'owner@example.test', role: 'OWNER', status: 'ACTIVE' }),
+  requireActiveUser: async () => ({ id: runtime.actorId, email: 'owner@example.test', role: 'OWNER', status: 'ACTIVE' }),
+}));
+vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
+vi.mock('next/navigation', () => ({ redirect: (to: string) => { throw Error('redirect:' + to); } }));
+vi.mock('@/lib/payments/stripe', () => ({
+  stripeIsConfigured: () => false,
+  getStripe: () => { throw Error('Provider access forbidden in this regression'); },
+}));
+import { applySombleImportJob } from '@/lib/import/somble-import-job';
+import { POST as maintenance } from '@/app/api/jobs/memberships/route';
+import { restoreCreditAction, markAttendanceAction } from '@/app/(portal)/instructor/classes/[occurrenceId]/roster/actions';
+import { cancelOccurrenceAction } from '@/app/(studio)/admin/schedule/[occurrenceId]/actions';
+import { returnTransactionCreditAction } from '@/app/(studio)/admin/members/[userId]/actions';
 import { cancelAdminIntroTrial } from '@/lib/domain/memberships/cancel-intro-trial';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 
@@ -214,13 +236,41 @@ async function history(userId: string) {
       include: { refunds: true, invoice: true },
     }),
     payments: await db.paymentRecord.findMany({ where: { userId } }),
+    bookings: await db.booking.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+    attendance: await db.attendanceRecord.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+    transfers: await db.bookingTransfer.findMany({ where: { memberId: userId }, orderBy: { id: 'asc' } }),
     entries: await db.creditLedgerEntry.findMany({
       where: { creditAccount: { userId } },
     }),
   };
 }
+async function pastFixture() {
+  const f = await fixture(true);
+  await db.classOccurrence.update({ where: { id: f.occurrence.id }, data: {
+    startAt: new Date(+now - 86400000), endAt: new Date(+now - 82800000),
+  } });
+  return f;
+}
+function form(values: Record<string, string>) {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(values)) data.set(key, value);
+  return data;
+}
+function barrier() {
+  let release!: () => void;
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  return { wait, release };
+}
+async function runMaintenance() {
+  vi.stubEnv('JOB_SECRET', 'owned-trial-test');
+  return (await maintenance(new Request('http://127.0.0.1/api/jobs/memberships', {
+    method: 'POST', headers: { authorization: 'Bearer owned-trial-test' },
+  }))).json();
+}
 describe('atomic intro trial cancellation on owned PostgreSQL', () => {
+  afterEach(() => { runtime.db = db; vi.unstubAllEnvs(); });
   beforeAll(async () => {
+    runtime.db = db; runtime.actorId = actorId;
     await assertOwnedDatabase();
     await db.user.create({
       data: {
@@ -269,6 +319,39 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
       }),
     ).toBe(1);
   });
+  it.each(['TRIALING', 'ACTIVE', 'PAUSED'] as const)(
+    'cancels a %s trial with proven historical funding without rewriting any history',
+    async (status) => {
+      const f = await fixture(true);
+      await db.membership.update({ where: { id: f.membership.id }, data: { status } });
+      // Mirrors the recorded anomaly: the class ended before stored activation;
+      // SCHEDULED is a stale occurrence label, not evidence of a future class.
+      await db.classOccurrence.update({ where: { id: f.occurrence.id }, data: {
+        startAt: new Date(+now - 86400000), endAt: new Date(+now - 82800000),
+      } });
+      const paidProduct = await db.product.create({ data: {
+        name: 'Unrelated monthly', slug: f.id + '-paid', description: 'Test',
+        kind: 'LIMITED_MEMBERSHIP', billingInterval: 'MONTHLY', priceCents: 9200,
+      } });
+      const unrelatedMembership = await db.membership.create({ data: {
+        userId: f.id, productId: paidProduct.id, status: 'ACTIVE', currentPeriodStart: now,
+        currentPeriodEnd: new Date(+now + 30 * 86400000),
+      } });
+      const before = await history(f.id);
+      const bookings = await db.booking.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } });
+      const result = await cancelAdminIntroTrial(db, f.input);
+      expect(result.status).toBe('cancelled');
+      expect(await history(f.id)).toEqual(before);
+      expect(await db.booking.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } })).toEqual(bookings);
+      expect(await db.attendanceRecord.count({ where: { userId: f.id } })).toBe(0);
+      expect(await db.membership.findUnique({ where: { id: unrelatedMembership.id } })).toEqual(unrelatedMembership);
+      expect(await db.creditAccount.findUnique({ where: { id: f.unrelatedCredit.id } })).toEqual(f.unrelatedCredit);
+      expect(await db.membership.findUnique({ where: { id: f.membership.id } })).toMatchObject({ status: 'CANCELLED', cancelAtPeriodEnd: false, activatedAt: f.membership.activatedAt });
+      expect((await db.creditAccount.findUniqueOrThrow({ where: { id: f.credit.id } })).validUntil!.getTime()).toBeLessThanOrEqual(Date.now());
+      expect(await db.emailMessage.findFirst({ where: { userId: f.id } })).toMatchObject({ status: 'CANCELLED' });
+      expect(await cancelAdminIntroTrial(db, f.input)).toEqual({ status: 'already_cancelled', auditId: result.auditId });
+    },
+  );
   it('serializes concurrent cancellation and replays the same durable receipt', async () => {
     const f = await fixture();
     const results = await Promise.all([
@@ -288,7 +371,7 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
     ).toBe(1);
   });
   it.each(['CONFIRMED', 'CANCELLED', 'LATE_CANCELLED', 'ATTENDED'] as const)(
-    'fails closed for %s trial booking history without touching any row or financial history',
+    'fails closed for %s future trial booking history without touching any row or financial history',
     async (status) => {
       const f = await fixture(true);
       await db.booking.update({
@@ -304,7 +387,7 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
         where: { userId: f.id },
       });
       await expect(cancelAdminIntroTrial(db, f.input)).rejects.toThrow(
-        /booking history.*review/i,
+        /booking.*review/i,
       );
       expect(await history(f.id)).toEqual(before);
       expect(
@@ -359,7 +442,7 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
   it.each(['PAID', 'PARTIALLY_REFUNDED'] as const)(
     'actual checkout replay after cancellation preserves %s purchase/payment/refund history',
     async (status) => {
-      const f = await fixture();
+      const f = await pastFixture();
       await db.purchase.update({
         where: { id: f.purchase.id },
         data: { status, refundedAmountCents: status === 'PAID' ? 0 : 100 },
@@ -403,7 +486,7 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
     },
   );
   it('serializes a checkout replay that read the purchase before cancellation committed', async () => {
-    const f = await fixture();
+    const f = await pastFixture();
     const before = await history(f.id);
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -486,7 +569,7 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
   it.each([true, false])(
     'Sales replay cannot reopen cancelled access with payment linkage present=%s',
     async (linked) => {
-      const f = await fixture();
+      const f = await pastFixture();
       if (!linked)
         await db.paymentRecord.updateMany({
           where: { userId: f.id },
@@ -724,7 +807,7 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
     });
     const cancellation = expect(
       cancelAdminIntroTrial(intercepted as unknown as PrismaClient, f.input),
-    ).rejects.toThrow(/booking history.*review/i);
+    ).rejects.toThrow(/booking.*review/i);
     await ready;
     const third = await db.classOccurrence.create({
       data: {
@@ -790,7 +873,7 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
     await ready;
     const cancellation = expect(
       cancelAdminIntroTrial(db, f.input),
-    ).rejects.toThrow(/booking history.*review/i);
+    ).rejects.toThrow(/booking.*review/i);
     release();
     await booking;
     await cancellation;
@@ -798,4 +881,416 @@ describe('atomic intro trial cancellation on owned PostgreSQL', () => {
       await db.booking.count({ where: { userId: f.id, status: 'CONFIRMED' } }),
     ).toBe(1);
   });
+
+  it('accepts the recorded paused shape: paid trial, one past confirmed booking, no attendance or future bookings', async () => {
+    const f = await pastFixture();
+    await db.booking.delete({ where: { id: f.unrelatedBooking.id } });
+    await db.membership.update({ where: { id: f.membership.id }, data: { status: 'PAUSED' } });
+    await db.purchase.update({ where: { id: f.purchase.id }, data: { status: 'PAID', refundedAmountCents: 0 } });
+    await db.refund.deleteMany({ where: { purchaseId: f.purchase.id } });
+    await db.paymentRecord.updateMany({ where: { userId: f.id }, data: { refundedAmountCents: 0 } });
+    const before = await history(f.id);
+    const result = await cancelAdminIntroTrial(db, f.input);
+    expect(result.status).toBe('cancelled');
+    expect(await history(f.id)).toEqual(before);
+    expect(await db.attendanceRecord.count({ where: { userId: f.id } })).toBe(0);
+    expect(await db.booking.count({ where: { userId: f.id, occurrence: { endAt: { gt: now } } } })).toBe(0);
+    expect(await db.auditLog.findUnique({ where: { id: result.auditId } })).toMatchObject({
+      before: expect.objectContaining({ status: 'PAUSED' }),
+      after: expect.objectContaining({ bookingIds: [], preservedBookingIds: [f.booking!.id], feeCharged: false, refundIssued: false, emailSent: false }),
+    });
+  });
+
+  it('never extends an already ended credit account while closing the membership', async () => {
+    const f = await pastFixture();
+    const endedAt = new Date(+now - 3600000);
+    await db.creditAccount.update({ where: { id: f.credit.id }, data: { validUntil: endedAt } });
+    expect((await cancelAdminIntroTrial(db, f.input)).status).toBe('cancelled');
+    expect((await db.creditAccount.findUniqueOrThrow({ where: { id: f.credit.id } })).validUntil).toEqual(endedAt);
+  });
+
+  it.each(['ATTENDED', 'NO_SHOW', 'CANCELLED', 'LATE_CANCELLED'] as const)(
+    'preserves %s historical booking, attendance, ledger and fee amounts', async (status) => {
+      const f = await pastFixture();
+      await db.booking.update({ where: { id: f.booking!.id }, data: { status } });
+      await db.attendanceRecord.create({ data: { userId: f.id, bookingId: f.booking!.id, occurrenceId: f.occurrence.id, status: 'CHECKED_IN', note: 'Keep original history' } });
+      await db.paymentRecord.create({ data: { userId: f.id, bookingId: f.booking!.id, kind: 'TRANSFER_FEE', status: 'SUCCEEDED', amountCents: 500, refundedAmountCents: 123, stripeEventId: randomUUID() } });
+      await db.creditLedgerEntry.create({ data: { creditAccountId: f.credit.id, bookingId: f.booking!.id, type: 'RESERVE', quantity: -1 } });
+      const before = await history(f.id);
+      expect((await cancelAdminIntroTrial(db, f.input)).status).toBe('cancelled');
+      expect(await history(f.id)).toEqual(before);
+    },
+  );
+
+  it.each(['missing', 'conflicting-ledger', 'foreign', 'derived-booking-credit', 'derived-purchase-credit', 'in-progress'])(
+    'refuses ambiguous or unresolved historical funding: %s', async (reason) => {
+      const f = await pastFixture();
+      if (reason === 'missing') await db.booking.update({ where: { id: f.booking!.id }, data: { policySnapshot: { accessType: 'INTRO_TRIAL' } } });
+      if (reason === 'foreign') await db.booking.update({ where: { id: f.booking!.id }, data: { policySnapshot: { accessType: 'INTRO_TRIAL', creditAccountId: 'unknown' } } });
+      if (reason === 'conflicting-ledger' || reason === 'derived-booking-credit') await db.creditLedgerEntry.create({ data: {
+        creditAccountId: f.unrelatedCredit.id, bookingId: f.booking!.id,
+        type: reason === 'conflicting-ledger' ? 'RESERVE' : 'RESTORE', quantity: reason === 'conflicting-ledger' ? -1 : 1,
+      } });
+      if (reason === 'derived-purchase-credit') await db.creditLedgerEntry.create({ data: { creditAccountId: f.unrelatedCredit.id, type: 'RESTORE', quantity: 1, sourceReturnKey: `returned-credit:RHYZE:${f.purchase.id}` } });
+      if (reason === 'in-progress') await db.classOccurrence.update({ where: { id: f.occurrence.id }, data: { endAt: new Date(+now + 3600000) } });
+      const before = await history(f.id);
+      await expect(cancelAdminIntroTrial(db, f.input)).rejects.toThrow(/review/i);
+      expect(await history(f.id)).toEqual(before);
+      expect(await db.auditLog.count({ where: { entityId: f.membership.id } })).toBe(0);
+    },
+  );
+
+  it.each(['booking', 'purchase'] as const)(
+    'honors a persisted cancellation receipt in the actual %s credit restoration action', async (kind) => {
+      const f = await pastFixture();
+      // Durable state fixture also exercises this guard against the old code before
+      // the new cancellation path exists. No domain method is stubbed.
+      await db.membership.update({ where: { id: f.membership.id }, data: { status: 'CANCELLED', currentPeriodEnd: now } });
+      await db.creditAccount.update({ where: { id: f.credit.id }, data: { validUntil: now } });
+      await db.auditLog.create({ data: { actorId, action: 'membership.intro_trial_cancelled', entityType: 'Membership', entityId: f.membership.id,
+        after: { userId: f.id, purchaseId: f.purchase.id, creditAccountId: f.credit.id, preservedBookingIds: [f.booking!.id] } } });
+      const before = await history(f.id);
+      const accounts = await db.creditAccount.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } });
+      const run = kind === 'booking'
+        ? restoreCreditAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id }))
+        : returnTransactionCreditAction(form({ userId: f.id, sourceId: f.purchase.id, sourceType: 'RHYZE' }));
+      await expect(run).rejects.toThrow(/cancelled trial.*review/i);
+      expect(await history(f.id)).toEqual(before);
+      expect(await db.creditAccount.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } })).toEqual(accounts);
+    },
+  );
+
+  it.each(['booking', 'purchase'] as const)(
+    'serializes stale %s restoration with cancellation', async (kind) => {
+      const f = await pastFixture();
+      const read = barrier(), proceed = barrier();
+      let held = false;
+      runtime.db = db.$extends({ query: {
+        booking: { async findFirst({ args, query }) { const row = await query(args); if (kind === 'booking' && !held && args.where?.id === f.booking!.id) { held = true; read.release(); await proceed.wait; } return row; } },
+        purchase: { async findFirst({ args, query }) { const row = await query(args); if (kind === 'purchase' && !held && args.where?.id === f.purchase.id) { held = true; read.release(); await proceed.wait; } return row; } },
+      } }) as unknown as PrismaClient;
+      // Booking restore already owns its roster and booking locks at this read; it wins that
+      // ordering, creates a derived credit, and cancellation must refuse atomically.
+      const restoration = (kind === 'booking'
+        ? restoreCreditAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id }))
+        : returnTransactionCreditAction(form({ userId: f.id, sourceId: f.purchase.id, sourceType: 'RHYZE' }))).catch(e => e as Error);
+      await read.wait;
+      const competing = kind === 'booking' ? cancelAdminIntroTrial(db, f.input).catch(e => e as Error) : null;
+      try {
+        if (kind === 'purchase') expect((await cancelAdminIntroTrial(db, f.input)).status).toBe('cancelled');
+      } finally { proceed.release(); }
+      const result = await restoration;
+      if (kind === 'purchase') {
+        expect((result as Error).message).toMatch(/cancelled trial.*review/i);
+        expect(await db.creditAccount.count({ where: { userId: f.id } })).toBe(2);
+      } else {
+        expect((result as Error).message).toContain('attendance-credit-restored');
+        expect((await competing as Error).message).toMatch(/review/i);
+        expect(await db.membership.findUnique({ where: { id: f.membership.id } })).toMatchObject({ status: 'TRIALING' });
+      }
+    },
+  );
+
+  it('a concurrent roster restoration waits for cancellation and cannot mint a credit', async () => {
+    const f = await pastFixture();
+    const written = barrier(), proceed = barrier();
+    const cancellingDb = db.$extends({ query: { auditLog: { async create({ args, query }) {
+      const row = await query(args); written.release(); await proceed.wait; return row;
+    } } } }) as unknown as PrismaClient;
+    const cancellation = cancelAdminIntroTrial(cancellingDb, f.input);
+    await written.wait;
+    const restoration = restoreCreditAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id })).catch(e => e as Error);
+    proceed.release();
+    expect((await cancellation).status).toBe('cancelled');
+    expect((await restoration as Error).message).toMatch(/cancelled trial.*review/i);
+    expect(await db.creditAccount.count({ where: { userId: f.id } })).toBe(2);
+    expect(await db.booking.findUnique({ where: { id: f.booking!.id } })).toEqual(f.booking);
+  });
+
+  it('attendance correction and cancellation both finish without restoring entitlement or deleting attendance', async () => {
+    const f = await pastFixture();
+    const [cancelled, marked] = await Promise.all([
+      cancelAdminIntroTrial(db, f.input),
+      markAttendanceAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id, status: 'CHECKED_IN' })).catch(e => e as Error),
+    ]);
+    expect(cancelled.status).toBe('cancelled');
+    expect((marked as Error).message).toContain('attendance-checked_in');
+    expect(await db.attendanceRecord.findUnique({ where: { bookingId: f.booking!.id } })).toMatchObject({ status: 'CHECKED_IN' });
+    expect(await db.membership.findUnique({ where: { id: f.membership.id } })).toMatchObject({ status: 'CANCELLED' });
+    expect((await db.creditAccount.findUniqueOrThrow({ where: { id: f.credit.id } })).validUntil!.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it.each(['start', 'end'] as const)(
+    'actual freeze route rechecks stale %s selection after cancellation', async (phase) => {
+      const f = await pastFixture();
+      if (phase === 'end') await db.membership.update({ where: { id: f.membership.id }, data: { status: 'PAUSED' } });
+      const freeze = await db.membershipFreeze.create({ data: { membershipId: f.membership.id, createdById: actorId,
+        startAt: new Date(+now - 86400000), endAt: new Date(+now - 1000), activatedAt: phase === 'end' ? new Date(+now - 86400000) : null } });
+      const selected = barrier(), proceed = barrier();
+      let held = false;
+      runtime.db = db.$extends({ query: { membershipFreeze: { async findMany({ args, query }) {
+        const rows = await query(args);
+        if (!held && rows.some(row => row.id === freeze.id)) { held = true; selected.release(); await proceed.wait; }
+        return rows;
+      } } } }) as unknown as PrismaClient;
+      const job = runMaintenance();
+      await selected.wait;
+      let closed;
+      try {
+        // Simulates the pending freeze being withdrawn while the job holds its
+        // old selection. Cancellation itself still refuses outstanding freezes.
+        await db.membershipFreeze.update({ where: { id: freeze.id }, data: { cancelledAt: new Date() } });
+        expect((await cancelAdminIntroTrial(db, f.input)).status).toBe('cancelled');
+        closed = await db.membership.findUnique({ where: { id: f.membership.id } });
+      } finally { proceed.release(); }
+      const result = await job;
+      expect(result.freezeErrors).toEqual([]);
+      expect(await db.membership.findUnique({ where: { id: f.membership.id } })).toEqual(closed);
+      expect(await db.membershipFreeze.findUnique({ where: { id: freeze.id } })).toMatchObject({ resumedAt: null, activatedAt: freeze.activatedAt });
+    },
+  );
+
+  it.each(['start', 'end'] as const)(
+    'actual freeze route cannot use stale non-trial classification to %s a cancelled trial', async (phase) => {
+      const f = await pastFixture();
+      await db.product.update({ where: { id: f.product.id }, data: { kind: 'MONTHLY_UNLIMITED' } });
+      if (phase === 'end') await db.membership.update({ where: { id: f.membership.id }, data: { status: 'PAUSED' } });
+      const freeze = await db.membershipFreeze.create({ data: { membershipId: f.membership.id, createdById: actorId,
+        startAt: new Date(+now - 86400000), endAt: new Date(+now - 1000), activatedAt: phase === 'end' ? new Date(+now - 86400000) : null } });
+      const selected = barrier(), proceed = barrier();
+      let held = false;
+      runtime.db = db.$extends({ query: { membershipFreeze: { async findMany({ args, query }) {
+        const rows = await query(args);
+        if (!held && rows.some(row => row.id === freeze.id)) { held = true; selected.release(); await proceed.wait; }
+        return rows;
+      } } } }) as unknown as PrismaClient;
+      const job = runMaintenance();
+      await selected.wait;
+      try {
+        await db.product.update({ where: { id: f.product.id }, data: { kind: 'INTRO_TRIAL' } });
+        await db.membershipFreeze.update({ where: { id: freeze.id }, data: { cancelledAt: new Date() } });
+        expect((await cancelAdminIntroTrial(db, f.input)).status).toBe('cancelled');
+      } finally { proceed.release(); }
+      const result = await job;
+      expect(result.freezesStarted).toBe(0);
+      expect(result.freezesResumed).toBe(0);
+      expect(await db.membership.findUnique({ where: { id: f.membership.id } })).toMatchObject({ status: 'CANCELLED' });
+      expect(await db.membershipFreeze.findUnique({ where: { id: freeze.id } })).toMatchObject({ resumedAt: null, activatedAt: freeze.activatedAt });
+    },
+  );
+
+  it('actual ending-freeze transaction wins, then cancellation closes resumed access', async () => {
+    const f = await pastFixture();
+    await db.membership.update({ where: { id: f.membership.id }, data: { status: 'PAUSED' } });
+    await db.membershipFreeze.create({ data: { membershipId: f.membership.id, createdById: actorId,
+      startAt: new Date(+now - 86400000), endAt: new Date(+now - 1000), activatedAt: new Date(+now - 86400000) } });
+    const locked = barrier(), proceed = barrier();
+    let held = false;
+    runtime.db = db.$extends({ query: { membershipFreeze: { async findUnique({ args, query }) {
+      const row = await query(args);
+      if (!held) { held = true; locked.release(); await proceed.wait; }
+      return row;
+    } } } }) as unknown as PrismaClient;
+    const job = runMaintenance();
+    await locked.wait;
+    const cancellation = cancelAdminIntroTrial(db, f.input);
+    proceed.release();
+    expect((await job).freezeErrors).toEqual([]);
+    expect((await cancellation).status).toBe('cancelled');
+    expect(await db.membership.findUnique({ where: { id: f.membership.id } })).toMatchObject({ status: 'CANCELLED' });
+    expect((await db.creditAccount.findUniqueOrThrow({ where: { id: f.credit.id } })).validUntil!.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+  it.each(['exact date', 'activation differs from purchase', 'imported row masks native trial'])(
+    'Somble replay cannot replace a native cancelled membership: %s', async (shape) => {
+    const f = await pastFixture();
+    const product = await db.product.update({ where: { id: f.product.id }, data: { name: f.id } });
+    await cancelAdminIntroTrial(db, f.input);
+    const purchasedAt = shape === 'exact date' ? now : new Date(+now - 2 * 86400000);
+    await db.purchase.update({ where: { id: f.purchase.id }, data: { paidAt: purchasedAt } });
+    if (shape === 'imported row masks native trial') await db.membership.create({ data: {
+      userId: f.id, productId: product.id, currentPeriodStart: purchasedAt, status: 'EXPIRED',
+    } });
+    const memberships = await db.membership.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } });
+    const accounts = await db.creditAccount.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } });
+    const before = await history(f.id);
+    await expect(applySombleImportJob(db, {
+      clientsCsv: `Client Name,Email Address,Status,Last Workout,Last Login,Date Joined,Total Workouts,App Downloaded,Birthday\nSynthetic,${f.id}@example.test,active,,,${now.toISOString()},0,false,`,
+      transactionsCsv: `transfer_date,transfer_amount,content_type,supporter,transfer_id,payment_id\n${now.toISOString()},7,Classpack,Synthetic,tr_${f.id},pi_import_${f.id}`,
+      membershipsCsv: `membership_name,supporter_name,supporter_email,payment_structure,payment_structure_amount,credits_remaining,status,payment_amount,access_method,purchase_date,expiration_date,pause_date,unsubscribe_date\n${product.name},Synthetic,${f.id}@example.test,credits,7,,active,7,online,${purchasedAt.toISOString()},${f.membership.currentPeriodEnd!.toISOString()},,`,
+      clientSourceFile: 'clients.csv', transactionSourceFile: 'transactions.csv', membershipSourceFile: 'memberships.csv',
+    })).rejects.toThrow(/native.*review/i);
+    expect(await db.membership.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } })).toEqual(memberships);
+    expect(await history(f.id)).toEqual(before);
+    expect(await db.creditAccount.findMany({ where: { userId: f.id }, orderBy: { id: 'asc' } })).toEqual(accounts);
+    expect(await db.sombleClientProfile.count({ where: { userId: f.id } })).toBe(0);
+    expect(await db.sombleTransaction.count({ where: { userId: f.id } })).toBe(0);
+  });
+
+  it.each(['attendance', 'restoration'] as const)(
+    'roster %s and studio cancellation finish without a row-lock inversion', async (kind) => {
+      const f = await pastFixture();
+      const booked = barrier(), proceed = barrier();
+      let held = false;
+      // Pause the actual legacy studio writer after its occurrence/booking writes,
+      // before notification FKs acquire the member row. Nothing is stubbed in DB.
+      runtime.db = db.$extends({ query: { booking: { async update({ args, query }) {
+        const result = await query(args);
+        if (!held && args.where.id === f.booking!.id) {
+          held = true; booked.release(); await proceed.wait;
+        }
+        return result;
+      } } } }) as unknown as PrismaClient;
+      const studio = cancelOccurrenceAction(form({ id: f.occurrence.id })).catch(e => e as Error);
+      await booked.wait;
+      const started = barrier();
+      let rosterPid = 0;
+      runtime.db = new Proxy(db, { get(target, key) {
+        if (key === '$transaction') return (run: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+          db.$transaction(async tx => {
+            const [identity] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+            rosterPid = identity.pid; started.release();
+            return run(tx);
+          }, { timeout: 10000 });
+        const value = target[key as keyof PrismaClient];
+        return typeof value === 'function' ? value.bind(target) : value;
+      } });
+      const roster = (kind === 'attendance'
+        ? markAttendanceAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id, status: 'CHECKED_IN' }))
+        : restoreCreditAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id }))).catch(e => e as Error);
+      try {
+        await started.wait;
+        const deadline = Date.now() + 2500;
+        let blocked = false;
+        while (Date.now() < deadline) {
+          const [state] = await db.$queryRaw<{ blocked: boolean }[]>`SELECT cardinality(pg_blocking_pids(${rosterPid}::int)) > 0 AS blocked`;
+          if (state.blocked) { blocked = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(blocked, 'roster must reach actual PostgreSQL contention').toBe(true);
+      } finally { proceed.release(); }
+      const [studioResult, rosterResult] = await Promise.all([studio, roster]);
+      expect((studioResult as Error).message).toContain('redirect:');
+      expect((rosterResult as Error).message).toContain(kind === 'attendance' ? 'attendance-checked_in' : 'attendance-credit-restored');
+      expect(await db.inAppNotification.count({ where: { userId: f.id } })).toBe(1);
+      expect(await db.emailMessage.count({ where: { userId: f.id, template: 'CLASS_CANCELLED' } })).toBe(1);
+      expect(await db.booking.findUnique({ where: { id: f.booking!.id } })).toMatchObject({ status: kind === 'attendance' ? 'CONFIRMED' : 'CANCELLED' });
+      if (kind === 'attendance') expect(await db.attendanceRecord.findUnique({ where: {
+        occurrenceId_userId: { occurrenceId: f.occurrence.id, userId: f.id },
+      } })).toMatchObject({ status: 'CHECKED_IN', bookingId: f.booking!.id });
+    }, 15000,
+  );
+
+  it('trial cancellation and event fulfillment finish without a booking/occurrence deadlock', async () => {
+    const f = await pastFixture();
+    const before = await history(f.id);
+    const order = await db.commerceOrder.create({ data: {
+      userId: f.id, occurrenceId: f.unrelatedBooking.occurrenceId, kind: 'EVENT', amountCents: 2500,
+    } });
+    const event = {
+      id: `evt_${randomUUID()}`, type: 'checkout.session.completed', created: Math.floor(+now / 1000),
+      data: { object: { id: `cs_event_${f.id}`, amount_total: 2500, currency: 'usd',
+        payment_status: 'paid', metadata: { commerceOrderId: order.id } } },
+    } as unknown as Stripe.Event;
+    const locked = barrier(), proceed = barrier(), started = barrier();
+    // The real payment writer reaches this statement only after taking its
+    // booking advisory lock. Its subsequent upsert runs the real admission trigger.
+    const paymentDb = db.$extends({ query: { commerceOrder: { async update({ args, query }) {
+      if (args.where.id === order.id) { locked.release(); await proceed.wait; }
+      return query(args);
+    } } } });
+    const payment = paymentDb.$transaction(tx => processStripeEvent(tx as unknown as Prisma.TransactionClient, event),
+      { timeout: 10000 }).catch(e => e as Error);
+    await locked.wait;
+    let cancellationPid = 0;
+    const transactionErrors: unknown[] = [];
+    const cancellationDb = new Proxy(db, { get(target, key) {
+      if (key === '$transaction') return (run: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        db.$transaction(async tx => {
+          const [identity] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+          cancellationPid = identity.pid; started.release();
+          return run(tx);
+        }, { timeout: 10000 }).catch(error => { transactionErrors.push(error); throw error; });
+      const value = target[key as keyof PrismaClient];
+      return typeof value === 'function' ? value.bind(target) : value;
+    } });
+    const cancellation = cancelAdminIntroTrial(cancellationDb, f.input).catch(e => e as Error);
+    let blocked = false;
+    try {
+      await started.wait;
+      const deadline = Date.now() + 2500;
+      while (Date.now() < deadline) {
+        const [state] = await db.$queryRaw<{ blocked: boolean }[]>`
+          SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = ${cancellationPid}::int
+            AND locktype = 'advisory' AND NOT granted
+            AND objid = (hashtext(${f.unrelatedBooking.id})::bigint & 4294967295)::oid)
+            AND cardinality(pg_blocking_pids(${cancellationPid}::int)) > 0 AS blocked`;
+        if (state.blocked) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    } finally { proceed.release(); }
+    // Await both even on RED, and reject hidden deadlocks recovered by a retry.
+    const [paymentResult, cancellationResult] = await Promise.all([payment, cancellation]);
+    expect(blocked, 'cancellation must wait on the event booking advisory lock').toBe(true);
+    expect(transactionErrors, 'cancellation must not deadlock even if a retry succeeds').toEqual([]);
+    expect(paymentResult).toBeUndefined();
+    expect(cancellationResult).toMatchObject({ status: 'cancelled' });
+    expect(await db.commerceOrder.findUnique({ where: { id: order.id } })).toMatchObject({ status: 'PAID', amountCents: 2500 });
+    expect(await db.paymentRecord.findFirst({ where: { commerceOrderId: order.id } })).toMatchObject({ status: 'SUCCEEDED', amountCents: 2500 });
+    expect(await db.booking.findUnique({ where: { id: f.unrelatedBooking.id } })).toMatchObject({ status: 'CONFIRMED', source: 'STRIPE_EVENT' });
+    const after = await history(f.id);
+    expect(after.purchases).toEqual(before.purchases);
+    expect(after.attendance).toEqual(before.attendance);
+    expect(after.entries).toEqual(before.entries);
+    expect(after.bookings.find(b => b.id === f.booking!.id)).toEqual(before.bookings.find(b => b.id === f.booking!.id));
+    expect(after.payments.filter(p => p.commerceOrderId !== order.id)).toEqual(before.payments);
+  }, 15000);
+
+  it.each(['attendance', 'restoration'] as const)(
+    'roster %s keeps the legacy booking advisory lock ahead of the occurrence row', async (kind) => {
+      const f = await pastFixture();
+      const locked = barrier(), proceed = barrier(), started = barrier();
+      // Existing event fulfillment holds the booking advisory lock before a
+      // booking write's admission trigger takes the occurrence row FOR SHARE.
+      // Exercise that exact database protocol without any payment/provider work.
+      const legacy = db.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${f.booking!.id}))`;
+        locked.release(); await proceed.wait;
+        await tx.booking.update({ where: { id: f.booking!.id }, data: { status: 'CONFIRMED' } });
+      }, { timeout: 10000 });
+      // Consume a possible deadlock immediately so it cannot become unhandled.
+      const legacyResult = legacy.catch(e => e as Error);
+      await locked.wait;
+      let rosterPid = 0;
+      runtime.db = new Proxy(db, { get(target, key) {
+        if (key === '$transaction') return (run: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+          db.$transaction(async tx => {
+            const [identity] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+            rosterPid = identity.pid; started.release();
+            return run(tx);
+          }, { timeout: 10000 });
+        const value = target[key as keyof PrismaClient];
+        return typeof value === 'function' ? value.bind(target) : value;
+      } });
+      const roster = (kind === 'attendance'
+        ? markAttendanceAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id, status: 'CHECKED_IN' }))
+        : restoreCreditAction(form({ bookingId: f.booking!.id, occurrenceId: f.occurrence.id }))).catch(e => e as Error);
+      try {
+        await started.wait;
+        const deadline = Date.now() + 2500;
+        let blocked = false;
+        while (Date.now() < deadline) {
+          const [state] = await db.$queryRaw<{ blocked: boolean }[]>`SELECT cardinality(pg_blocking_pids(${rosterPid}::int)) > 0 AS blocked`;
+          if (state.blocked) { blocked = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(blocked, 'roster must wait on the legacy booking advisory lock').toBe(true);
+      } finally { proceed.release(); }
+      expect(await legacyResult).toBeUndefined();
+      expect((await roster as Error).message).toContain(kind === 'attendance' ? 'attendance-checked_in' : 'attendance-credit-restored');
+      expect(await db.booking.findUnique({ where: { id: f.booking!.id } })).toMatchObject({ status: kind === 'attendance' ? 'CONFIRMED' : 'CANCELLED' });
+      if (kind === 'attendance') expect(await db.attendanceRecord.findUnique({ where: {
+        occurrenceId_userId: { occurrenceId: f.occurrence.id, userId: f.id },
+      } })).toMatchObject({ status: 'CHECKED_IN', bookingId: f.booking!.id });
+    }, 15000,
+  );
 });

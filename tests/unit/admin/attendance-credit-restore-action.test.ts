@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const tx = {
     $executeRaw: vi.fn(),
-    auditLog: { create: vi.fn() },
+    $queryRaw: vi.fn(),
+    auditLog: { create: vi.fn(), findFirst: vi.fn(async () => null) },
     attendanceRecord: { deleteMany: vi.fn() },
     booking: { findFirst: vi.fn(), update: vi.fn() },
     commerceOrder: { findFirst: vi.fn() },
@@ -98,6 +99,23 @@ describe('admin attendance credit restore action', () => {
         quantity: 1,
       }),
     });
+  });
+
+  it('locks the occurrence row before member entitlement writes can block studio cancellation', async () => {
+    const locks: string[] = [];
+    mocks.tx.$executeRaw.mockImplementation(async (sql: TemplateStringsArray, ...values: unknown[]) => {
+      locks.push(sql.join('?').includes('UPDATE "User"') ? 'user-row' : String(values[0]));
+      return 1;
+    });
+    mocks.tx.$queryRaw.mockImplementation(async (sql: TemplateStringsArray, ...values: unknown[]) => {
+      if (sql.join('?').includes('"ClassOccurrence"') && sql.join('?').includes('FOR UPDATE')) {
+        locks.push(`occurrence-row:${values[0]}`);
+      }
+      return [];
+    });
+    const form = new FormData(); form.set('bookingId', 'booking_1'); form.set('occurrenceId', 'occurrence_1');
+    await expect(restoreCreditAction(form)).rejects.toThrow('attendance-credit-restored');
+    expect(locks).toEqual(['occurrence_1', 'booking_1', 'occurrence-row:occurrence_1', 'membership-entitlement:member_1', 'user-row']);
   });
 
   it('creates an event credit when an event booking has no original reservation', async () => {

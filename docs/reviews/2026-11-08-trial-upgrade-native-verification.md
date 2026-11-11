@@ -1,5 +1,7 @@
 # Trial admin artifact — final native verification
 
+> Historical baseline report. Current uncommitted continuation and its actual gate limitations are recorded in [the scoped cancellation handoff](2026-11-08-trial-cancellation-continuation.md). Its PAUSED/history behavior supersedes the restrictions below. The supervisor reports reviewer process `proc_dbb49882b065` exited 1; its artifact is not a successful independent review. Baseline passing tests do not verify the continuation. Static preview was not updated.
+
 This local-only verification supersedes the infrastructure blockers in the earlier trial-upgrade review snapshots. It is not an application deployment, release approval, or completed customer operation.
 
 ## Verified current source

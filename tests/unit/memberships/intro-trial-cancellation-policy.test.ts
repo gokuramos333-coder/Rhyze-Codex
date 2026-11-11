@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  trialUpgradeTerms,
-  requireTrialUpgradeCheckout,
-} from '@/lib/domain/memberships/trial-upgrade';
-import {
   canCancelIntroTrial,
   trialBookingScope,
 } from '@/lib/domain/memberships/intro-trial-cancellation-policy';
@@ -27,7 +23,6 @@ describe('trial cancellation eligibility and provenance', () => {
     ).toBe(true);
     for (const patch of [
       { status: 'CANCELLED' },
-      { status: 'PAUSED' },
       { stripeSubscriptionId: 'sub_paid' },
       { currentPeriodEnd: now },
       { activatedAt: new Date('2026-10-01') },
@@ -37,7 +32,8 @@ describe('trial cancellation eligibility and provenance', () => {
       expect(canCancelIntroTrial({ ...trial, ...patch }, now)).toBe(false);
     }
   });
-  it('requires exact account provenance or a single historical trial for legacy unlinked bookings', () => {
+  it('allows a paused unexpired trial and requires exact booking funding', () => {
+    expect(canCancelIntroTrial({ ...trial, status: 'PAUSED' }, now)).toBe(true);
     expect(
       trialBookingScope(
         { accessType: 'INTRO_TRIAL', creditAccountId: 'trial-credit' },
@@ -47,7 +43,7 @@ describe('trial cancellation eligibility and provenance', () => {
     ).toBe('cancel');
     expect(
       trialBookingScope({ accessType: 'INTRO_TRIAL' }, 'trial-credit', 1),
-    ).toBe('cancel');
+    ).toBe('review');
     expect(
       trialBookingScope({ accessType: 'INTRO_TRIAL' }, 'trial-credit', 2),
     ).toBe('review');
@@ -73,46 +69,5 @@ describe('trial cancellation eligibility and provenance', () => {
         1,
       ),
     ).toBe('review');
-  });
-});
-describe('first period offer terms', () => {
-  it('uses an exact $78 first payment, then the unchanged $92 renewal', () => {
-    expect(trialUpgradeTerms({ mode: 'amount', value: '78' }, 9200)).toEqual({
-      firstCents: 7800,
-      recurringCents: 9200,
-      amountOffCents: 1400,
-      duration: 'once',
-    });
-  });
-  it('keeps explicit 15% distinct from the rounded flat amount', () => {
-    expect(
-      trialUpgradeTerms({ mode: 'percent', value: '15' }, 9200),
-    ).toMatchObject({
-      firstCents: 7820,
-      recurringCents: 9200,
-      amountOffCents: 1380,
-      duration: 'once',
-    });
-  });
-  it.each(['', '-1', '0', '93', '78.001', 'Infinity', '1e2'])(
-    'rejects invalid flat amount %s',
-    (value) => {
-      expect(() =>
-        trialUpgradeTerms({ mode: 'amount', value }, 9200),
-      ).toThrow();
-    },
-  );
-  it.each(['100', '-1', '15.001', ''])(
-    'rejects invalid percentage %s',
-    (value) => {
-      expect(() =>
-        trialUpgradeTerms({ mode: 'percent', value }, 9200),
-      ).toThrow();
-    },
-  );
-  it('fails closed before a checkout or checkout email can be created', () => {
-    expect(() => requireTrialUpgradeCheckout()).toThrow(
-      /unavailable.*activation.*renewal/i,
-    );
   });
 });

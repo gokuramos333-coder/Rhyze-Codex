@@ -85,7 +85,7 @@ function fixture() {
     },
     booking: { findMany: async () => bookings, update: update({}) },
     attendanceRecord: { count: async () => 0 },
-    creditLedgerEntry: { count: async () => 0 },
+    creditLedgerEntry: { count: async () => 0, findMany: async () => [] },
     creditAccount: { update: update(account), upsert: update(account) },
     paymentRecord: {
       count: async () => 0,
@@ -179,7 +179,7 @@ describe('intro trial review regressions', () => {
   });
 
   it.each(['CONFIRMED', 'CANCELLED', 'LATE_CANCELLED', 'ATTENDED'])(
-    'fails closed for %s trial booking history before any cancellation writes',
+    'fails closed for %s future trial booking history before any cancellation writes',
     async (status) => {
       const f = fixture();
       f.bookings.push({
@@ -190,7 +190,7 @@ describe('intro trial review regressions', () => {
           accessType: 'INTRO_TRIAL',
           creditAccountId: 'credit',
         },
-        occurrence: { startAt: new Date(), template: { isEvent: false } },
+        occurrence: { startAt: new Date(Date.now() + 86400000), endAt: new Date(Date.now() + 90000000), template: { isEvent: false } },
       });
       await expect(
         cancelAdminIntroTrial(f.db as never, f.input),
@@ -256,6 +256,30 @@ describe('intro trial review regressions', () => {
       if (!linked) expect(f.tx.$queryRaw).toHaveBeenCalled();
     },
   );
+
+  it.each([true, false])('permits ordinary payment linking after cancellation with linkage present=%s, without restoring access', async (linked) => {
+    const f = fixture();
+    await cancelAdminIntroTrial(f.db as never, f.input);
+    const payment = {
+      id: 'payment', userId: linked ? 'member' : null,
+      purchaseId: linked ? 'purchase' : null, membershipId: linked ? 'trial' : null,
+      amountCents: 700, status: 'SUCCEEDED', stripePaymentIntentId: 'pi_trial',
+      currency: 'usd', customerName: null, customerEmail: null, stripeCustomerId: null,
+    };
+    f.tx.user.findFirst = async () => ({ ...f.purchase.user, name: 'Synthetic', stripeCustomerId: null });
+    f.tx.paymentRecord.findUnique = async () => payment;
+    f.tx.paymentRecord.update = async ({ data }: any) => Object.assign(payment, data);
+    const before = JSON.stringify([f.purchase, f.membership, f.account]);
+    await expect(linkStripePaymentRecordToMember(f.tx, {
+      paymentRecordId: payment.id, memberEmail: 'synthetic@example.test', grantIntroTrial: false,
+    })).resolves.toMatchObject({
+      ok: true, memberId: 'member', creditAccountId: null,
+      purchaseId: linked ? 'purchase' : null, membershipId: linked ? 'trial' : null,
+    });
+    expect(payment).toMatchObject({ userId: 'member', customerEmail: 'synthetic@example.test' });
+    expect(JSON.stringify([f.purchase, f.membership, f.account])).toBe(before);
+    expect(f.audits.map(audit => audit.action)).toEqual(['membership.intro_trial_cancelled', 'payment.link-member']);
+  });
 
   it('still permits the initial Sales grant for an unmatched payment without an existing purchase', async () => {
     const f = fixture();

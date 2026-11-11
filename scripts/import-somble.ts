@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { prisma } from '@/lib/db/prisma';
+import { findSombleMembershipForImport } from '@/lib/import/somble-membership-ownership';
 import {
   parseSombleClients,
   parseSombleMemberships,
@@ -199,13 +200,10 @@ async function main() {
           productByName.set(normalizedName(product.name), product);
         }
 
-        const existingMembership = await database.membership.findFirst({
-          where: {
-            userId,
-            productId: product.id,
-            currentPeriodStart: membership.purchasedAt,
-            stripeSubscriptionId: null,
-          },
+        const existingMembership = await findSombleMembershipForImport(database, {
+          userId,
+          productId: product.id,
+          purchasedAt: membership.purchasedAt,
         });
         const membershipData = {
           status: sombleMembershipStatus(membership.status),

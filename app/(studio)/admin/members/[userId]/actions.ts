@@ -1,4 +1,5 @@
 'use server';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { isDeepStrictEqual } from 'node:util';
 import type { Prisma } from '@prisma/client';
 import { memberCouponParams } from '@/lib/domain/memberships/member-pricing';
@@ -413,6 +414,13 @@ export async function returnTransactionCreditAction(formData: FormData) {
   const returnedAt = new Date();
   const terms = returnedCreditTerms(returnedAt);
   await prisma.$transaction(async (tx) => {
+    await lockMembershipEntitlements(tx, userId);
+    // The label/duplicate preflight may predate a committed cancellation.
+    if (sourceType === 'RHYZE' && await tx.auditLog.findFirst({ where: {
+      action: 'membership.intro_trial_cancelled', entityType: 'Membership',
+      after: { path: ['purchaseId'], equals: sourceId },
+    }, select: { id: true } })) throw Error('Cancelled trial credit restoration needs review.');
+    if (await tx.creditLedgerEntry.findUnique({ where: { sourceReturnKey }, select: { id: true } })) return;
     const account = await tx.creditAccount.create({
       data: {
         userId,

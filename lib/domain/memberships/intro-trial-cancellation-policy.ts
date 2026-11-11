@@ -14,19 +14,19 @@ export function canCancelIntroTrial(trial: Trial, now: Date): boolean {
     trial.product.trialDays === INTRO_TRIAL_DAYS &&
     trial.product.billingInterval === 'ONE_TIME' &&
     !trial.stripeSubscriptionId &&
-    ['ACTIVE', 'TRIALING'].includes(trial.status) &&
+    ['ACTIVE', 'TRIALING', 'PAUSED'].includes(trial.status) &&
     (!trial.currentPeriodEnd || trial.currentPeriodEnd > now) &&
     (!trial.activatedAt ||
       +trial.activatedAt + INTRO_TRIAL_DAYS * 86400000 > +now)
   );
 }
 
-/** Missing legacy funding is safe only when exactly one trial ever existed.
- * Unknown snapshots cannot prove that a future booking is unrelated. */
+/** Historical funding requires an exact account; one trial in the account
+ * history is not proof of ownership of an unlinked booking. */
 export function trialBookingScope(
   snapshot: unknown,
   accountId: string,
-  trialCount: number,
+  _trialCount: number,
 ): 'cancel' | 'review' | 'preserve' {
   const saved = snapshot as {
     accessType?: unknown;
@@ -37,7 +37,7 @@ export function trialBookingScope(
   if (saved?.accessType === 'INTRO_TRIAL') {
     if (typeof saved.creditAccountId === 'string' && saved.creditAccountId)
       return 'preserve';
-    return trialCount === 1 ? 'cancel' : 'review';
+    return 'review';
   }
   if (typeof saved?.creditAccountId === 'string' && saved.creditAccountId)
     return 'preserve';

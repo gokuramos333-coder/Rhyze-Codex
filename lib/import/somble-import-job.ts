@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { findSombleMembershipForImport } from '@/lib/import/somble-membership-ownership';
 import {
   groupSombleAttendees,
   parseSombleClients,
@@ -270,13 +271,10 @@ export async function applySombleImportJob(
         productByName.set(normalizedName(product.name), product);
       }
 
-      const existingMembership = await database.membership.findFirst({
-        where: {
-          userId,
-          productId: product.id,
-          currentPeriodStart: membership.purchasedAt,
-          stripeSubscriptionId: null,
-        },
+      const existingMembership = await findSombleMembershipForImport(database, {
+        userId,
+        productId: product.id,
+        purchasedAt: membership.purchasedAt,
       });
       const membershipData = {
         status: sombleMembershipStatus(membership.status),

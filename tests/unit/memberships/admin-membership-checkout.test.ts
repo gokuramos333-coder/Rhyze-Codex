@@ -35,7 +35,7 @@ describe('admin membership Stripe checkout', () => {
     };
   }
 
-  it('blocks the ordinary checkout for a trial upgrade before purchase, coupon or provider work', async () => {
+  it('retains the existing trial-history checkout boundary before any billing work', async () => {
     const deps = dependencies({ hasIntroTrialHistory: vi.fn().mockResolvedValue(true) });
     await expect(startAdminMembershipCheckout({ clientId: client.id, productId: product.id, origin: 'https://example.test' }, deps)).rejects.toThrow(/Checkout unavailable/);
     expect(deps.createPurchase).not.toHaveBeenCalled();
