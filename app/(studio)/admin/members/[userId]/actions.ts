@@ -41,6 +41,9 @@ import {
   manualCreditLabel,
 } from '@/lib/domain/credits/manual-credit';
 import { startAdminMembershipCheckout } from '@/lib/domain/memberships/admin-membership-checkout';
+import { headers } from 'next/headers';
+import { stripeAccountMode } from '@/lib/payments/stripe';
+import { cancelPendingMembershipCheckout } from '@/lib/domain/memberships/cancel-pending-checkout';
 import {
   assignedMembershipRecords,
   parseAdminMembershipAssignmentInput,
@@ -954,6 +957,32 @@ async function reviewLockedMembershipChangeRequest(formData: FormData) {
   revalidatePath(`/admin/members/${userId}`);
   revalidatePath('/member/membership');
   redirect(`/admin/members/${userId}?sent=request-review`);
+}
+
+export async function cancelAdminMembershipCheckoutAction(formData: FormData) {
+  const actor = await requireApprovedOwner();
+  const userId = String(formData.get('userId') || '');
+  const purchaseId = String(formData.get('purchaseId') || '');
+  const destination = `/admin/members/${encodeURIComponent(userId)}`;
+  try {
+    const origin = (await headers()).get('origin');
+    const expectedOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://www.rhyzefitness.com').origin;
+    const reason = String(formData.get('reason') || '').trim();
+    if (origin !== expectedOrigin || !userId || !purchaseId || userId.length > 128 || purchaseId.length > 128 ||
+        formData.get('confirmed') !== 'yes' || reason.length < 3 || reason.length > 240 || !stripeIsConfigured()) {
+      throw Error('Confirm the exact unfinished checkout and enter a reason.');
+    }
+    const stripe = getStripe();
+    await cancelPendingMembershipCheckout({ userId, purchaseId, actorId: actor.id, reason, live: stripeAccountMode() === 'live' }, prisma, {
+      retrieve: id => stripe.checkout.sessions.retrieve(id),
+      expire: (id, key) => stripe.checkout.sessions.expire(id, {}, { idempotencyKey: key }),
+    });
+  } catch (error) {
+    console.error('Admin checkout cancellation needs review', { message: error instanceof Error ? error.message : 'Unknown failure' });
+    redirect(`${destination}?membership=checkout-review#memberships`);
+  }
+  revalidatePath(destination);
+  redirect(`${destination}?membership=checkout-cancelled#memberships`);
 }
 
 export async function startAdminMembershipCheckoutAction(formData: FormData) {

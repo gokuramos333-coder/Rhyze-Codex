@@ -50,11 +50,15 @@ import {
   sendMemberMessageAction,
   sendSombleRecoveryInvitationAction,
   startAdminMembershipCheckoutAction,
+  cancelAdminMembershipCheckoutAction,
   updateManualMemberCreditsAction,
   updateAdminMemberProfilePhotoAction,
   updateMemberMembershipAction,
 } from './actions';
 import { AdminMembershipStartForm } from '@/components/admin/AdminMembershipStartForm';
+import { PendingMembershipCheckout } from '@/components/admin/PendingMembershipCheckout';
+import { isApprovedOwner } from '@/lib/auth/owner-access';
+import { memberPricingLabel, type MemberPricing } from '@/lib/domain/memberships/member-pricing';
 import { CancelIntroTrialForm } from '@/components/admin/CancelIntroTrialForm';
 import { canCancelIntroTrial, trialBookingScope } from '@/lib/domain/memberships/intro-trial-cancellation-policy';
 import { cancelAdminIntroTrialAction } from './trial-actions';
@@ -663,6 +667,19 @@ export default async function AdminMemberDetailPage(
       </section>
       <div className="mt-8 min-w-0">
           <InfoSection id="memberships" title="MEMBERSHIPS">
+            {searchParams.membership === 'checkout-cancelled' && <p role="status" className="mb-4 bg-emerald-50 p-3 text-sm font-bold">Unfinished checkout cancelled and verified expired. No charge, membership cancellation, or email was created. Review the corrected price and manually start a new checkout below.</p>}
+            {searchParams.membership === 'checkout-review' && <p role="alert" className="mb-4 bg-amber-50 p-3 text-sm font-bold">Cancellation could not be verified. Do not create a replacement yet. Refresh and retry cancellation to check the same saved link. A paid, completed, mismatched or unavailable checkout requires staff review; no pending purchase was cleared without expiry proof.</p>}
+            {isApprovedOwner({ ...actor, status: 'ACTIVE' }) && member.purchases.filter(purchase =>
+              purchase.status === 'PENDING' && (purchase.policyAcceptance as {source?: string} | null)?.source === 'ADMIN_CHECKOUT' &&
+              ['MONTHLY_UNLIMITED', 'LIMITED_MEMBERSHIP', 'VIP'].includes(purchase.product.kind) && purchase.product.billingInterval !== 'ONE_TIME'
+            ).map(purchase => {
+              const pricing = (purchase.policyAcceptance as {memberPricing?: MemberPricing} | null)?.memberPricing;
+              return <PendingMembershipCheckout key={purchase.id} userId={member.id} action={cancelAdminMembershipCheckoutAction} offer={{
+                id: purchase.id, name: purchase.product.name, amountCents: purchase.amountCents,
+                pricingLabel: pricing ? memberPricingLabel(pricing) : 'No custom pricing saved. Review the plan terms before creating a replacement.',
+                createdAt: date(purchase.createdAt), hasSession: Boolean(purchase.stripeCheckoutSessionId),
+              }} />;
+            })}
             {searchParams.trial === 'cancelled' && <p role="status" className="mb-4 bg-emerald-50 p-3 text-sm font-bold">Trial cancelled. Trial access ended; no bookings were changed. No payment, refund or customer email was created.</p>}
             {searchParams.trial === 'review' && <p role="alert" className="mb-4 bg-amber-50 p-3 text-sm font-bold">Trial cancellation was not applied. Confirm this is an active or paused unexpired 7-day trial and enter a reason. Review ambiguous funding, future or in-progress trial bookings, replacement credits, pending freezes, billing actions and any email already sending. Proven historical bookings are preserved. No partial cancellation was saved.</p>}
             {clientPricingHistory.some(change => (change.quote as {pricingLabel?: string}).pricingLabel) && <details className="mb-4 border border-rhyze-orange/30 bg-orange-50 p-3 text-sm"><summary className="cursor-pointer font-bold">Client pricing history</summary>

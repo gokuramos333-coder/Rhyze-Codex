@@ -432,6 +432,13 @@ async function fulfillProductPurchase(
       include: { product: true, membership: true },
     });
   }
+  // A paid event contradicting independently verified expiry must be reconciled,
+  // never silently resurrected (nor silently treated as successfully processed).
+  if (prior && (prior.policyAcceptance as { source?: string } | null)?.source === 'ADMIN_CHECKOUT' && await tx.auditLog.findFirst({ where: {
+    action: 'ADMIN_MEMBERSHIP_CHECKOUT_CANCELLED', entityType: 'Purchase', entityId: prior.id,
+  }, select: { id: true } })) {
+    throw Error('Payment reported for a cancelled checkout; provider reconciliation required.');
+  }
   // Cancellation takes this same purchase row lock before writing its receipt.
   // Read after the lock: a delayed/replayed checkout cannot restore trial access
   // or rewrite settled/refunded financial records after local cancellation.
