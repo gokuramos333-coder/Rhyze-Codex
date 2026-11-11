@@ -17,14 +17,12 @@ export function AdminMembershipStartForm({
   checkoutAction,
   assignmentAction,
   minimumEndDate,
-  hasIntroTrialHistory = false,
 }: {
   userId: string;
   products: MembershipProduct[];
   checkoutAction: MembershipAction;
   assignmentAction: MembershipAction;
   minimumEndDate: string;
-  hasIntroTrialHistory?: boolean;
 }) {
   return (
     <section id="start-membership" className="mt-5 min-w-0 break-words scroll-mt-24 border border-rhyze-orange/30 bg-orange-50 p-3 sm:p-4">
@@ -33,7 +31,7 @@ export function AdminMembershipStartForm({
         This client has no active recurring membership. Choose the secure paid path or a documented no-charge assignment.
       </p>
       <div className="mt-4 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-4">
-        {hasIntroTrialHistory ? <p role="alert" className="min-w-0 bg-white p-3 text-sm font-bold">Checkout unavailable: trial-to-paid billing needs separate review. Cancelling a trial does not authorize a paid plan.</p> : <form action={checkoutAction} className="min-w-0 border-t-4 border-rhyze-orange bg-white p-3 sm:p-4">
+        <form action={checkoutAction} className="min-w-0 border-t-4 border-rhyze-orange bg-white p-3 sm:p-4">
           <input type="hidden" name="userId" value={userId} />
           <h3 className="font-display text-2xl sm:text-3xl tracking-wider">PURCHASE THROUGH STRIPE</h3>
           <p className="mt-2 text-xs font-bold text-rhyze-black/50">
@@ -45,7 +43,7 @@ export function AdminMembershipStartForm({
           <button className="mt-3 w-full bg-rhyze-gradient px-4 py-3 text-xs font-black uppercase tracking-widest">
             Continue to secure checkout
           </button>
-        </form>}
+        </form>
 
         <form action={assignmentAction} className="min-w-0 border-t-4 border-rhyze-gold bg-rhyze-black p-3 sm:p-4 text-rhyze-cream">
           <input type="hidden" name="userId" value={userId} />

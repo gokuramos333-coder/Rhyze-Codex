@@ -23,7 +23,6 @@ describe('admin membership Stripe checkout', () => {
       findClient: vi.fn().mockResolvedValue(client),
       findProduct: vi.fn().mockResolvedValue(product),
       hasCurrentMembership: vi.fn().mockResolvedValue(false),
-      hasIntroTrialHistory: vi.fn().mockResolvedValue(false),
       createPurchase: vi.fn().mockResolvedValue({ id: 'purchase-1' }),
       createCheckoutSession: vi.fn().mockResolvedValue({
         id: 'cs_1',
@@ -34,13 +33,6 @@ describe('admin membership Stripe checkout', () => {
       ...overrides,
     };
   }
-
-  it('retains the existing trial-history checkout boundary before any billing work', async () => {
-    const deps = dependencies({ hasIntroTrialHistory: vi.fn().mockResolvedValue(true) });
-    await expect(startAdminMembershipCheckout({ clientId: client.id, productId: product.id, origin: 'https://example.test' }, deps)).rejects.toThrow(/Checkout unavailable/);
-    expect(deps.createPurchase).not.toHaveBeenCalled();
-    expect(deps.createCheckoutSession).not.toHaveBeenCalled();
-  });
 
   it('creates a client-linked subscription checkout with admin return routes', async () => {
     const deps = dependencies();

@@ -31,7 +31,6 @@ type CheckoutDependencies = {
   findClient(id: string): Promise<CheckoutClient | null>;
   findProduct(id: string): Promise<CheckoutProduct | null>;
   hasCurrentMembership(userId: string): Promise<boolean>;
-  hasIntroTrialHistory(userId: string): Promise<boolean>;
   createPurchase(input: {
     userId: string;
     productId: string;
@@ -87,9 +86,6 @@ export async function startAdminMembershipCheckout(
   } & MemberPricingInput,
   dependencies: CheckoutDependencies,
 ) {
-  // Preserve the existing trial-history boundary; cancellation does not authorize billing.
-  if (await dependencies.hasIntroTrialHistory(input.clientId))
-    throw Error('Checkout unavailable: trial-to-paid billing needs separate review. Cancelling a trial does not authorize a paid plan.');
   const [client, product, hasCurrentMembership] = await Promise.all([
     dependencies.findClient(input.clientId),
     dependencies.findProduct(input.productId),

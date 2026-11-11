@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { CancelIntroTrialForm } from '@/components/admin/CancelIntroTrialForm';
 import { AdminMembershipStartForm } from '@/components/admin/AdminMembershipStartForm';
 afterEach(cleanup);
@@ -44,13 +44,31 @@ it('keeps ordinary checkout and assignment available even with legacy trial-prev
     view.queryByRole('region', { name: 'Trial to paid membership' }),
   ).toBeNull();
 });
-it('retains a non-billing notice for trial history while leaving assignment available', () => {
+it('keeps the standard paid purchase form visible and usable after trial history', async () => {
+  const checkoutAction = vi.fn(async (_form: FormData) => {});
+  const assignmentAction = vi.fn();
+  // Exercise the removed restriction even if a caller still supplies its old prop.
+  const legacyProps = { hasIntroTrialHistory: true };
   const view = render(<AdminMembershipStartForm userId="synthetic" products={products}
-    checkoutAction={() => {}} assignmentAction={() => {}} minimumEndDate="2026-11-08"
-    hasIntroTrialHistory={true} />);
-  expect(view.queryByRole('button', { name: 'Continue to secure checkout' })).toBeNull();
-  expect(view.getByRole('alert').textContent).toMatch(/Checkout unavailable/);
+    checkoutAction={checkoutAction} assignmentAction={assignmentAction} minimumEndDate="2026-11-08"
+    {...legacyProps} />);
+  const button = view.getByRole('button', { name: 'Continue to secure checkout' }) as HTMLButtonElement;
+  expect(button.disabled).toBe(false);
+  expect(view.queryByRole('alert')).toBeNull();
+  const purchaseForm = within(button.closest('form')!);
+  expect(purchaseForm.getByRole('heading', { name: 'PURCHASE THROUGH STRIPE' })).toBeTruthy();
+  expect(purchaseForm.getByText('Card details stay on Stripe. Access starts only after Stripe confirms payment.')).toBeTruthy();
+  expect(purchaseForm.getByText('Review the amount on Stripe before paying. Creating checkout does not grant access or charge the card.')).toBeTruthy();
+  fireEvent.change(purchaseForm.getByRole('combobox', { name: 'Membership plan' }), {
+    target: { value: 'elevate' },
+  });
+  fireEvent.click(button);
+  await waitFor(() => expect(checkoutAction).toHaveBeenCalledOnce());
+  expect(Object.fromEntries(checkoutAction.mock.calls[0][0])).toEqual({
+    userId: 'synthetic', productId: 'elevate',
+  });
   expect(view.getByRole('button', { name: 'Assign membership' })).toBeTruthy();
+  expect(assignmentAction).not.toHaveBeenCalled();
 });
 it('requires explicit cancellation confirmation and truthfully explains the booking restriction', () => {
   const action = vi.fn();

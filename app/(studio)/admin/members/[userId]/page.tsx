@@ -673,7 +673,6 @@ export default async function AdminMemberDetailPage(
               <AdminMembershipStartForm
                 userId={member.id}
                 products={membershipProducts}
-                hasIntroTrialHistory={member.memberships.some(item => item.product.kind === 'INTRO_TRIAL')}
                 checkoutAction={startAdminMembershipCheckoutAction}
                 assignmentAction={assignAdminMembershipAction}
                 minimumEndDate={new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)}
