@@ -1,4 +1,3 @@
-import { requiredPhoneSchema } from '@/lib/validation/phone';
 import { z } from 'zod';
 
 export const callbackInputSchema = z.object({
@@ -28,7 +27,16 @@ export const callbackInputSchema = z.object({
     .email()
     .max(254)
     .transform((value) => value.toLowerCase()),
-  phone: requiredPhoneSchema,
+  phone: z
+    .string()
+    .trim()
+    .min(7)
+    .max(30)
+    .regex(/^\+?[\d\s().-]+$/)
+    .refine((value) => {
+      const length = value.replace(/\D/g, '').length;
+      return length >= 10 && length <= 15;
+    }, 'Enter a phone number with its area code.'),
   message: z.string().trim().max(2000).optional().default(''),
   website: z.literal('').optional().default(''),
 });

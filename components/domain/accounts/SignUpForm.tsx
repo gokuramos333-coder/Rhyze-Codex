@@ -1,7 +1,6 @@
 'use client';
 
 import { signUpAction } from '@/app/(auth)/actions';
-import { PhoneField } from './PhoneField';
 import { AuthField } from './AuthFrame';
 import { PasswordField } from './PasswordField';
 import { BirthdayFields } from './BirthdayFields';
@@ -21,7 +20,7 @@ export function SignUpForm({
         <AuthField label="Last name" name="lastName" autoComplete="family-name" showRequiredIndicator />
       </div>
       <AuthField label="Email address" name="email" type="email" autoComplete="email" showRequiredIndicator />
-      <PhoneField label="Cell phone" name="phone" required />
+      <AuthField label="Cell phone" name="phone" type="tel" autoComplete="tel" showRequiredIndicator />
       <BirthdayFields />
       <PasswordField
         label="Password"

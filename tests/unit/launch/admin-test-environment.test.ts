@@ -15,9 +15,6 @@ const local = {
     'postgresql://tester@127.0.0.1:51917/membership_plan_test',
   NEWSLETTER_TEST_DATABASE_URL:
     'postgresql://tester@127.0.0.1:51917/rhyze_newsletter_preview',
-  ARCHIVE_TEST_DATABASE_URL: 'postgresql://archive_test@localhost:55473/archive_phone_test?host=%2Fprivate%2Ftmp%2Fowned-archive',
-  ARCHIVE_TEST_DATABASE_DIR: '/private/tmp/owned-archive/data',
-  ARCHIVE_TEST_SOCKET_DIR: '/private/tmp/owned-archive',
   ADMIN_RENEWAL_TEST_DATABASE_URL: 'postgresql://tester@127.0.0.1:51917/admin_renewal_test',
   ADMIN_RENEWAL_TEST_DATABASE_DIR: '/tmp/new-owned-admin-cluster',
   KELLY_TEST_DATABASE_URL:
@@ -34,16 +31,13 @@ describe('Admin supported release environment', () => {
     });
     expect(env.ADMIN_RENEWAL_TEST_DATABASE_URL).toBe(local.ADMIN_RENEWAL_TEST_DATABASE_URL);
     expect(env.ADMIN_RENEWAL_TEST_DATABASE_DIR).toBe(local.ADMIN_RENEWAL_TEST_DATABASE_DIR);
-    expect(env.ARCHIVE_TEST_DATABASE_URL).toBe(local.ARCHIVE_TEST_DATABASE_URL);
-    expect(env.ARCHIVE_TEST_DATABASE_DIR).toBe(local.ARCHIVE_TEST_DATABASE_DIR);
-    expect(env.ARCHIVE_TEST_SOCKET_DIR).toBe(local.ARCHIVE_TEST_SOCKET_DIR);
     expect(env.NODE_ENV).toBe('test');
     expect(env.EMAIL_DELIVERY_ENABLED).toBe('false');
     expect(env.STRIPE_SECRET_KEY).toBeUndefined();
     expect(env.NETLIFY_AUTH_TOKEN).toBeUndefined();
     expect(redact(JSON.stringify(env))).not.toContain('syntheticPassword');
   });
-  it.each(['ADMIN_RENEWAL_TEST_DATABASE_URL', 'ADMIN_RENEWAL_TEST_DATABASE_DIR', 'ARCHIVE_TEST_DATABASE_URL', 'ARCHIVE_TEST_DATABASE_DIR', 'ARCHIVE_TEST_SOCKET_DIR'])(
+  it.each(['ADMIN_RENEWAL_TEST_DATABASE_URL', 'ADMIN_RENEWAL_TEST_DATABASE_DIR'])(
     'requires %s without fallback',
     (key) => {
       expect(() =>

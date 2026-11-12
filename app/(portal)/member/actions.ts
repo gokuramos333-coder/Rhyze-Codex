@@ -10,9 +10,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
-import { updateProfile } from '@/lib/domain/accounts/profile-update';
 import {
   notificationPreferenceSchema,
+  profileSchema,
 } from '@/lib/validation/profile';
 import { deleteObject, putPublicImage } from '@/lib/storage/object-storage';
 import {
@@ -81,11 +81,37 @@ export async function changePasswordAction(formData: FormData): Promise<void> {
 
 export async function updateProfileAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
-  try {
-    await updateProfile(prisma, user.id, formData);
-  } catch {
-    redirect('/member/profile?error=profile');
-  }
+  const parsed = profileSchema.safeParse({
+    preferredName: formData.get('preferredName'),
+    phone: formData.get('phone'),
+    birthdayMonth: formData.get('birthdayMonth'),
+    birthdayDay: formData.get('birthdayDay'),
+    addressLine1: formData.get('addressLine1'),
+    addressLine2: formData.get('addressLine2'),
+    city: formData.get('city'),
+    region: formData.get('region'),
+    postalCode: formData.get('postalCode'),
+    emergencyContactName: formData.get('emergencyContactName'),
+    emergencyContactPhone: formData.get('emergencyContactPhone'),
+  });
+
+  if (!parsed.success) redirect('/member/profile?error=profile');
+
+  await prisma.$transaction([
+    prisma.memberProfile.upsert({
+      where: { userId: user.id },
+      update: parsed.data,
+      create: { userId: user.id, ...parsed.data },
+    }),
+    prisma.auditLog.create({
+      data: {
+        actorId: user.id,
+        action: 'member.profile.updated',
+        entityType: 'MemberProfile',
+        entityId: user.id,
+      },
+    }),
+  ]);
 
   revalidatePath('/member/profile');
   redirect('/member/profile?saved=profile');

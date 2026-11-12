@@ -1,4 +1,3 @@
-import { PhoneField } from '@/components/domain/accounts/PhoneField';
 import { ProfileField } from '@/components/domain/accounts/ProfileField';
 import { BirthdayFields } from '@/components/domain/accounts/BirthdayFields';
 import Image from 'next/image';
@@ -79,7 +78,7 @@ export default async function MemberProfilePage(
       )}
       {searchParams.error && (
         <p className="mt-6 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-4 text-sm font-bold">
-          Check changed phone numbers (7–15 digits) and enter both emergency-contact fields.
+          Enter both emergency-contact fields and check the remaining details.
         </p>
       )}
 
@@ -107,8 +106,11 @@ export default async function MemberProfilePage(
           defaultValue={profile?.preferredName}
           autoComplete="given-name"
         />
-        <PhoneField label="Phone" name="phone" preserveUnchanged
+        <ProfileField
+          label="Phone"
+          name="phone"
           defaultValue={profile?.phone}
+          autoComplete="tel"
         />
         <BirthdayFields value={profile?.dateOfBirth} />
         <ProfileField
@@ -148,7 +150,9 @@ export default async function MemberProfilePage(
           name="emergencyContactName"
           defaultValue={profile?.emergencyContactName}
         />
-        <PhoneField label="Emergency phone" name="emergencyContactPhone" preserveUnchanged
+        <ProfileField
+          label="Emergency phone"
+          name="emergencyContactPhone"
           defaultValue={profile?.emergencyContactPhone}
         />
         <button className="min-h-12 bg-rhyze-black px-5 text-xs font-black uppercase tracking-[0.2em] text-rhyze-cream md:col-span-2">

@@ -1,9 +1,6 @@
 import { expect, it } from 'vitest';
 import { releaseTestEnvironment } from '@/scripts/release/guards';
 const source = {
-  ARCHIVE_TEST_DATABASE_URL: 'postgresql://archive_test@localhost:55473/archive_phone_test?host=%2Fprivate%2Ftmp%2Fowned-archive',
-  ARCHIVE_TEST_DATABASE_DIR: '/private/tmp/owned-archive/data',
-  ARCHIVE_TEST_SOCKET_DIR: '/private/tmp/owned-archive',
  ADMIN_RENEWAL_TEST_DATABASE_URL:'postgresql://tester@127.0.0.1:55439/admin_renewal_test',
  ADMIN_RENEWAL_TEST_DATABASE_DIR:'/tmp/owned-discount-pg',
  KELLY_TEST_DATABASE_URL:'postgresql://tester@127.0.0.1:55439/kelly_renewal_actions_test',
