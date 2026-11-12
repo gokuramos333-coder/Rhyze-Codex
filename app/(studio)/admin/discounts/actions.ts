@@ -14,9 +14,10 @@ export async function createDiscountCampaignAction(form: FormData) {
     await prisma.$transaction(async tx => {
       const products = await tx.product.findMany({ where: { id: { in: terms.productIds }, isActive: true } });
       if (products.length !== terms.productIds.length || !products.every(campaignProductEligible)) throw Error('Select active monthly memberships or one-time class packs.');
+      if (terms.duration !== 'once' && products.some(p => p.billingInterval !== 'MONTHLY')) throw Error('Recurring discounts require monthly memberships.');
       for (const product of products) campaignValueQuote(terms, product);
       const campaign = await tx.discountCampaign.create({ data: { ...terms, enabled: false } });
-      await tx.auditLog.create({ data: { actorId: owner.id, action: 'DISCOUNT_CAMPAIGN_CREATED', entityType: 'DiscountCampaign', entityId: campaign.id, after: { ...terms, startsAt: terms.startsAt.toISOString(), endsAt: terms.endsAt.toISOString(), enabled: false } } });
+      await tx.auditLog.create({ data: { actorId: owner.id, action: 'DISCOUNT_CAMPAIGN_CREATED', entityType: 'DiscountCampaign', entityId: campaign.id, after: { ...terms, startsAt: terms.startsAt.toISOString(), endsAt: terms.endsAt?.toISOString() ?? null, enabled: false } } });
     });
   } catch {
     return { error: 'Unable to create code. Choose an unused code and active eligible products, then retry. Your entries are retained.' };
@@ -33,7 +34,7 @@ export async function setDiscountCampaignEnabledAction(form: FormData) {
   try {
     await prisma.$transaction(async tx => {
       const before = await tx.discountCampaign.findUniqueOrThrow({ where: { id } });
-      if (enabled && before.endsAt.getTime() <= Date.now()) throw Error('Campaign is expired or closing.');
+      if (enabled && before.endsAt && before.endsAt.getTime() <= Date.now()) throw Error('Campaign is expired or closing.');
       await tx.discountCampaign.update({ where: { id }, data: { enabled } });
       await tx.auditLog.create({ data: { actorId: owner.id, action: 'DISCOUNT_CAMPAIGN_ENABLED_CHANGED', entityType: 'DiscountCampaign', entityId: id, before: { enabled: before.enabled }, after: { enabled } } });
     });

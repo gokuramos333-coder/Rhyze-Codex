@@ -65,7 +65,7 @@ it('prior referral discount does not exclude a campaign',async()=>{
 it('last-minute issuance uses no early cutoff or 31-minute grace',async()=>{
  await db.discountCampaign.update({where:{id:campaign.id},data:{endsAt:new Date(Date.now()+60000)}});
  const sale=await db.discountCampaign.findUniqueOrThrow({where:{id:campaign.id}});expect(await invoke()).toContain('https://example.invalid/');
- expect(calls[0].params.expires_at).toBe(Math.floor(sale.endsAt.getTime()/1000)+1800);
+ expect(calls[0].params.expires_at).toBe(Math.floor(sale.endsAt!.getTime()/1000)+1800);
 });
 it.each(['disable','end'])('existing valid session resumes after %s without fresh issuance',async(kind)=>{
  const first=await invoke();await db.discountCampaign.update({where:{id:campaign.id},data:kind==='disable'?{enabled:false}:{endsAt:new Date(Date.now()-1)}});

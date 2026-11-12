@@ -13,3 +13,11 @@ it.each([1,60000,600000])('exact migrated SQL accepts positive interval %s ms',a
 it.each([0,-1])('exact migrated SQL rejects nonpositive interval %s ms',async ms=>{
  await expect(db.discountCampaign.create({data:campaign(ms)})).rejects.toThrow('DiscountCampaign_window');
 });
+it('migrated SQL preserves old once defaults and accepts independent unlimited redemption/benefit',async()=>{
+ const legacy=await db.discountCampaign.create({data:campaign(60000)});expect(legacy.duration).toBe('once');expect(legacy.durationMonths).toBeNull();
+ const lifetime=await db.discountCampaign.create({data:{...campaign(60000),endsAt:null,duration:'forever'}});expect(lifetime.endsAt).toBeNull();
+ const limited=await db.discountCampaign.create({data:{...campaign(60000),duration:'repeating',durationMonths:3}});expect(limited.durationMonths).toBe(3);
+});
+it.each([{duration:'bad'},{duration:'repeating'},{duration:'repeating',durationMonths:0},{duration:'repeating',durationMonths:601},{duration:'forever',durationMonths:3},{duration:'once',durationMonths:1}])('SQL rejects invalid financial duration %j',async terms=>{
+ await expect(db.discountCampaign.create({data:{...campaign(60000),...terms}})).rejects.toThrow('DiscountCampaign_duration_check');
+});

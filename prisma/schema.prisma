@@ -1374,7 +1374,9 @@ model DiscountCampaign {
   amountOffCents Int?
   productIds String[]
   startsAt   DateTime
-  endsAt     DateTime
+  endsAt     DateTime?
+  duration   String @default("once")
+  durationMonths Int?
   enabled    Boolean  @default(false)
   createdAt  DateTime @default(now())
 }

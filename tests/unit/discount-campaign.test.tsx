@@ -28,7 +28,7 @@ it('admits through the final millisecond with a fixed maximum 30-minute deadline
  expect(campaignCheckout({ ...campaign, endsAt: end }, product, now).expiresAt).toBe(Math.floor(now.getTime()/1000)+1800);
 });
 it('allows a short sale without a provider-motivated early cutoff', () => {
- const d=form(); d.set('endsAt','2026-11-10T12:01'); expect(parseCampaignForm(d).endsAt.toISOString()).toBe('2026-11-10T17:01:00.000Z');
+ const d=form(); d.set('endsAt','2026-11-10T12:01'); expect(parseCampaignForm(d).endsAt!.toISOString()).toBe('2026-11-10T17:01:00.000Z');
 });
 it('rejects unselected product and disallowed kinds/cadences', () => {
  expect(() => campaignCheckout(campaign, { ...product, id: 'other' }, now)).toThrow();

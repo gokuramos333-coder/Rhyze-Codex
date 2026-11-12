@@ -24,7 +24,7 @@ it('shows creation errors inline and permits a retry', async () => {
   const { container } = render(<DiscountCampaignForm products={[]} action={action} />);
   fireEvent.submit(container.querySelector('form')!);
   expect((await screen.findByRole('alert')).textContent).toBe('Synthetic creation rejection');
-  expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(false);
+  expect((screen.getByRole('button', {name:'Create disabled code'}) as HTMLButtonElement).disabled).toBe(false);
 });
 
 it('submits the requested toggle and shows its error inline', async () => {
