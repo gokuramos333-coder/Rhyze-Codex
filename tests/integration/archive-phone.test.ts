@@ -37,6 +37,71 @@ async function visible(id: string, archive = '') {
     },
   });
 }
+async function expectHidden(id: string) {
+  expect(await getClientArchive(db, id)).toEqual({
+    archived: true,
+    effectivelyArchived: true,
+    reasons: [],
+  });
+  expect(await visible(id)).toBeNull();
+  expect(await visible(id, 'archived')).not.toBeNull();
+  expect(await visible(id, 'all')).not.toBeNull();
+}
+async function expectBlocked(id: string, archived: boolean, reason: string) {
+  expect(await getClientArchive(db, id)).toEqual({
+    archived,
+    effectivelyArchived: false,
+    reasons: [reason],
+  });
+  expect(await visible(id)).not.toBeNull();
+  expect(await visible(id, 'archived')).toBeNull();
+  expect(await visible(id, 'all')).not.toBeNull();
+  await expect(changeClientArchive(db, owner, id, 'archive')).rejects.toThrow(
+    reason,
+  );
+  expect(
+    (await db.user.findUniqueOrThrow({ where: { id } })).archivedAt !== null,
+  ).toBe(archived);
+}
+async function historicalOccurrence(status: 'SCHEDULED' | 'COMPLETED') {
+  return db.classOccurrence.create({
+    data: {
+      templateId: (
+        await db.classOccurrence.findUniqueOrThrow({
+          where: { id: occurrence },
+        })
+      ).templateId,
+      startAt: new Date(+past - 3600000),
+      endAt: past,
+      capacity: 20,
+      status,
+    },
+  });
+}
+async function planChange(membershipId: string, active: boolean) {
+  return db.membershipPlanChange.create({
+    data: {
+      membershipId,
+      activeMembershipId: active ? membershipId : null,
+      fromProductId: product,
+      toProductId: product,
+      actorId: owner,
+      status: active ? 'SUBMITTED' : 'CANCELLED',
+      timing: 'IMMEDIATE',
+      effectiveAt: past,
+      periodStart: new Date(+past - 86400000),
+      periodEnd: past,
+      expiresAt: past,
+      stripeSubscriptionId: `sub_${randomUUID()}`,
+      stripeCustomerId: `cus_${randomUUID()}`,
+      stripeItemId: `si_${randomUUID()}`,
+      fromPriceId: 'price_previous',
+      toPriceId: 'price_next',
+      quote: {},
+      submittedAt: past,
+    },
+  });
+}
 describe('safe archive and phone against native PostgreSQL', () => {
   beforeAll(async () => {
     config.assertIdentity(
@@ -203,7 +268,7 @@ describe('safe archive and phone against native PostgreSQL', () => {
       });
     },
   );
-  it.each(['balance', 'unlimited', 'reservation', 'gift'] as const)(
+  it.each(['balance', 'unlimited', 'gift'] as const)(
     'blocks %s credit obligations without altering the ledger',
     async (kind) => {
       const u = await member();
@@ -220,9 +285,8 @@ describe('safe archive and phone against native PostgreSQL', () => {
         await db.creditLedgerEntry.create({
           data: {
             creditAccountId: account.id,
-            type: kind === 'reservation' ? 'RESERVE' : 'GRANT',
-            quantity: kind === 'reservation' ? -1 : 1,
-            bookingId: kind === 'reservation' ? randomUUID() : null,
+            type: 'GRANT',
+            quantity: 1,
           },
         });
       const entries = await db.creditLedgerEntry.findMany({
@@ -239,51 +303,334 @@ describe('safe archive and phone against native PostgreSQL', () => {
       ).toEqual(entries);
     },
   );
-  it('permits expired settled credits and historical attendance without deleting either', async () => {
+  it.each([
+    { validUntil: past, settlement: null },
+    { validUntil: future, settlement: null },
+    { validUntil: past, settlement: 'RELEASE' },
+    { validUntil: future, settlement: 'RELEASE' },
+    { validUntil: past, settlement: 'RESTORE' },
+    { validUntil: future, settlement: 'RESTORE' },
+  ] as const)(
+    'blocks an outstanding reservation at zero balance (expiry $validUntil, earlier return $settlement)',
+    async ({ validUntil, settlement }) => {
+      const u = await member();
+      await changeClientArchive(db, owner, u.id, 'archive');
+      // An overdue CONFIRMED booking isolates reservations from future bookings.
+      const history = await historicalOccurrence('SCHEDULED');
+      const booking = await db.booking.create({
+        data: { userId: u.id, occurrenceId: history.id, status: 'CONFIRMED' },
+      });
+      const account = await db.creditAccount.create({
+        data: {
+          userId: u.id,
+          label: 'Outstanding reservation',
+          validFrom: new Date(+past - 86400000),
+          validUntil,
+          entries: {
+            create: [
+              { type: 'GRANT', quantity: 1, createdAt: new Date(+past - 4000) },
+              {
+                type: 'RESERVE',
+                quantity: -1,
+                bookingId: booking.id,
+                createdAt: new Date(+past - 3000),
+              },
+              ...(settlement
+                ? [
+                    {
+                      type: settlement,
+                      quantity: 1,
+                      bookingId: booking.id,
+                      createdAt: new Date(+past - 2000),
+                    },
+                    {
+                      type: 'RESERVE' as const,
+                      quantity: -1,
+                      bookingId: booking.id,
+                      createdAt: new Date(+past - 1000),
+                    },
+                  ]
+                : []),
+            ],
+          },
+        },
+      });
+      const entries = await db.creditLedgerEntry.findMany({
+        where: { creditAccountId: account.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(entries.reduce((sum, entry) => sum + entry.quantity, 0)).toBe(0);
+      await expectBlocked(u.id, true, 'Credits or access obligations');
+      expect(
+        await db.creditLedgerEntry.findMany({
+          where: { creditAccountId: account.id },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ).toEqual(entries);
+      expect(
+        await db.booking.findUnique({ where: { id: booking.id } }),
+      ).toEqual(booking);
+    },
+  );
+  it.each(['RELEASE', 'RESTORE'] as const)(
+    'permits an expired reservation fully returned by %s',
+    async (settlement) => {
+      const u = await member();
+      const history = await historicalOccurrence('SCHEDULED');
+      const booking = await db.booking.create({
+        data: { userId: u.id, occurrenceId: history.id, status: 'CANCELLED' },
+      });
+      await db.creditAccount.create({
+        data: {
+          userId: u.id,
+          label: 'Returned reservation',
+          validUntil: past,
+          entries: {
+            create: [
+              { type: 'GRANT', quantity: 1 },
+              { type: 'RESERVE', quantity: -1, bookingId: booking.id },
+              { type: settlement, quantity: 1, bookingId: booking.id },
+            ],
+          },
+        },
+      });
+      await changeClientArchive(db, owner, u.id, 'archive');
+      await expectHidden(u.id);
+    },
+  );
+  it.each(['ATTENDED', 'NO_SHOW', 'LATE_CANCELLED'] as const)(
+    'permits an expired zero-balance RESERVE for historical %s without a settlement entry',
+    async (status) => {
+      const u = await member();
+      const account = await db.creditAccount.create({
+        data: {
+          userId: u.id,
+          label: 'Expired',
+          validFrom: new Date(+past - 86400000),
+          validUntil: past,
+          entries: { create: { type: 'GRANT', quantity: 1 } },
+        },
+      });
+      const history = await historicalOccurrence('COMPLETED');
+      const booking = await db.booking.create({
+        data: { userId: u.id, occurrenceId: history.id, status },
+      });
+      await db.creditLedgerEntry.create({
+        data: {
+          creditAccountId: account.id,
+          type: 'RESERVE',
+          quantity: -1,
+          bookingId: booking.id,
+        },
+      });
+      const attendance = await db.attendanceRecord.create({
+        data: {
+          userId: u.id,
+          occurrenceId: history.id,
+          bookingId: booking.id,
+          status,
+        },
+      });
+      const entries = await db.creditLedgerEntry.findMany({
+        where: { creditAccountId: account.id },
+        orderBy: { id: 'asc' },
+      });
+      expect(entries.reduce((sum, entry) => sum + entry.quantity, 0)).toBe(0);
+      await changeClientArchive(db, owner, u.id, 'archive');
+      await expectHidden(u.id);
+      expect(
+        await db.booking.findUnique({ where: { id: booking.id } }),
+      ).toEqual(booking);
+      expect(
+        await db.attendanceRecord.findUnique({ where: { id: attendance.id } }),
+      ).toEqual(attendance);
+      expect(
+        await db.creditAccount.findUnique({ where: { id: account.id } }),
+      ).toEqual(account);
+      expect(
+        await db.creditLedgerEntry.findMany({
+          where: { creditAccountId: account.id },
+          orderBy: { id: 'asc' },
+        }),
+      ).toEqual(entries);
+    },
+  );
+  it.each([
+    { archived: false, guest: false },
+    { archived: true, guest: false },
+    { archived: false, guest: true },
+    { archived: true, guest: true },
+  ])(
+    'blocks failed refunds on paid orders (archived $archived, guest $guest)',
+    async ({ archived, guest }) => {
+      const u = await member();
+      if (archived) await changeClientArchive(db, owner, u.id, 'archive');
+      const order = await db.commerceOrder.create({
+        data: {
+          userId: guest ? null : u.id,
+          customerEmail: ` ${u.email.toUpperCase()} `,
+          kind: 'MERCHANDISE',
+          status: 'PAID',
+          amountCents: 100,
+          paidAt: past,
+        },
+      });
+      const refund = await db.commerceRefund.create({
+        data: {
+          commerceOrderId: order.id,
+          amountCents: 100,
+          status: 'FAILED',
+          providerStatus: 'failed',
+          failureReason: 'Synthetic provider failure',
+        },
+      });
+      await expectBlocked(
+        u.id,
+        archived,
+        'Active billing or unresolved payment',
+      );
+      expect(
+        await db.commerceOrder.findUnique({ where: { id: order.id } }),
+      ).toEqual(order);
+      expect(
+        await db.commerceRefund.findUnique({ where: { id: refund.id } }),
+      ).toEqual(refund);
+    },
+  );
+  it('permits cancelled membership with historical planChangeState and an inactive plan change', async () => {
     const u = await member();
-    const account = await db.creditAccount.create({
+    const membership = await db.membership.create({
       data: {
         userId: u.id,
-        label: 'Expired',
-        validUntil: past,
-        entries: { create: { type: 'GRANT', quantity: 1 } },
+        productId: product,
+        status: 'CANCELLED',
+        currentPeriodStart: new Date(+past - 86400000),
+        currentPeriodEnd: past,
+        planChangeState: {
+          paidStart: 1,
+          paidEnd: 2,
+          paidAt: 1,
+          lifecycleAt: 3,
+          restrictiveAt: 3,
+        },
       },
     });
-    const history = await db.classOccurrence.create({
-      data: {
-        templateId: (
-          await db.classOccurrence.findUniqueOrThrow({
-            where: { id: occurrence },
-          })
-        ).templateId,
-        startAt: new Date(+past - 3600000),
-        endAt: past,
-        capacity: 20,
-        status: 'COMPLETED',
-      },
-    });
-    const booking = await db.booking.create({
-      data: { userId: u.id, occurrenceId: history.id, status: 'ATTENDED' },
-    });
-    const attendance = await db.attendanceRecord.create({
-      data: {
-        userId: u.id,
-        occurrenceId: history.id,
-        bookingId: booking.id,
-        status: 'ATTENDED',
-      },
-    });
+    const operation = await planChange(membership.id, false);
     await changeClientArchive(db, owner, u.id, 'archive');
-    expect(await db.booking.findUnique({ where: { id: booking.id } })).toEqual(
-      booking,
-    );
+    await expectHidden(u.id);
     expect(
-      await db.attendanceRecord.findUnique({ where: { id: attendance.id } }),
-    ).toEqual(attendance);
+      await db.membership.findUnique({ where: { id: membership.id } }),
+    ).toEqual(membership);
     expect(
-      await db.creditAccount.findUnique({ where: { id: account.id } }),
-    ).toEqual(account);
+      await db.membershipPlanChange.findUnique({ where: { id: operation.id } }),
+    ).toEqual(operation);
   });
+  it.each([
+    'plan change',
+    'billing lock',
+    'billing review',
+    'pending request',
+    'freeze',
+  ] as const)(
+    'blocks cancelled membership with an active %s and resurfaces the client',
+    async (kind) => {
+      const u = await member();
+      await changeClientArchive(db, owner, u.id, 'archive');
+      const membership = await db.membership.create({
+        data: {
+          userId: u.id,
+          productId: product,
+          status: 'CANCELLED',
+          currentPeriodStart: past,
+          currentPeriodEnd: past,
+          billingLockToken: kind === 'billing lock' ? randomUUID() : null,
+          billingLockNeedsReview: kind === 'billing review',
+        },
+      });
+      if (kind === 'plan change') await planChange(membership.id, true);
+      if (kind === 'pending request')
+        await db.membershipChangeRequest.create({
+          data: {
+            userId: u.id,
+            membershipId: membership.id,
+            type: 'CHANGE',
+            status: 'PENDING',
+          },
+        });
+      if (kind === 'freeze')
+        await db.membershipFreeze.create({
+          data: {
+            membershipId: membership.id,
+            createdById: owner,
+            startAt: past,
+            endAt: future,
+          },
+        });
+      await expectBlocked(u.id, true, 'Active billing or unresolved payment');
+    },
+  );
+  it('permits a settled one-time Stripe customer without any membership', async () => {
+    const u = await member();
+    const customer = await db.user.update({
+      where: { id: u.id },
+      data: { stripeCustomerId: `cus_${randomUUID()}` },
+    });
+    const order = await db.commerceOrder.create({
+      data: {
+        userId: u.id,
+        kind: 'MERCHANDISE',
+        status: 'PAID',
+        amountCents: 100,
+        paidAt: past,
+      },
+    });
+    const payment = await db.paymentRecord.create({
+      data: {
+        userId: u.id,
+        commerceOrderId: order.id,
+        kind: 'MERCHANDISE',
+        status: 'SUCCEEDED',
+        amountCents: 100,
+        stripeEventId: randomUUID(),
+        stripeCustomerId: customer.stripeCustomerId,
+      },
+    });
+    expect(await db.membership.count({ where: { userId: u.id } })).toBe(0);
+    await changeClientArchive(db, owner, u.id, 'archive');
+    await expectHidden(u.id);
+    expect(
+      (await db.user.findUniqueOrThrow({ where: { id: u.id } }))
+        .stripeCustomerId,
+    ).toBe(customer.stripeCustomerId);
+    expect(
+      await db.commerceOrder.findUnique({ where: { id: order.id } }),
+    ).toEqual(order);
+    expect(
+      await db.paymentRecord.findUnique({ where: { id: payment.id } }),
+    ).toEqual(payment);
+  });
+  it.each(['FAILED', 'DISPUTED'] as const)(
+    'blocks a one-time Stripe customer with an unresolved %s payment',
+    async (status) => {
+      const u = await member();
+      await changeClientArchive(db, owner, u.id, 'archive');
+      const customer = await db.user.update({
+        where: { id: u.id },
+        data: { stripeCustomerId: `cus_${randomUUID()}` },
+      });
+      await db.paymentRecord.create({
+        data: {
+          userId: u.id,
+          kind: 'MERCHANDISE',
+          status,
+          amountCents: 100,
+          stripeEventId: randomUUID(),
+          stripeCustomerId: customer.stripeCustomerId,
+        },
+      });
+      await expectBlocked(u.id, true, 'Active billing or unresolved payment');
+    },
+  );
   it.each([
     'pending purchase',
     'failed payment',

@@ -13,11 +13,13 @@ export class ClientArchiveError extends Error {}
 // client visible immediately, without changing billing/booking admission paths.
 // u is the User row in the enclosing parameterized query.
 function archiveReasonsSql(now: Date) {
+  // planChangeState and Stripe customer identity survive settled billing;
+  // current membership, operation and payment records establish obligations.
   return Prisma.sql`array_remove(ARRAY[
     CASE WHEN u.role <> 'MEMBER' THEN 'Only MEMBER clients can be archived' END,
     CASE WHEN
       EXISTS (SELECT 1 FROM "Membership" m WHERE m."userId"=u.id AND
-        (m.status IN ('TRIALING','ACTIVE','PAST_DUE','PAUSED') OR m."billingLockNeedsReview" OR m."billingLockToken" IS NOT NULL OR m."planChangeState" IS NOT NULL))
+        (m.status IN ('TRIALING','ACTIVE','PAST_DUE','PAUSED') OR m."billingLockNeedsReview" OR m."billingLockToken" IS NOT NULL))
       OR EXISTS (SELECT 1 FROM "Purchase" p WHERE p."userId"=u.id AND p.status='PENDING')
       OR EXISTS (SELECT 1 FROM "PaymentRecord" p WHERE
         (p."userId"=u.id OR (p."userId" IS NULL AND lower(btrim(p."customerEmail"))=lower(btrim(u.email))))
@@ -25,11 +27,10 @@ function archiveReasonsSql(now: Date) {
       OR EXISTS (SELECT 1 FROM "CommerceOrder" o WHERE
         (o."userId"=u.id OR (o."userId" IS NULL AND lower(btrim(o."customerEmail"))=lower(btrim(u.email))))
         AND (o.status IN ('PENDING','PAYMENT_FAILED','FULFILLMENT_REVIEW','DISPUTED')
-          OR EXISTS (SELECT 1 FROM "CommerceRefund" r WHERE r."commerceOrderId"=o.id AND r.status NOT IN ('SUCCEEDED','FAILED','CANCELLED'))))
+          OR EXISTS (SELECT 1 FROM "CommerceRefund" r WHERE r."commerceOrderId"=o.id AND r.status NOT IN ('SUCCEEDED','CANCELLED'))))
       OR EXISTS (SELECT 1 FROM "MembershipChangeRequest" r WHERE r."userId"=u.id AND r.status='PENDING')
       OR EXISTS (SELECT 1 FROM "MembershipPlanChange" p JOIN "Membership" m ON m.id=p."membershipId" WHERE m."userId"=u.id AND p."activeMembershipId" IS NOT NULL)
       OR EXISTS (SELECT 1 FROM "MembershipFreeze" f JOIN "Membership" m ON m.id=f."membershipId" WHERE m."userId"=u.id AND f."cancelledAt" IS NULL AND f."resumedAt" IS NULL)
-      OR (u."stripeCustomerId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "Membership" m WHERE m."userId"=u.id))
       THEN 'Active billing or unresolved payment' END,
     CASE WHEN
       EXISTS (SELECT 1 FROM "Booking" b JOIN "ClassOccurrence" o ON o.id=b."occurrenceId" WHERE b."userId"=u.id AND b.status='CONFIRMED' AND o.status='SCHEDULED' AND o."endAt">${now})
@@ -38,8 +39,13 @@ function archiveReasonsSql(now: Date) {
     CASE WHEN EXISTS (SELECT 1 FROM "CreditAccount" c WHERE c."userId"=u.id AND (
       ((c."validUntil" IS NULL OR c."validUntil">${now}) AND
         (c."isUnlimited" OR COALESCE((SELECT sum(e.quantity) FROM "CreditLedgerEntry" e WHERE e."creditAccountId"=c.id),0) <> 0))
-      OR EXISTS (SELECT 1 FROM "CreditLedgerEntry" e WHERE e."creditAccountId"=c.id AND e.type='RESERVE' AND NOT EXISTS (
-        SELECT 1 FROM "CreditLedgerEntry" settled WHERE settled."creditAccountId"=c.id AND settled."bookingId"=e."bookingId" AND settled.type IN ('RELEASE','CONSUME','RESTORE')))
+      -- Attendance and late cancellation consume the reservation by booking
+      -- status, without a CONSUME entry. Otherwise use the net debit per
+      -- booking/account so an earlier return cannot hide a later reservation.
+      OR EXISTS (SELECT 1 FROM "CreditLedgerEntry" e WHERE e."creditAccountId"=c.id
+        AND e.type IN ('RESERVE','RELEASE','RESTORE')
+        AND NOT EXISTS (SELECT 1 FROM "Booking" b WHERE b.id=e."bookingId" AND b.status IN ('ATTENDED','NO_SHOW','LATE_CANCELLED'))
+        GROUP BY e."bookingId" HAVING sum(e.quantity) < 0)
     )) THEN 'Credits or access obligations' END
   ]::text[], NULL)`;
 }
