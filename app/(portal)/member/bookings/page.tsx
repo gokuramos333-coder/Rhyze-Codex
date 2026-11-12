@@ -1,3 +1,4 @@
+import { giftCreditKind } from '@/lib/domain/credits/gift-credit';
 import Link from 'next/link';
 import { occurrenceDurationMinutes, occurrenceInstructorName, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { CancellationTimestamp } from '@/components/attendance/CancellationTimestamp';
@@ -131,6 +132,10 @@ export default async function MemberBookingsPage(
             isEvent: booking.occurrence.template.isEvent,
             hasReservedCredit: Boolean(reservation),
           });
+          if (reservation && giftCreditKind(reservation.creditAccount) && decision.restoreCredit) {
+            decision.message = 'Your gift credit will be returned with its original expiration date and class/event restrictions. Cancellation does not extend the gift.';
+            decision.confirmLabel = 'Cancel and return my gift credit';
+          }
           return (
           <article
             key={booking.id}

@@ -1,4 +1,5 @@
 'use server';
+import { giftCreditAllows, giftCreditKind } from '@/lib/domain/credits/gift-credit';
 import type { Prisma } from '@prisma/client';
 import { vipRenewalReservation, vipRenewalEntitlementInclude, renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { releaseRenewalBookingSpend } from '@/lib/domain/bookings/vip-renewal-continuity';
@@ -254,6 +255,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           validUntil: item.validUntil,
         });
         return (
+          giftCreditAllows(item, now, occurrence.startAt, occurrence.template.isEvent) &&
           productAllowsOccurrence &&
           validEventAccess &&
           creditAccountCanBook({ membershipStatus: item.sourcePurchase?.membership?.status ?? null }) &&
@@ -275,7 +277,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       if (trialAccess?.reason === 'outside-window' || trialAccess?.reason === 'expired') return 'trial-window';
       return 'access';
     }
-    const accessProductKind = instructorAccess ? null : (account && vipCreditBenefit(account) ? 'VIP' : currentCreditProduct(account)?.kind
+    const accessProductKind = instructorAccess || giftCreditKind(account ?? {}) ? null : (account && vipCreditBenefit(account) ? 'VIP' : currentCreditProduct(account)?.kind
       ?? (trialAccess?.allowed ? 'INTRO_TRIAL' : null));
     const accessType = (instructorAccess || isOwnerUnlimitedAccess(account))
       ? 'COMPLIMENTARY'
@@ -305,7 +307,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       : await tx.booking.create({ data: bookingData });
     if (recovery) await tx.auditLog.create({ data: { actorId: user.id, action: 'booking.vip-renewal-rebooked', entityType: 'Booking', entityId: booking.id, before: { cancelledAt: existingBooking!.cancelledAt, policySnapshot: previousSnapshot }, after: { creditAccountId: account!.id, bookedAt: now } } });
     await completeWaitlistBooking(tx, occurrenceId, user.id);
-    if (!instructorAccess && trial && trialAccess?.allowed && !trial.activatedAt) {
+    if (!instructorAccess && !giftCreditKind(account ?? {}) && trial && trialAccess?.allowed && !trial.activatedAt) {
       await tx.membership.update({
         where: { id: trial.id },
         data: {

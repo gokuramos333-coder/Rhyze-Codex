@@ -1,4 +1,5 @@
 'use server';
+import { giftCreditAllows } from '@/lib/domain/credits/gift-credit';
 import { vipRenewalReservation, vipRenewalEntitlementInclude } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { isOwnerUnlimitedAccess } from '@/lib/domain/credits/owner-unlimited-access';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
@@ -161,7 +162,8 @@ export async function addMemberToClassAction(formData: FormData) {
         validUntil: account.validUntil,
       });
       return (
-        productAllowsOccurrence &&
+        giftCreditAllows(account, now, occurrence.startAt, occurrence.template.isEvent) &&
+          productAllowsOccurrence &&
         validEventAccess &&
         creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
         (vipCreditAccountCanBook({ account, memberships: member.memberships, now, occurrenceStartsAt: occurrence.startAt }) ||

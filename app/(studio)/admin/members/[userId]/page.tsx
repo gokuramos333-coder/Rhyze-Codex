@@ -1,3 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import { MemberGiftForm } from '@/components/admin/MemberGiftForm';
+import { GiftCreditList } from '@/components/member/GiftCreditList';
+import { giftMonthEnd } from '@/lib/domain/credits/gift-credit';
+import { grantMemberGiftAction } from './gift-actions';
 import { LeadsWorkspace } from '@/components/newsletters/LeadsWorkspace';
 import { CustomerEmailActivity } from '@/components/newsletters/CustomerEmailActivity';
 import Link from 'next/link';
@@ -249,6 +254,7 @@ export default async function AdminMemberDetailPage(
     prisma.booking.findMany({ where: { userId: params.userId }, select: { policySnapshot: true, occurrence: { select: { startAt: true, endAt: true } } } }),
   ]);
   if (!member) notFound();
+  const giftGrants = await prisma.auditLog.findMany({ where: { entityId: member.id, action: 'credit.gift-grant' }, select: { after: true, actor: { select: { name: true } } }, orderBy: { createdAt: 'desc' } });
   const clientPricingHistory = await prisma.membershipPlanChange.findMany({
     where: { membership: { userId: member.id }, status: { in: ['APPLIED', 'SCHEDULED', 'AWAITING_PAYMENT', 'SUBMITTING'] } },
     orderBy: { createdAt: 'desc' }, take: 10,
@@ -573,6 +579,10 @@ export default async function AdminMemberDetailPage(
           deleted: Boolean(message.deletedAt),
         }))}
       />
+      <section className="mt-8 border-t-4 border-rhyze-gold bg-white p-5" id="gifts">
+        <MemberGiftForm userId={member.id} memberName={member.name || 'this member'} requestId={randomUUID()} defaultExpiry={giftMonthEnd(new Date())} action={grantMemberGiftAction} />
+        <GiftCreditList accounts={member.creditAccounts} now={new Date()} grants={giftGrants} />
+      </section>
       <section id="credits" className="mt-8 scroll-mt-24 border-t-4 border-rhyze-gold bg-white p-5">
         <h2 className="font-display text-4xl tracking-wider">CREDITS</h2>
         <p className="mt-1 text-sm font-bold text-rhyze-black/55">Admins can manually grant paid credits with a custom expiration date. Attendance restores still default to the two-week rollover policy.</p>

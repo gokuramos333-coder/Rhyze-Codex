@@ -1,3 +1,4 @@
+import { GiftCreditList } from '@/components/member/GiftCreditList';
 import { requireArea } from '@/lib/auth/session';
 import { currentCreditProduct } from '@/lib/domain/credits/current-credit-product';
 import { prisma } from '@/lib/db/prisma';
@@ -225,6 +226,7 @@ export default async function MemberMembershipPage(props: { searchParams: Promis
         <div className="border-t-4 border-rhyze-orange bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Available event credits</p><p className="mt-2 font-display text-6xl">{creditBalances.eventCredits}</p></div>
         <div className="border-t-4 border-rhyze-coral bg-white p-6"><p className="text-xs font-black uppercase tracking-widest">Active plans</p><p className="mt-2 font-display text-6xl">{displayMemberships.filter((item) => ['ACTIVE','TRIALING'].includes(item.status)).length}</p></div>
       </div>
+      <GiftCreditList accounts={credits} now={now} />
       {searchParams.result && !confirmedTrial && <p className="mt-6 border-l-4 border-rhyze-coral bg-white p-4 font-bold">{resultMessages[searchParams.result] || 'Membership updated.'}</p>}
       {!requestedRecoveryMatches && <p className="mt-6 bg-white p-4">Sign in to the account that received this recovery invitation, or contact the studio.</p>}
       {recovery && requestedRecoveryMatches && <SombleRecoveryPanel recovery={recovery} action={startSombleRecoveryAction} />}

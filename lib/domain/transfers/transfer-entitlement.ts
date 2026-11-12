@@ -1,3 +1,4 @@
+import { GIFT_CREDIT_PREFIX, giftCreditAllows } from '@/lib/domain/credits/gift-credit';
 import { ownerUnlimitedAccessAllows, type OwnerUnlimitedAccount } from '@/lib/domain/credits/owner-unlimited-access';
 import { instructorStandardClassAccess } from '@/lib/domain/bookings/booking-rules';
 import { giftedVipThrough, vipCreditBenefit, vipMembershipPaidThrough, type VipEntitlementMembership } from '@/lib/domain/credits/vip-access';
@@ -35,6 +36,10 @@ export function transferEntitlementAllowed(input: {
   now: Date;
 }) {
   if (input.user.status !== 'ACTIVE' || input.sourceIsEvent !== input.destinationIsEvent) return false;
+  if (input.creditAccountId?.startsWith(GIFT_CREDIT_PREFIX)) {
+    const gift = input.user.creditAccounts?.find(a => a.id === input.creditAccountId);
+    return Boolean(gift && giftCreditAllows(gift, input.now, input.destinationStartsAt, input.destinationIsEvent));
+  }
   // Trial bookings often have no RESERVE entry or creditAccountId: unlimited
   // access still has a fixed window. A transfer must never activate a new week
   // or silently consume a different membership instead of its original trial.
