@@ -9,6 +9,7 @@ export const vipRenewalEntitlementInclude = {
   planChanges: { where: { activeMembershipId: { not: null } } },
 } as const;
 export type RenewalMembership = VipEntitlementMembership & {
+  productId?: string;
   stripeSubscriptionId?: string | null;
   cancelAtPeriodEnd?: boolean;
   billingLockToken?: string | null;
@@ -16,8 +17,24 @@ export type RenewalMembership = VipEntitlementMembership & {
   product: VipEntitlementMembership['product'] & { priceCents?: number; billingInterval?: string };
   freezes?: { startAt: Date; endAt: Date; cancelledAt: Date | null }[];
   changeRequests?: { status: string; type: string }[];
-  planChanges?: { activeMembershipId: string | null }[];
+  planChanges?: {
+    activeMembershipId: string | null; status?: string; timing?: string;
+    fromProductId?: string; toProductId?: string; stripeSubscriptionId?: string;
+    stripeScheduleId?: string | null; effectiveAt?: Date; periodEnd?: Date; quote?: unknown;
+  }[];
 };
+// A confirmed next-renewal price change preserves the same VIP entitlement.
+// Incomplete operations and changes to the membership product remain blocked.
+function isScheduledPriceOnlyChange(m: RenewalMembership, p: NonNullable<RenewalMembership['planChanges']>[number]) {
+  const quote = p.quote as { resetBillingCycle?: unknown; monthlyCents?: unknown } | null;
+  return p.activeMembershipId === m.id && p.status === 'SCHEDULED' && p.timing === 'NEXT_RENEWAL' &&
+    !!m.productId && p.fromProductId === m.productId && p.toProductId === m.productId &&
+    p.stripeSubscriptionId === m.stripeSubscriptionId && !!p.stripeScheduleId &&
+    !!m.currentPeriodEnd && p.periodEnd?.getTime() === m.currentPeriodEnd.getTime() &&
+    p.effectiveAt?.getTime() === m.currentPeriodEnd.getTime() &&
+    quote?.resetBillingCycle === false && typeof quote.monthlyCents === 'number' &&
+    Number.isSafeInteger(quote.monthlyCents) && quote.monthlyCents > 0;
+}
 export type VipRenewalFunding = { version: 1; membershipId: string; creditAccountId: string; paidThroughAtBooking: string };
 export function renewalFunding(snapshot: unknown): VipRenewalFunding | null {
   const value = (snapshot as { vipRenewalReservation?: VipRenewalFunding } | null)?.vipRenewalReservation;
@@ -46,7 +63,8 @@ export function vipRenewalReservation(input: {
     m.purchase?.status !== 'PAID' || isAdminAssignment(m.purchase.policyAcceptance) ||
     m.purchase.creditAccount?.id !== input.account.id ||
     !m.freezes || !m.changeRequests || !m.planChanges ||
-    m.changeRequests.some(r => r.status === 'PENDING') || m.planChanges.some(p => p.activeMembershipId) ||
+    m.changeRequests.some(r => r.status === 'PENDING') ||
+    m.planChanges.some(p => p.activeMembershipId && !isScheduledPriceOnlyChange(m, p)) ||
     m.freezes.some(f => !f.cancelledAt && f.startAt <= input.occurrenceStartsAt && f.endAt > input.now)) return null;
   const paidEnd = vipMembershipPaidThrough(m, input.now);
   if (!paidEnd || !m.currentPeriodEnd || paidEnd.getTime() !== m.currentPeriodEnd.getTime() ||

@@ -62,6 +62,22 @@ describe('owner renewal admission', () => {
     const guards = await db.$queryRaw<any[]>`SELECT tgname FROM pg_trigger WHERE tgrelid = '"Booking"'::regclass AND NOT tgisinternal`;
     expect(guards.length).toBeGreaterThan(0);
   });
+  it('books through the real action with a scheduled same-VIP price change', async () => {
+    const f = await fixture();
+    await db.membershipPlanChange.create({ data: {
+      membershipId: f.id, activeMembershipId: f.id, fromProductId: f.product.id, toProductId: f.product.id,
+      actorId: f.id, status: 'SCHEDULED', timing: 'NEXT_RENEWAL', effectiveAt: end,
+      periodStart: start, periodEnd: end, expiresAt: end, stripeSubscriptionId: f.id,
+      stripeCustomerId: 'cus_synthetic', stripeItemId: 'si_synthetic', fromPriceId: 'price_synthetic',
+      toPriceId: 'price_synthetic', stripeScheduleId: `sched_${f.id}`,
+      quote: { resetBillingCycle: false, monthlyCents: 17760 },
+    } });
+    const booking = await f.book();
+    expect((booking.policySnapshot as any).vipRenewalReservation.membershipId).toBe(f.id);
+    expect(await db.creditLedgerEntry.count({ where: { creditAccountId: f.account.id } })).toBe(0);
+    expect((await db.creditAccount.findUniqueOrThrow({ where: { id: f.account.id } })).validUntil).toEqual(end);
+    expect((await db.membershipPlanChange.findUniqueOrThrow({ where: { activeMembershipId: f.id } })).status).toBe('SCHEDULED');
+  });
   it('admits next-week classes within seven days after renewal and rejects the exact upper boundary', async () => {
     const f = await fixture();
     const allowed = await f.occurrence('2026-11-13T22:09:24.999Z');
