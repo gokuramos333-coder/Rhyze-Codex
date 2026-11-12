@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest';
 import { releaseTestEnvironment } from '@/scripts/release/guards';
 const source = {
+ ADMIN_RENEWAL_TEST_DATABASE_URL:'postgresql://tester@127.0.0.1:55439/admin_renewal_test',
+ ADMIN_RENEWAL_TEST_DATABASE_DIR:'/tmp/owned-discount-pg',
+ KELLY_TEST_DATABASE_URL:'postgresql://tester@127.0.0.1:55439/kelly_renewal_actions_test',
+ KELLY_TEST_DATABASE_DIR:'/tmp/owned-discount-pg',
  TRIAL_TEST_DATABASE_DIR:'/tmp/owned-discount-pg',
  DATABASE_URL:'postgresql://tester@127.0.0.1:55439/callback_test',
  CALLBACK_TEST_DATABASE_URL:'postgresql://tester@127.0.0.1:55439/callback_test',

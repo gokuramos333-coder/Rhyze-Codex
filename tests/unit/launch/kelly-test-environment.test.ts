@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { releaseTestEnvironment, redact } from '@/scripts/release/guards';
 const local = {
+  DISCOUNT_TEST_DATABASE_URL: 'postgresql://tester@127.0.0.1:51917/discount_campaign_test',
+  DISCOUNT_TEST_DATA_DIRECTORY: '/tmp/owned-discount-pg',
   TRIAL_TEST_DATABASE_DIR: '/tmp/owned-trial-cluster',
   ADMIN_RENEWAL_TEST_DATABASE_URL: 'postgresql://tester@127.0.0.1:55439/admin_renewal_test',
   ADMIN_RENEWAL_TEST_DATABASE_DIR: '/tmp/owned-release-test-cluster',
