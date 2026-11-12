@@ -1,5 +1,7 @@
 'use client';
 
+import { isValidPhone, PHONE_ERROR } from '@/lib/validation/phone';
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Clock, Phone } from 'lucide-react';
 import { Input, Label, Textarea } from '@/components/ui/Input';
@@ -439,12 +441,13 @@ export function CallbackScheduler() {
                     Phone number
                   </Label>
                   <Input
+                    onChange={(event) => event.currentTarget.setCustomValidity(isValidPhone(event.currentTarget.value) ? '' : PHONE_ERROR)}
                     id="callback-phone"
                     name="phone"
                     type="tel"
                     autoComplete="tel"
                     required
-                    maxLength={30}
+                    maxLength={80}
                     placeholder="(973) 555-0123"
                     disabled={sending}
                   />

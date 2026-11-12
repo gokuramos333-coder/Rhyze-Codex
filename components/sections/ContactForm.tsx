@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { optionalPhoneSchema } from '@/lib/validation/phone';
 import { z } from 'zod';
 import {
   Input,
@@ -16,7 +17,7 @@ import { Button } from '@/components/ui/Button';
 const schema = z.object({
   name: z.string().min(1, 'Please share your name'),
   email: z.string().email('Enter a valid email'),
-  phone: z.string().optional(),
+  phone: optionalPhoneSchema.optional(),
   subject: z.enum(['general', 'membership', 'private-event', 'press']),
   message: z.string().min(5, 'Tell us a little more'),
 });
@@ -98,8 +99,10 @@ export function ContactForm() {
             id="phone"
             type="tel"
             autoComplete="tel"
+            error={!!errors.phone}
             {...register('phone')}
           />
+          <FieldError message={errors.phone?.message} />
         </div>
         <div>
           <Label htmlFor="subject" required>

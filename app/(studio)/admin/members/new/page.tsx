@@ -1,3 +1,4 @@
+import { PhoneField } from '@/components/domain/accounts/PhoneField';
 import Link from 'next/link';
 import { BirthdayFields } from '@/components/domain/accounts/BirthdayFields';
 import { requireApprovedOwner } from '@/lib/auth/session';
@@ -61,10 +62,7 @@ export default async function CreateAdminClientPage({
               Email
               <input type="email" name="email" required className="min-h-12 border border-black/15 px-3 text-base font-normal normal-case tracking-normal" />
             </label>
-            <label className="grid gap-1 text-xs font-black uppercase tracking-widest sm:col-span-2">
-              Cell phone
-              <input type="tel" name="phone" required minLength={7} maxLength={30} className="min-h-12 border border-black/15 px-3 text-base font-normal normal-case tracking-normal" />
-            </label>
+            <PhoneField label="Cell phone" name="phone" required />
             <BirthdayFields className="sm:col-span-2" />
           </div>
         </section>

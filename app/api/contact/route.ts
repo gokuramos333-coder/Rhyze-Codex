@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import type { Prisma } from '@prisma/client';
+import { optionalPhoneSchema } from '@/lib/validation/phone';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { renderTransactionalEmail } from '@/lib/notifications/email-content';
@@ -10,7 +11,7 @@ import { site } from '@/lib/site';
 const schema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  phone: z.string().optional().default(''),
+  phone: optionalPhoneSchema.optional().default(''),
   subject: z.enum(['general', 'membership', 'private-event', 'press']),
   message: z.string().min(5),
 });

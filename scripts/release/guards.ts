@@ -1,3 +1,4 @@
+import { archiveTestDatabase } from './archive-test-database';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { discountDatabaseDeclaration } from './disposable-discount-database';
@@ -238,6 +239,10 @@ export function releaseTestEnvironment(
   const admin = adminRenewalTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
   env.ADMIN_RENEWAL_TEST_DATABASE_URL = admin.url;
   env.ADMIN_RENEWAL_TEST_DATABASE_DIR = admin.identity.directory;
+  const archive = archiveTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
+  env.ARCHIVE_TEST_DATABASE_URL = archive.url;
+  env.ARCHIVE_TEST_DATABASE_DIR = archive.identity.dir;
+  env.ARCHIVE_TEST_SOCKET_DIR = archive.socket;
   return env;
 }
 

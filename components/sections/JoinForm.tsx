@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { requiredPhoneSchema } from '@/lib/validation/phone';
 import { z } from 'zod';
 import { CheckCircle2 } from 'lucide-react';
 import { Input, Label, FieldError } from '@/components/ui/Input';
@@ -12,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 const schema = z.object({
   name: z.string().min(1, 'Required'),
   email: z.string().email('Enter a valid email'),
-  phone: z.string().min(7, 'A phone we can reach you at'),
+  phone: requiredPhoneSchema,
   startDate: z.string().min(1, 'Pick a date'),
   waiver: z.literal(true, {
     error: 'Please agree to the waiver to continue',
