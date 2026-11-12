@@ -1,3 +1,4 @@
+import { requiredPhoneSchema } from '@/lib/validation/phone';
 import { z } from 'zod';
 import { birthdayDateFromMonthDay } from '@/lib/domain/birthdays/birthday-reminders';
 
@@ -5,7 +6,7 @@ const adminClientInputSchema = z.object({
   firstName: z.string().trim().min(1, 'Enter a first name.').max(50),
   lastName: z.string().trim().min(1, 'Enter a last name.').max(50),
   email: z.string().trim().email('Enter a valid email address.').transform((value) => value.toLowerCase()),
-  phone: z.string().trim().min(7, 'Enter a cell phone number.').max(30),
+  phone: requiredPhoneSchema,
   birthdayMonth: z.coerce.number().int().min(1).max(12),
   birthdayDay: z.coerce.number().int().min(1).max(31),
 });

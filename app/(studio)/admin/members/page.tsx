@@ -1,3 +1,4 @@
+import { clientArchiveVisibilityWhere } from '@/lib/domain/accounts/client-archive';
 import Link from 'next/link';
 import { ContactStatusControl } from '@/components/newsletters/ContactStatusControl';
 import { Download, Mail, Search, UserPlus } from 'lucide-react';
@@ -34,6 +35,7 @@ export default async function AdminMembersPage(
       account?: string;
       membership?: string;
       sort?: string;
+      archive?: string;
     }>;
   }
 ) {
@@ -44,6 +46,8 @@ export default async function AdminMembersPage(
   const account = searchParams.account?.trim();
   const membership = searchParams.membership?.trim();
   const sort = searchParams.sort || 'joined-desc';
+  const archive = searchParams.archive || '';
+  const archiveWhere = await clientArchiveVisibilityWhere(prisma, archive);
   await prisma.user.updateMany({
     where: claimedAccountStatusUpdateWhere(),
     data: { status: 'ACTIVE' },
@@ -57,7 +61,7 @@ export default async function AdminMembersPage(
           ? ({ createdAt: 'asc' } as const)
           : ({ createdAt: 'desc' } as const);
   const members = await prisma.user.findMany({
-    where: buildClientDirectoryWhere({ q, source, plan, account, membership }),
+    where: { AND: [buildClientDirectoryWhere({ q, source, plan, account, membership }), archiveWhere] },
     include: {
       sombleClientProfile: true,
       leadProfile: true,
@@ -132,7 +136,7 @@ export default async function AdminMembersPage(
         </div>
       </div>
 
-      <form className="mt-7 grid gap-3 border-t-4 border-rhyze-gold bg-white p-4 lg:grid-cols-[minmax(14rem,1fr)_11rem_12rem_14rem_11rem_auto]">
+      <form className="mt-7 grid gap-3 border-t-4 border-rhyze-gold bg-white p-4 sm:grid-cols-2 xl:grid-cols-4">
         {membership === 'active' && <input type="hidden" name="membership" value="active" />}
         <label className="relative">
           <Search className="absolute left-4 top-4 h-4 w-4 text-rhyze-black/35" />
@@ -177,6 +181,11 @@ export default async function AdminMembersPage(
             </option>
           ))}
           <option value="none">No native plan</option>
+        </select>
+        <select name="archive" defaultValue={archive} aria-label="Filter clients by archive visibility" className="min-h-12 border border-black/15 px-3">
+          <option value="">Current directory</option>
+          <option value="archived">Archived clients</option>
+          <option value="all">All including archived</option>
         </select>
         <select name="sort" defaultValue={sort} className="min-h-12 border border-black/15 px-3">
           <option value="joined-desc">Newest joined</option>

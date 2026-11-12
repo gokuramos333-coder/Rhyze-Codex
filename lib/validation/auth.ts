@@ -1,3 +1,4 @@
+import { requiredPhoneSchema } from '@/lib/validation/phone';
 import { z } from 'zod';
 import { birthdayDateFromMonthDay } from '@/lib/domain/birthdays/birthday-reminders';
 
@@ -35,7 +36,7 @@ export const signUpSchema = z
     firstName: z.string().trim().min(1, 'Enter your first name.').max(50),
     lastName: z.string().trim().min(1, 'Enter your last name.').max(50),
     email: emailSchema,
-    phone: z.string().trim().min(7, 'Enter your cell phone number.').max(30),
+    phone: requiredPhoneSchema,
     birthdayMonth: birthdayMonthSchema,
     birthdayDay: birthdayDaySchema,
     waiverAccepted: z.literal(true, {

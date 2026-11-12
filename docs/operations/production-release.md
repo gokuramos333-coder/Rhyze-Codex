@@ -108,6 +108,17 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 # server database/address/port/directory before ANY fixture write, in NODE_ENV=test.
 # Kelly and admin also require SQL admission guards, not only Prisma db push.
 # Only localhost/127.0.0.1 and those exact test databases are accepted (Kelly: 127.0.0.1 only).
+# ARCHIVE_TEST_DATABASE_URL, ARCHIVE_TEST_DATABASE_DIR and ARCHIVE_TEST_SOCKET_DIR
+# are also required. Use npm run test:archive-phone-db -- -- COMMAND [ARGS] to
+# provision a fresh socket-only archive_phone_test cluster, apply its exact new
+# migration and keep it alive for COMMAND (then stop it even on failure).
+# Example for the parent release check, with ALL other test DB declarations set:
+# npm run test:archive-phone-db -- -- npm run release:check -- --expected-deploy DEPLOY_ID --base-ref SOURCE_COMMIT
+# The runner uses PostgreSQL tools on PATH (or PG_BIN). Its archive URL is
+# postgresql://archive_test@localhost:PORT/archive_phone_test?host=SOCKET_DIR;
+# the declared data directory must be SOCKET_DIR/data. The suite checks database,
+# socket transport, port, server user and exact data_directory before fixture writes.
+# No DATABASE_URL fallback is allowed for this suite. Do not use a shared cluster.
 # Tests require the current schema and the case-insensitive User-email index.
 # For discount_campaign_test, initialize the pinned pre-campaign baseline
 # schema then apply all six exact mirrored campaign migrations in order,

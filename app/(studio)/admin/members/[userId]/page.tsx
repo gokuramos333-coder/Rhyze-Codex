@@ -1,3 +1,7 @@
+import { ClientArchiveControls } from '@/components/admin/ClientArchiveControls';
+import { getClientArchive } from '@/lib/domain/accounts/client-archive';
+import { isApprovedOwner } from '@/lib/auth/owner-access';
+import { changeClientArchiveAction } from './archive-actions';
 import { randomUUID } from 'node:crypto';
 import { MemberGiftForm } from '@/components/admin/MemberGiftForm';
 import { GiftCreditList } from '@/components/member/GiftCreditList';
@@ -378,6 +382,9 @@ export default async function AdminMemberDetailPage(
       party: importedBookingParty(booking.policySnapshot),
     }));
 
+  const archiveState = member.role === 'MEMBER' && isApprovedOwner({ ...actor, status: 'ACTIVE' })
+    ? await getClientArchive(prisma, member.id) : null;
+
   return (
     <>
       {reviewedRecovery && <section id="billing-recovery" className="mb-6 border-t-4 border-rhyze-coral bg-white p-6">
@@ -442,6 +449,8 @@ export default async function AdminMemberDetailPage(
         <Metric label="Spent this year" value={money(spend.yearlyCents)} icon={<CalendarCheck />} href="#payment-history" />
         <Metric label="Lifetime spent" value={money(spend.lifetimeCents)} icon={<CalendarCheck />} href="#payment-history" />
       </div>
+      {archiveState && <ClientArchiveControls userId={member.id} state={archiveState} action={changeClientArchiveAction} />}
+
       {searchParams.sent === 'client-created' && (
         <p className="mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-4 font-bold">
           Client profile created. A secure account-activation email was queued for this client.
