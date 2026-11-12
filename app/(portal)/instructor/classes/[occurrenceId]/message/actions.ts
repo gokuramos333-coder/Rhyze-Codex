@@ -5,6 +5,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
+import { renewalBookingSpend } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { queueEmail } from '@/lib/notifications/email-queue';
 
 function classDate(value: Date) {
@@ -79,20 +82,23 @@ export async function cancelAssignedClassAction(formData: FormData) {
   const occurrenceId = String(formData.get('occurrenceId') || '');
   const reason = resolveCancellationReason(formData);
   if (reason.length < 10) redirect(`/instructor/classes/${occurrenceId}/message?error=reason`);
-  const occurrence = await prisma.classOccurrence.findFirst({
-    where: { id: occurrenceId, instructorId: instructor.id, status: 'SCHEDULED' },
-    include: { template: true, instructor: {select:{name:true}}, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
-  });
-  if (!occurrence) redirect('/instructor/schedule');
   await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;
+    const occurrence = await tx.classOccurrence.findFirst({
+      where: { id: occurrenceId, instructorId: instructor.id, status: 'SCHEDULED' },
+      include: { template: true, instructor: {select:{name:true}}, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
+    });
+    if (!occurrence) return;
+    for (const userId of [...new Set(occurrence.bookings.map(b => b.userId))].sort()) {
+      await lockMembershipEntitlements(tx, userId);
+    }
     await tx.classOccurrence.update({ where: { id: occurrenceId }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason } });
     for (const booking of occurrence.bookings) {
       await tx.booking.update({ where: { id: booking.id }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
-      const reservation = await tx.creditLedgerEntry.findFirst({ where: { bookingId: booking.id, type: 'RESERVE' } });
-      if (reservation) {
-        const released = await tx.creditLedgerEntry.findFirst({ where: { bookingId: booking.id, type: { in: ['RELEASE','RESTORE'] } } });
-        if (!released) await tx.creditLedgerEntry.create({ data: { creditAccountId: reservation.creditAccountId, bookingId: booking.id, type: 'RELEASE', quantity: 1, reason: 'Instructor cancelled class' } });
-      }
+      const spend = await renewalBookingSpend(tx, booking.id);
+      for (const item of spend) await tx.creditLedgerEntry.create({ data: {
+        ...item, bookingId: booking.id, type: 'RELEASE', reason: 'Instructor cancelled class',
+      } });
       await tx.inAppNotification.create({ data: { userId: booking.userId, title: `${instructorOccurrenceTitle(occurrence)} was cancelled`, body: reason, link: '/member/bookings', dedupeKey: `class-cancelled:${occurrenceId}:${booking.userId}` } });
       await queueEmail(tx, {
         userId: booking.userId,
@@ -105,14 +111,14 @@ export async function cancelAssignedClassAction(formData: FormData) {
           classDate: classDate(occurrence.startAt),
           classTime: classTime(occurrence.startAt),
           reason,
-          creditResult: 'Your eligible class credit was returned automatically.',
+          creditResult: spend.length > 0 ? 'Your eligible class credit was returned automatically.' : 'No outstanding class credit needed to be returned.',
         },
         dedupeKey: `class-cancelled-email:${occurrenceId}:${booking.userId}`,
       });
     }
     await tx.classMessage.create({ data: { occurrenceId, instructorId: instructor.id, subject: `${instructorOccurrenceTitle(occurrence)} cancelled`, body: reason, kind: 'CANCELLATION', recipientCount: occurrence.bookings.length } });
     await tx.auditLog.create({ data: { actorId: instructor.id, action: 'class.cancelled.by-instructor', entityType: 'ClassOccurrence', entityId: occurrenceId } });
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 15000 });
   revalidatePath('/instructor/schedule');
   revalidatePath('/schedule');
   redirect('/instructor/schedule?cancelled=1');

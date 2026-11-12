@@ -13,6 +13,9 @@ import { queueEmail } from '@/lib/notifications/email-queue';
 import { normalizeInstructorPayMethod, parseDollarCents } from '@/lib/domain/instructors/pay-rates';
 import { cleanOptionalText, occurrenceLocalTimeZone, occurrenceTitle, parseOccurrenceLocalStart } from '@/lib/domain/schedule/occurrence-management';
 
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
+import { renewalBookingSpend } from '@/lib/domain/bookings/vip-renewal-continuity';
+
 const studioTimezone = 'America/New_York';
 
 function classDate(value: Date) {
@@ -50,14 +53,19 @@ async function cancelOccurrencesWithNotifications(
   occurrenceIds: string[],
   reason: string,
 ) {
-  const occurrences = await prisma.classOccurrence.findMany({
-    where: { id: { in: occurrenceIds }, status: 'SCHEDULED' },
-    include: {
-      template: true,
-      bookings: { where: { status: 'CONFIRMED' }, include: { user: true } },
-    },
-  });
   await prisma.$transaction(async (tx) => {
+    // Match booking/recovery/cleanup lock order; read the roster only after all
+    // occurrence locks, so a concurrent cancellation cannot refund twice.
+    for (const id of [...new Set(occurrenceIds)].sort()) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
+    }
+    const occurrences = await tx.classOccurrence.findMany({
+      where: { id: { in: occurrenceIds }, status: 'SCHEDULED' },
+      include: { template: true, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
+    });
+    for (const userId of [...new Set(occurrences.flatMap(o => o.bookings.map(b => b.userId)))].sort()) {
+      await lockMembershipEntitlements(tx, userId);
+    }
     for (const occurrence of occurrences) {
       await tx.classOccurrence.update({
         where: { id: occurrence.id },
@@ -68,24 +76,11 @@ async function cancelOccurrencesWithNotifications(
           where: { id: booking.id },
           data: { status: 'CANCELLED', cancelledAt: new Date() },
         });
-        const reservation = await tx.creditLedgerEntry.findFirst({
-          where: { bookingId: booking.id, type: 'RESERVE' },
-        });
-        if (reservation) {
-          const released = await tx.creditLedgerEntry.findFirst({
-            where: { bookingId: booking.id, type: { in: ['RELEASE', 'RESTORE'] } },
-          });
-          if (!released) {
-            await tx.creditLedgerEntry.create({
-              data: {
-                creditAccountId: reservation.creditAccountId,
-                bookingId: booking.id,
-                type: 'RELEASE',
-                quantity: 1,
-                reason: 'Studio cancelled class',
-              },
-            });
-          }
+        const spend = await renewalBookingSpend(tx, booking.id);
+        for (const item of spend) {
+          await tx.creditLedgerEntry.create({ data: {
+            ...item, bookingId: booking.id, type: 'RELEASE', reason: 'Studio cancelled class',
+          } });
         }
         await tx.inAppNotification.upsert({
           where: { dedupeKey: `class-cancelled:${occurrence.id}:${booking.userId}` },
@@ -109,7 +104,7 @@ async function cancelOccurrencesWithNotifications(
             classDate: classDate(occurrence.startAt),
             classTime: classTime(occurrence.startAt),
             reason,
-            creditResult: 'Your eligible class credit was returned automatically.',
+            creditResult: spend.length > 0 ? 'Your eligible class credit was returned automatically.' : 'No outstanding class credit needed to be returned.',
           },
           dedupeKey: `class-cancelled-email:${occurrence.id}:${booking.userId}`,
         });
@@ -124,7 +119,7 @@ async function cancelOccurrencesWithNotifications(
         },
       });
     }
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 15000 });
 }
 
 export async function updateOccurrenceAction(formData: FormData) {

@@ -105,6 +105,7 @@ function fixture(person: {
   ];
   const records: any[] = [];
   const db: any = {
+      booking: { findMany: vi.fn(async () => []) },
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
     membershipFreeze: { findMany: async () => [] },

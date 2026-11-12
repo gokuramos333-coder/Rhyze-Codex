@@ -1,3 +1,4 @@
+import { reconcileVipRenewalBookings } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
@@ -219,7 +220,9 @@ export async function POST(request: Request) {
       vipEventCreditsGranted += 1;
   }
 
+  const renewalReservations = await reconcileVipRenewalBookings(prisma, { now });
   return NextResponse.json({
+    vipRenewalReservationsReleased: renewalReservations.removed,
     backfilledTrialWindows: Number(backfilledTrialWindows),
     expiredTrials: expired.count,
     expiredTrialCredits: Number(expiredTrialCredits),

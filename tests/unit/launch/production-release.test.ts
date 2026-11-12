@@ -60,6 +60,10 @@ const environment = () =>
   );
 const localEnv = {
   TRIAL_TEST_DATABASE_DIR: '/private/tmp/owned-trial-cluster',
+  ADMIN_RENEWAL_TEST_DATABASE_URL: 'postgresql://tester@127.0.0.1:55439/admin_renewal_test',
+  ADMIN_RENEWAL_TEST_DATABASE_DIR: '/tmp/owned-release-test-cluster',
+  KELLY_TEST_DATABASE_URL: 'postgresql://tester@127.0.0.1:55439/kelly_renewal_actions_test',
+  KELLY_TEST_DATABASE_DIR: '/tmp/owned-release-test-cluster',
   NEWSLETTER_TEST_DATABASE_URL:
     'postgresql://tester@127.0.0.1:55439/rhyze_newsletter_preview',
   DATABASE_URL: 'postgresql://tester@127.0.0.1:55439/callback_test',

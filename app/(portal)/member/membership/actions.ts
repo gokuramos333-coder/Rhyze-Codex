@@ -1,4 +1,6 @@
 'use server';
+import { reconcileVipRenewalBookings } from '@/lib/domain/bookings/vip-renewal-continuity';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 
 import { attributionMetadata, sourceAttributionSelect } from '@/lib/attribution/first-touch';
@@ -99,6 +101,7 @@ export async function requestMembershipChangeAction(formData: FormData) {
   if (existing) redirect('/member/membership?result=request-pending');
 
   await prisma.$transaction(async (tx) => {
+    await lockMembershipEntitlements(tx, user.id);
     const created = await tx.membershipChangeRequest.create({
       data: {
         userId: user.id,
@@ -132,6 +135,7 @@ export async function requestMembershipChangeAction(formData: FormData) {
     });
   });
   revalidatePath('/member');
+  await reconcileVipRenewalBookings(prisma, { userId: user.id });
   revalidatePath('/member/profile');
   revalidatePath('/member/membership');
   redirect('/member/membership?result=requested');

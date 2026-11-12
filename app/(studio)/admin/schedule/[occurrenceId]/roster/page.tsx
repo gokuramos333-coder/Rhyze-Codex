@@ -9,7 +9,10 @@ import { occurrenceAdminDateTimeLabel } from '@/lib/domain/schedule/occurrence-d
 import { addMemberToClassAction, addOwnerComplimentaryBookingAction } from './actions';
 
 const addMemberMessages: Record<string, { text: string; tone: 'success' | 'error' | 'info' }> = {
-  'member-added': { text: 'Member added. An eligible credit was used, or complimentary regular-class access was applied.', tone: 'success' },
+  'member-added': { text: 'Member added using eligible class access. VIP reservations up to seven days after renewal remain pending renewal until payment succeeds.', tone: 'success' },
+  'member-ambiguous': { text: 'More than one active client matches. Enter the exact email for the intended client.', tone: 'error' },
+  'member-waiver': { text: 'The member must sign the current required waiver and cancellation policy before booking.', tone: 'error' },
+  'member-renewal-recovery': { text: 'This booking has renewal funding history. Admin add cannot recover it; use the reviewed member recovery flow after checking current eligibility.', tone: 'error' },
   'member-search': { text: 'Enter at least 2 characters from the member name or email.', tone: 'error' },
   'member-not-found': { text: 'No matching client account was found.', tone: 'error' },
   'member-already-booked': { text: 'That member is already on this roster.', tone: 'info' },

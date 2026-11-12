@@ -44,6 +44,7 @@ describe('bounded manual class membership maintenance', () => {
     };
     const memberships = [legacyGift, membership];
     state.db = {
+      booking: { findMany: vi.fn(async () => []) },
       membershipFreeze: { findMany: async () => [] },
       // The raw jobs only backfill/expire INTRO_TRIAL records, absent here.
       $executeRaw: async () => 0,

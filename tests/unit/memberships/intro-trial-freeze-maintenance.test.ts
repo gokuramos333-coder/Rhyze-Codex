@@ -45,6 +45,7 @@ function fixture(phase: 'start' | 'end', cancelled: boolean) {
   );
   const freezeUpdate = vi.fn(async ({ data }) => Object.assign(freeze, data));
   const tx: any = {
+    booking: { findMany: async () => [] }, // This trial fixture has no advance VIP reservations.
     $executeRaw: vi.fn(async () => 0),
     $queryRaw: vi.fn(async () => []),
     membership: {

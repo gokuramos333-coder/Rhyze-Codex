@@ -90,6 +90,18 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 # TRIAL_TEST_DATABASE_DIR must identify your own cluster's absolute data directory;
 # the trial suite requires an explicit 127.0.0.1 port and checks server identity
 # before fixture writes. Never reuse another worker's database directory.
+# KELLY_TEST_DATABASE_URL must use postgresql://USER@127.0.0.1:PORT/kelly_renewal_actions_test
+# with an explicit port, no query/fragment overrides, and KELLY_TEST_DATABASE_DIR
+# set to the absolute data_directory of a newly provisioned owned local cluster.
+# Never reuse/reset another worker's cluster. Both Kelly suites verify the server
+# database, address, port and exact directory before fixture writes, in NODE_ENV=test.
+# The release environment requires and passes both Kelly variables; no fallback.
+# ADMIN_RENEWAL_TEST_DATABASE_URL requires 127.0.0.1, an explicit port and exact
+# admin_renewal_test; ADMIN_RENEWAL_TEST_DATABASE_DIR declares the new owned cluster.
+# The real release builder requires/forwards both; admin beforeAll checks the exact
+# server database/address/port/directory before ANY fixture write, in NODE_ENV=test.
+# Kelly and admin also require SQL admission guards, not only Prisma db push.
+# Only localhost/127.0.0.1 and those exact test databases are accepted (Kelly: 127.0.0.1 only).
 # Tests require the current schema and the case-insensitive User-email index.
 # The script does not migrate, seed, reset, or recreate any database.
 

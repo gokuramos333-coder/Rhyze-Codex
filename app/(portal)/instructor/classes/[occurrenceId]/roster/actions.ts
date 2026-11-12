@@ -1,4 +1,6 @@
 'use server';
+import { assertVipRenewalAttendanceFunded, releaseRenewalBookingSpend } from '@/lib/domain/bookings/vip-renewal-continuity';
+import { renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { restoredCancellationAt } from '@/lib/domain/bookings/restored-cancellation-at';
 import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
@@ -157,6 +159,11 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
       await tx.$queryRaw`SELECT id FROM "ClassOccurrence" WHERE id = ${occurrenceId} FOR UPDATE`;
       await lockMembershipEntitlements(tx, booking.userId);
+      if (renewalFunding(booking.policySnapshot)) {
+        const current = await tx.booking.findUniqueOrThrow({ where: { id: booking.id }, include: { occurrence: true } });
+        if (current.occurrenceId !== occurrenceId) throw Error('renewal-unfunded');
+        await assertVipRenewalAttendanceFunded(tx, current);
+      }
       if (transition.action === 'CLEAR') {
         await tx.attendanceRecord.deleteMany({
           where: { occurrenceId, userId: booking.userId },
@@ -264,6 +271,8 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
         occurrenceId: true,
         userId: true,
         cancelledAt: true,
+        status: true,
+        policySnapshot: true,
         user: { select: { name: true, email: true } },
         occurrence: { select: { startAt: true, timezone: true, template: { select: { name: true, isEvent: true } } } },
       },
@@ -276,6 +285,18 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
       action: 'membership.intro_trial_cancelled', entityType: 'Membership',
       after: { path: ['preservedBookingIds'], array_contains: [booking.id] },
     }, select: { id: true } })) throw Error('Cancelled trial credit restoration needs review.');
+    if (renewalFunding(booking.policySnapshot)) {
+      // A later paid conversion may have reserved real inventory.
+      const creditReturned = await releaseRenewalBookingSpend(tx, booking.id);
+      if (booking.status !== 'CANCELLED') {
+        await tx.booking.update({ where: { id: booking.id }, data: { status: 'CANCELLED', cancelledAt: new Date() } });
+        await tx.attendanceRecord.deleteMany({ where: { bookingId } });
+        await tx.emailMessage.updateMany({ where: { userId: booking.userId, template: { in: ['CLASS_REMINDER', 'BOOKING_CONFIRMATION'] }, status: { in: ['QUEUED', 'PROCESSING', 'FAILED'] }, payload: { path: ['bookingId'], equals: bookingId } }, data: { status: 'CANCELLED' } });
+        await tx.auditLog.create({ data: { actorId: actor.id, action: 'booking.vip-renewal-admin-cancelled', entityType: 'Booking', entityId: booking.id, after: { creditReturned } } });
+        await notifyWaitlistOpening(tx, occurrenceId, `vip-renewal-admin-cancel:${booking.id}`);
+      }
+      return { booking, fallbackUsed: false, noCreditSpent: !creditReturned };
+    }
     await assertNoCashRefundForBooking(tx, booking);
 
     const reservation = await tx.creditLedgerEntry.findFirst({
@@ -386,6 +407,11 @@ export async function restoreCreditAction(formData: FormData): Promise<void> {
   });
   if (!restored) return;
   const { booking, fallbackUsed } = restored;
+  if ('noCreditSpent' in restored && restored.noCreditSpent) {
+    revalidatePath(`/admin/schedule/${occurrenceId}/roster`);
+    revalidatePath('/member/bookings');
+    redirect(`/admin/schedule/${occurrenceId}/roster?result=cancelled-no-credit-spent`);
+  }
   await queueEmail(prisma, {
     userId: booking.userId,
     to: 'melissa@rhyzefit.com',

@@ -18,6 +18,7 @@ function fixture() {
     status: 'ACTIVE', currentPeriodStart: new Date(sep * 1000), currentPeriodEnd: new Date(oct * 1000), purchase, user, product };
   const records = new Map<string, any>();
   const tx: any = {
+    $executeRaw: vi.fn(async () => 0),
     $queryRaw: vi.fn(async () => [{ id: 'purchase' }]),
     membership: { findUnique: async () => membership, update: async ({ data }: any) => Object.assign(membership, data),
       updateMany: async ({ data }: any) => Object.assign(membership, data), upsert: async ({ update }: any) => Object.assign(membership, update) },

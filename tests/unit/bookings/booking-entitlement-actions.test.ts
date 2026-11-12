@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const tx = {
     waitlistEntry: { findUnique: vi.fn(), count: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-    $executeRaw: vi.fn(), user: { findUnique: vi.fn(), findFirst: vi.fn() },
+    $executeRaw: vi.fn(), user: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
     classOccurrence: { findUnique: vi.fn(), findFirst: vi.fn() }, waiverVersion: { findFirst: vi.fn() }, waiverAcceptance: { findUnique: vi.fn() },
     booking: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn() },
     membership: { findFirst: vi.fn(), findMany: vi.fn() }, creditAccount: { findMany: vi.fn() },
@@ -29,7 +29,7 @@ function fixture(isEvent = false, role = 'INSTRUCTOR') {
   const user = { ...mocks.actor, role, status: 'ACTIVE', instructorProfile: { isActive: true }, memberships: [] as typeof membership[] };
   const occurrence = { id: 'class', status: 'SCHEDULED', startAt: new Date('2026-09-22T16:00Z'), endAt: new Date('2026-09-22T16:50Z'), capacity: 25, historicalSignupCount: 0, _count: { bookings: 0 },
     template: { name: 'Test class', isEvent, durationMinutes: 50, slug: 'test' }, instructor: { name: 'Teacher' } };
-  mocks.tx.user.findUnique.mockResolvedValue(user); mocks.tx.user.findFirst.mockResolvedValue(user);
+  mocks.tx.user.findUnique.mockResolvedValue(user); mocks.tx.user.findFirst.mockResolvedValue(user); mocks.tx.user.findMany.mockResolvedValue([user]);
   mocks.tx.classOccurrence.findUnique.mockResolvedValue(occurrence);
   mocks.tx.waiverVersion.findFirst.mockResolvedValue({ id: 'waiver' }); mocks.tx.waiverAcceptance.findUnique.mockResolvedValue({ id: 'accepted' });
   mocks.tx.booking.findUnique.mockResolvedValue(null); mocks.tx.booking.findFirst.mockResolvedValue(null); mocks.tx.booking.count.mockResolvedValue(0);
@@ -44,6 +44,23 @@ function fixture(isEvent = false, role = 'INSTRUCTOR') {
 beforeEach(() => { vi.clearAllMocks(); vi.useFakeTimers(); vi.setSystemTime(now); });
 import { afterEach } from 'vitest';
 afterEach(() => vi.useRealTimers());
+
+it('reserves only the renewal-week Saturday with durable contingent VIP funding and no debit', async () => {
+  const f = fixture(false, 'MEMBER');
+  vi.setSystemTime(new Date('2026-11-03T20:00Z'));
+  f.occurrence.startAt = new Date('2026-11-07T16:00Z');
+  f.occurrence.endAt = new Date('2026-11-07T16:50Z');
+  f.membership.currentPeriodEnd = new Date('2026-11-06T22:09:25Z');
+  Object.assign(f.membership, { cancelAtPeriodEnd: false, stripeSubscriptionId: 'sub_synthetic', freezes: [], changeRequests: [], planChanges: [], billingLockToken: null, billingLockNeedsReview: false });
+  Object.assign(f.membership.product, { billingInterval: 'MONTHLY', priceCents: 19900 });
+  Object.assign(f.membership.purchase.creditAccount, { id: 'vip-unlimited', validUntil: f.membership.currentPeriodEnd });
+  f.user.memberships.push(f.membership);
+  f.accounts.splice(0, f.accounts.length, { id: 'vip-unlimited', label: 'VIP', isUnlimited: true, validFrom: now, validUntil: f.membership.currentPeriodEnd, entries: [], sourcePurchase: { product: f.membership.product, membership: { id: 'vip', status: 'ACTIVE' } } });
+  await expect(bookOccurrenceAction(f.form)).rejects.toThrow('result=confirmed');
+  expect(mocks.tx.booking.create.mock.calls[0][0].data.policySnapshot.vipRenewalReservation).toEqual({ version: 1, membershipId: 'vip', creditAccountId: 'vip-unlimited', paidThroughAtBooking: '2026-11-06T22:09:25.000Z' });
+  expect(mocks.tx.creditLedgerEntry.create).not.toHaveBeenCalled();
+  expect(mocks.charge).not.toHaveBeenCalled();
+});
 
 describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]] as const)('%s booking entitlement', (_label, action) => {
   it('books a November Tricia event with the existing monthly credit once', async () => {
