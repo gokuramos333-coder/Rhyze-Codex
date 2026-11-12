@@ -23,7 +23,28 @@ function archiveReasonsSql(now: Date) {
       OR EXISTS (SELECT 1 FROM "Purchase" p WHERE p."userId"=u.id AND p.status='PENDING')
       OR EXISTS (SELECT 1 FROM "PaymentRecord" p WHERE
         (p."userId"=u.id OR (p."userId" IS NULL AND lower(btrim(p."customerEmail"))=lower(btrim(u.email))))
-        AND p.status IN ('FAILED','DISPUTED'))
+        AND p.status IN ('FAILED','DISPUTED')
+        -- Keep each failed obligation unless exactly one completed retry proves
+        -- settlement. The member marker selects its distinct full event key;
+        -- booking/kind/amount alone cannot identify a transfer operation.
+        AND (SELECT count(*) FROM "BookingTransfer" t
+          JOIN "Booking" b ON b.id=t."bookingId" AND b."userId"=t."memberId"
+          JOIN "PaymentRecord" s ON s."stripePaymentIntentId"=t."stripePaymentIntentId"
+          WHERE p.status='FAILED' AND p.kind='TRANSFER_FEE'
+            AND p."userId"=u.id AND p."stripePaymentIntentId" IS NULL
+            AND p."amountCents">0 AND p."refundedAmountCents"=0 AND p.currency='usd'
+            AND t.status='COMPLETED' AND t."bookingId"=p."bookingId" AND t."memberId"=p."userId"
+            AND t."toOccurrenceId" IS NOT NULL AND t."stripePaymentIntentId" IS NOT NULL
+            AND t."feeCents"=p."amountCents"
+            AND p."stripeEventId"='attendance-fee-failed:TRANSFER:' ||
+              CASE WHEN t.reason='Member self-reschedule' THEN 'member-transfer-fee-' ELSE 'transfer-fee-' END ||
+              t."bookingId" || '-' || t."fromOccurrenceId" || '-' || t."toOccurrenceId"
+            AND s."userId"=p."userId" AND s."bookingId"=p."bookingId"
+            AND s.kind='TRANSFER_FEE' AND s.status='SUCCEEDED'
+            AND s."amountCents"=p."amountCents" AND s.currency=p.currency AND s."refundedAmountCents"=0
+            AND s."occurredAt">p."occurredAt" AND s."occurredAt">p."updatedAt"
+            AND s."createdAt">p."createdAt" AND t."createdAt">=s."createdAt"
+            AND t."createdAt">=s."occurredAt") <> 1)
       OR EXISTS (SELECT 1 FROM "CommerceOrder" o WHERE
         (o."userId"=u.id OR (o."userId" IS NULL AND lower(btrim(o."customerEmail"))=lower(btrim(u.email))))
         AND (o.status IN ('PENDING','PAYMENT_FAILED','FULFILLMENT_REVIEW','DISPUTED')

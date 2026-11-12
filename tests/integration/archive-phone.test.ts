@@ -78,6 +78,169 @@ async function historicalOccurrence(status: 'SCHEDULED' | 'COMPLETED') {
     },
   });
 }
+type TransferFeeChannel = 'instructor' | 'member';
+type TransferFeeEvidence =
+  | 'exact retry'
+  | 'unrelated success'
+  | 'different destination'
+  | 'different source'
+  | 'different payment intent'
+  | 'earlier successful transfer'
+  | 'another failed destination';
+
+async function transferFeeRetryHistory(
+  userId: string,
+  channel: TransferFeeChannel,
+  evidence: TransferFeeEvidence = 'exact retry',
+) {
+  const source = await historicalOccurrence('COMPLETED');
+  const destination = await historicalOccurrence('COMPLETED');
+  const other = await historicalOccurrence('COMPLETED');
+  const instructor = await db.user.create({
+    data: { email: `${randomUUID()}@example.test`, role: 'INSTRUCTOR' },
+  });
+  await db.classOccurrence.update({
+    where: { id: source.id },
+    data: { instructorId: instructor.id },
+  });
+  const customerId = `cus_${randomUUID()}`;
+  await db.user.update({
+    where: { id: userId },
+    data: { stripeCustomerId: customerId },
+  });
+  // Both attempts were inside the STANDARD paid-transfer window (2–6 hours).
+  const failedAt = new Date(+source.startAt - 4 * 3600000);
+  const succeededAt = new Date(
+    +failedAt + (evidence === 'earlier successful transfer' ? -60000 : 60000),
+  );
+  const booking = await db.booking.create({
+    data: {
+      userId,
+      occurrenceId: source.id,
+      status: 'CONFIRMED',
+      bookedAt: new Date(+failedAt - 3600000),
+      createdAt: new Date(+failedAt - 3600000),
+      policySnapshot: {
+        accessType: 'STANDARD',
+        accessProductKind: 'CLASS_PACK',
+      },
+    },
+  });
+  const keyPrefix =
+    channel === 'member' ? 'member-transfer-fee' : 'transfer-fee';
+  const reason = channel === 'member' ? 'Member self-reschedule' : null;
+
+  async function failedAttempt(toOccurrenceId: string) {
+    // attendance-fee.ts retains this exact key and a null intent on failure.
+    // Instructor actions also retain PAYMENT_FAILED history; member actions do not.
+    await db.paymentRecord.create({
+      data: {
+        userId,
+        bookingId: booking.id,
+        kind: 'TRANSFER_FEE',
+        status: 'FAILED',
+        amountCents: 500,
+        stripeEventId: `attendance-fee-failed:TRANSFER:${keyPrefix}-${booking.id}-${source.id}-${toOccurrenceId}`,
+        stripeCustomerId: customerId,
+        stripePaymentIntentId: null,
+        occurredAt: failedAt,
+        createdAt: failedAt,
+        updatedAt: failedAt,
+      },
+    });
+    if (channel === 'instructor') {
+      await db.bookingTransfer.create({
+        data: {
+          bookingId: booking.id,
+          memberId: userId,
+          instructorId: instructor.id,
+          fromOccurrenceId: source.id,
+          toOccurrenceId,
+          status: 'PAYMENT_FAILED',
+          feeCents: 500,
+          reason,
+          createdAt: new Date(+failedAt + 1000),
+        },
+      });
+    }
+  }
+
+  await failedAttempt(destination.id);
+  if (evidence === 'another failed destination') await failedAttempt(other.id);
+  const paymentIntentId = `pi_${randomUUID()}`;
+  const payment = await db.paymentRecord.create({
+    data: {
+      userId,
+      bookingId: booking.id,
+      kind: 'TRANSFER_FEE',
+      status: 'SUCCEEDED',
+      amountCents: 500,
+      stripeEventId: `attendance-fee:${paymentIntentId}`,
+      stripeCustomerId: customerId,
+      stripePaymentIntentId: paymentIntentId,
+      occurredAt: succeededAt,
+      createdAt: succeededAt,
+      updatedAt: succeededAt,
+    },
+  });
+  if (evidence !== 'unrelated success') {
+    const fromOccurrenceId =
+      evidence === 'different source' ? other.id : source.id;
+    const toOccurrenceId =
+      evidence === 'different destination' ? other.id : destination.id;
+    const transferredAt = new Date(+succeededAt + 1000);
+    await db.bookingTransfer.create({
+      data: {
+        bookingId: booking.id,
+        memberId: userId,
+        instructorId: instructor.id,
+        fromOccurrenceId,
+        toOccurrenceId,
+        status: 'COMPLETED',
+        feeCents: 500,
+        stripePaymentIntentId:
+          evidence === 'different payment intent'
+            ? `pi_${randomUUID()}`
+            : paymentIntentId,
+        reason,
+        createdAt: transferredAt,
+      },
+    });
+    await db.booking.update({
+      where: { id: booking.id },
+      data: {
+        occurrenceId: toOccurrenceId,
+        policySnapshot: {
+          accessType: 'STANDARD',
+          accessProductKind: 'CLASS_PACK',
+          transferredFrom: fromOccurrenceId,
+          transferredAt: transferredAt.toISOString(),
+          transferRequestedBy: channel === 'member' ? 'MEMBER' : 'INSTRUCTOR',
+        },
+      },
+    });
+  }
+  // The class has since finished: isolate payment proof from future obligations.
+  await db.booking.update({
+    where: { id: booking.id },
+    data: { status: 'ATTENDED' },
+  });
+  return { bookingId: booking.id, paymentId: payment.id };
+}
+
+async function retainedTransferFeeHistory(bookingId: string) {
+  return {
+    booking: await db.booking.findUniqueOrThrow({ where: { id: bookingId } }),
+    payments: await db.paymentRecord.findMany({
+      where: { bookingId },
+      orderBy: { id: 'asc' },
+    }),
+    transfers: await db.bookingTransfer.findMany({
+      where: { bookingId },
+      orderBy: { id: 'asc' },
+    }),
+  };
+}
 async function planChange(membershipId: string, active: boolean) {
   return db.membershipPlanChange.create({
     data: {
@@ -453,6 +616,94 @@ describe('safe archive and phone against native PostgreSQL', () => {
           orderBy: { id: 'asc' },
         }),
       ).toEqual(entries);
+    },
+  );
+  // RED target: the current blanket FAILED predicate rejects these exact retries.
+  // A booking/kind/amount-only exemption must still fail the negative cases below.
+  it.each([
+    { channel: 'instructor', archived: false },
+    { channel: 'instructor', archived: true },
+    { channel: 'member', archived: false },
+    { channel: 'member', archived: true },
+  ] as const)(
+    'permits an exact settled transfer-fee retry ($channel, archived $archived) without rewriting history',
+    async ({ channel, archived }) => {
+      const u = await member();
+      if (archived) await changeClientArchive(db, owner, u.id, 'archive');
+      const fixture = await transferFeeRetryHistory(u.id, channel);
+      const retained = await retainedTransferFeeHistory(fixture.bookingId);
+      expect(retained.payments).toHaveLength(2);
+      expect(retained.transfers).toHaveLength(channel === 'instructor' ? 2 : 1);
+      expect(await getClientArchive(db, u.id)).toEqual({
+        archived,
+        effectivelyArchived: archived,
+        reasons: [],
+      });
+      await changeClientArchive(db, owner, u.id, 'archive');
+      await expectHidden(u.id);
+      await changeClientArchive(db, owner, u.id, 'restore');
+      expect(await visible(u.id)).not.toBeNull();
+      expect(await retainedTransferFeeHistory(fixture.bookingId)).toEqual(
+        retained,
+      );
+    },
+  );
+  it.each([
+    'unrelated success',
+    'different destination',
+    'different source',
+    'different payment intent',
+    'earlier successful transfer',
+    'another failed destination',
+  ] as const)(
+    'keeps transfer-fee failure outstanding with %s despite the same booking/kind/amount',
+    async (evidence) => {
+      for (const archived of [false, true]) {
+        const u = await member();
+        if (archived) await changeClientArchive(db, owner, u.id, 'archive');
+        const fixture = await transferFeeRetryHistory(
+          u.id,
+          'instructor',
+          evidence,
+        );
+        const retained = await retainedTransferFeeHistory(fixture.bookingId);
+        await expectBlocked(
+          u.id,
+          archived,
+          'Active billing or unresolved payment',
+        );
+        expect(await retainedTransferFeeHistory(fixture.bookingId)).toEqual(
+          retained,
+        );
+      }
+    },
+  );
+  it.each([
+    { status: 'REFUNDED', refundedAmountCents: 500 },
+    { status: 'PARTIALLY_REFUNDED', refundedAmountCents: 100 },
+    { status: 'DISPUTED', refundedAmountCents: 0 },
+    { status: 'SUCCEEDED', refundedAmountCents: 100 },
+  ] as const)(
+    'does not settle a transfer-fee failure with $status / $refundedAmountCents refunded',
+    async ({ status, refundedAmountCents }) => {
+      for (const archived of [false, true]) {
+        const u = await member();
+        if (archived) await changeClientArchive(db, owner, u.id, 'archive');
+        const fixture = await transferFeeRetryHistory(u.id, 'member');
+        await db.paymentRecord.update({
+          where: { id: fixture.paymentId },
+          data: { status, refundedAmountCents },
+        });
+        const retained = await retainedTransferFeeHistory(fixture.bookingId);
+        await expectBlocked(
+          u.id,
+          archived,
+          'Active billing or unresolved payment',
+        );
+        expect(await retainedTransferFeeHistory(fixture.bookingId)).toEqual(
+          retained,
+        );
+      }
     },
   );
   it.each([
