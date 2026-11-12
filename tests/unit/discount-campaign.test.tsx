@@ -70,5 +70,5 @@ it('links Sales to the owner-only Discounts route and shows pack code entry', ()
 });
 it('renders owner terms, eligible product selection and explicit lease/deferred policy', () => {
  const html=renderToStaticMarkup(<DiscountCampaignForm products={[{ id:'monthly',name:'Synthetic monthly' }]} action={async () => {}} />);
- for (const text of ['Create discount code','America/New_York','First payment only','30 minutes','One use per customer per sale','Provider verification pending','Disabling does not revoke','No stacking','Fixed amounts','productIds','datetime-local']) expect(html).toContain(text);
+ for (const text of ['Create discount code','America/New_York','First payment only','30 minutes','One use per customer per sale','Codes start disabled','Disabling does not revoke','No stacking','Fixed amounts','productIds','datetime-local']) expect(html).toContain(text);
 });

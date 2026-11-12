@@ -13,7 +13,7 @@ export function DiscountCampaignForm({ products, action }: { products: { id: str
   return <form onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); startTransition(() => submit(data)); }} className="grid min-w-0 gap-4 rounded border bg-white p-5">
     {result?.error && <p role="alert" className="border border-red-500 p-3">{result.error}</p>}
     <h2 className="text-2xl font-bold">Create discount code</h2>
-    <p role="note">Provider verification pending: do not advertise or launch codes yet. Requests processed too late by the payment provider can fail, even if authorized before closing; the deadline is never extended automatically.</p>
+    <p role="note">Codes start disabled. Review the dates, discount and eligible products, then enable the code when you are ready to share it.</p>
     <p>First payment only: first monthly payment or one-time class pack. Renewals return to regular price. Exact percentage in cents, not whole-dollar rounding.</p>
     <p>No stacking. Instructor referrals remain separate. One use per customer per sale. A different sale can be used later. Refunded redemptions remain used pending a separate policy decision.</p>
     <p>Redemption times are America/New_York. New checkouts stop at the exact advertised end. Checkouts authorized before closing can finish until 30 minutes after the sale closes, or their original session expiry if earlier (sessions last at most 24 hours). Finish means completing Checkout, not bank settlement or webhook arrival. Disabling does not revoke existing valid sessions; it stops new admissions. Legitimate completed payments can settle later.</p>
