@@ -1,4 +1,7 @@
 'use server';
+import type { Prisma } from '@prisma/client';
+import { vipRenewalReservation, vipRenewalEntitlementInclude, renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
+import { releaseRenewalBookingSpend } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { isOwnerUnlimitedAccess } from '@/lib/domain/credits/owner-unlimited-access';
 import { occurrenceDurationMinutes, occurrenceTitle, occurrenceInstructorName } from '@/lib/domain/schedule/occurrence-management';
 import { publicOccurrenceUrl, notifyWaitlistOpening, completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
@@ -78,7 +81,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     const now = new Date();
     const currentUser = await tx.user.findUnique({
       where: { id: user.id },
-      include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } },
+      include: { instructorProfile: true, memberships: { include: vipRenewalEntitlementInclude } },
     });
     if (!currentUser || currentUser.status !== 'ACTIVE') return 'access';
     const instructorAccess = instructorStandardClassAccess({ user: currentUser, isEvent: occurrence.template.isEvent });
@@ -101,13 +104,17 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       return 'waiver';
     }
 
-    if (
-      await tx.booking.findUnique({
-        where: { occurrenceId_userId: { occurrenceId, userId: user.id } },
-      })
-    ) {
-      return 'duplicate';
-    }
+    const existingBooking = await tx.booking.findUnique({
+      where: { occurrenceId_userId: { occurrenceId, userId: user.id } },
+    });
+    const previousSnapshot = (existingBooking?.policySnapshot ?? {}) as Prisma.JsonObject;
+    const release = previousSnapshot.vipRenewalRelease as Prisma.JsonObject | undefined;
+    const priorRecovery = previousSnapshot.vipRenewalRecovery as Prisma.JsonObject | undefined;
+    const recovery = existingBooking?.status === 'CANCELLED' && !occurrence.template.isEvent &&
+      renewalFunding(previousSnapshot) && release?.reason === 'RENEWAL_UNFUNDED' &&
+      priorRecovery?.releasedAt !== release.cancelledAt &&
+      release.cancelledAt === existingBooking.cancelledAt?.toISOString();
+    if (existingBooking && !recovery) return 'duplicate';
 
     const overlap = await tx.booking.findFirst({
       where: {
@@ -250,7 +257,8 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           productAllowsOccurrence &&
           validEventAccess &&
           creditAccountCanBook({ membershipStatus: item.sourcePurchase?.membership?.status ?? null }) &&
-          vipCreditAccountCanBook({ account: item, memberships: currentUser.memberships, now, occurrenceStartsAt: occurrence.startAt }) &&
+          (vipCreditAccountCanBook({ account: item, memberships: currentUser.memberships, now, occurrenceStartsAt: occurrence.startAt }) ||
+            vipRenewalReservation({ account: item, memberships: currentUser.memberships, now, occurrenceStartsAt: occurrence.startAt, isEvent: occurrence.template.isEvent })) &&
           validSingleClassCredit &&
           validIntroTrialCredit &&
           (item.isUnlimited ||
@@ -272,17 +280,30 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     const accessType = (instructorAccess || isOwnerUnlimitedAccess(account))
       ? 'COMPLIMENTARY'
       : accessTypeForProductKind(accessProductKind);
-    const booking = await tx.booking.create({
-      data: {
+    const renewalReservation = !instructorAccess && account ? vipRenewalReservation({ account, memberships: currentUser.memberships, now, occurrenceStartsAt: occurrence.startAt, isEvent: occurrence.template.isEvent }) : null;
+    // Released seats require actual paid recovery, never another contingent hold.
+    if (recovery && (!account || instructorAccess || renewalReservation ||
+      account.id !== renewalFunding(previousSnapshot)?.creditAccountId ||
+      account.sourcePurchase?.status !== 'PAID' || !account.sourcePurchase.paidAt ||
+      account.validFrom > occurrence.startAt || !account.validUntil || account.validUntil <= occurrence.startAt ||
+      currentUser.memberships.some(m => m.id === account.sourcePurchase?.membership?.id &&
+        (m.billingLockToken || m.billingLockNeedsReview || m.status !== 'ACTIVE' ||
+          (m.planChangeState as { fundingReversedAt?: number } | null)?.fundingReversedAt ||
+          !m.currentPeriodEnd || m.currentPeriodEnd <= occurrence.startAt ||
+          m.freezes.some(f => !f.cancelledAt && f.startAt <= occurrence.startAt && f.endAt > occurrence.startAt))))) return 'access';
+    const bookingData = {
         occurrenceId,
         userId: user.id,
         policySnapshot: bookingPolicySnapshotWithAccess({
-          currentSnapshot: { creditAccountId: instructorAccess ? null : account?.id ?? null, ...(!instructorAccess ? classTicketPolicySnapshot(account?.sourcePurchase?.policyAcceptance) : {}) },
+          currentSnapshot: { ...previousSnapshot, ...(recovery ? { vipRenewalRecovery: { releasedAt: release!.cancelledAt, bookedAt: now.toISOString(), creditAccountId: account!.id } } : {}), ...(renewalReservation ? { vipRenewalReservation: renewalReservation } : {}), creditAccountId: instructorAccess ? null : account?.id ?? null, ...(!instructorAccess ? classTicketPolicySnapshot(account?.sourcePurchase?.policyAcceptance) : {}) },
           accessType,
           accessProductKind,
         }),
-      },
-    });
+    };
+    const booking = recovery && existingBooking
+      ? await tx.booking.update({ where: { id: existingBooking.id }, data: { ...bookingData, status: 'CONFIRMED', cancelledAt: null, bookedAt: now } })
+      : await tx.booking.create({ data: bookingData });
+    if (recovery) await tx.auditLog.create({ data: { actorId: user.id, action: 'booking.vip-renewal-rebooked', entityType: 'Booking', entityId: booking.id, before: { cancelledAt: existingBooking!.cancelledAt, policySnapshot: previousSnapshot }, after: { creditAccountId: account!.id, bookedAt: now } } });
     await completeWaitlistBooking(tx, occurrenceId, user.id);
     if (!instructorAccess && trial && trialAccess?.allowed && !trial.activatedAt) {
       await tx.membership.update({
@@ -349,7 +370,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
         bookingsUrl: '/member/bookings',
       },
       scheduledFor: new Date(occurrence.startAt.getTime() - 24 * 60 * 60 * 1000),
-      dedupeKey: `class-reminder:${booking.id}:${occurrence.id}`,
+      dedupeKey: `class-reminder:${booking.id}:${occurrence.id}${recovery ? `:${now.toISOString()}` : ''}`,
     });
     if (!instructorAccess && account && !account.isUnlimited) {
       await tx.creditLedgerEntry.create({
@@ -462,7 +483,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
     });
     await tx.emailMessage.updateMany({
       where: {
-        dedupeKey: `class-reminder:${booking.id}:${booking.occurrenceId}`,
+        payload: { path: ['bookingId'], equals: booking.id },
         template: 'CLASS_REMINDER',
         status: { in: ['QUEUED', 'PROCESSING'] },
       },
@@ -487,7 +508,10 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       ? 'This cancellation falls inside the late-cancel window, so the credit was not returned.'
       : 'The booking was marked as a late cancellation.';
     if (reservation && creditDecision === 'RELEASE_RESERVATION') {
-      await tx.creditLedgerEntry.create({
+      if (renewalFunding(booking.policySnapshot)) {
+        creditReturned = await releaseRenewalBookingSpend(tx, booking.id);
+      } else {
+        await tx.creditLedgerEntry.create({
         data: {
           creditAccountId: reservation.creditAccountId,
           bookingId: booking.id,
@@ -496,10 +520,12 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
           reason: 'Booking cancelled',
         },
       });
-      creditReturned = true;
+        creditReturned = true;
+      }
       creditResult = booking.occurrence.template.isEvent
         ? 'Your event credit was returned to your account.'
         : 'Your class credit was returned to your account.';
+      if (!creditReturned) creditResult = 'No outstanding credit was spent or returned for this booking.';
     } else if (creditDecision === 'CREATE_EVENT_CREDIT') {
       const sourceReturnKey = eventCancellationCreditKey(booking.id);
       const existingCredit = await tx.creditLedgerEntry.findUnique({

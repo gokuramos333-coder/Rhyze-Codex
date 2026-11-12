@@ -50,6 +50,10 @@ describe.skipIf(!url)('owner unlimited standard-class access', () => {
     expect(transferEntitlementAllowed({ ...transfer, sourceIsEvent: true, destinationIsEvent: true })).toBe(false);
   });
   it('lets an owner actually book a standard class, preserves unlimited access, and rejects events/expired dates', async () => {
+    // Unlimited credit access does not bypass the current required waiver.
+    const waiver = await db.waiverVersion.findFirst({ where: { isActive: true, requiresSign: true } })
+      ?? await db.waiverVersion.create({ data: { version: 900002, title: 'Synthetic owner access waiver', body: 'Synthetic test only', effectiveAt: now, isActive: true, requiresSign: true } });
+    await db.waiverAcceptance.create({ data: { userId, waiverVersionId: waiver.id, signedDate: now, mediaConsent: false } });
     const account = await db.$transaction(tx => grantOwnerUnlimitedAccess(tx, input));
     await db.classCategory.create({ data: { id, name: 'Grant test', slug: id } });
     for (const isEvent of [false, true]) await db.classTemplate.create({ data: { id: id + isEvent, slug: id + isEvent, categoryId: id, name: 'Synthetic grant class', description: 'Test only', isEvent, durationMinutes: 50, defaultCapacity: 20, tags: [], equipment: [] } });

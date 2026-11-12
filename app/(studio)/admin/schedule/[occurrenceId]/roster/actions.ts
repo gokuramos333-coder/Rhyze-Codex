@@ -1,4 +1,5 @@
 'use server';
+import { vipRenewalReservation, vipRenewalEntitlementInclude } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { isOwnerUnlimitedAccess } from '@/lib/domain/credits/owner-unlimited-access';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
@@ -20,7 +21,7 @@ import {
   standardSingleClassCreditCanBook,
 } from '@/lib/domain/bookings/booking-rules';
 import { availableMembershipCredits } from '@/lib/domain/credits/membership-renewal';
-import { vipCreditAccountCanBook, vipCreditBenefit, vipEntitlementInclude } from '@/lib/domain/credits/vip-access';
+import { vipCreditAccountCanBook, vipCreditBenefit } from '@/lib/domain/credits/vip-access';
 import { bookingPolicySnapshotWithAccess } from '@/lib/domain/bookings/booking-access';
 import { accessTypeForProductKind } from '@/lib/domain/bookings/cancellation-policy';
 
@@ -51,7 +52,7 @@ export async function addMemberToClassAction(formData: FormData) {
     });
     if (!occurrence || occurrence.status !== 'SCHEDULED') return 'unavailable';
 
-    const member = await tx.user.findFirst({
+    const matches = await tx.user.findMany({
       where: {
         AND: [{ OR: [
           { role: { in: ['MEMBER', 'INSTRUCTOR'] } },
@@ -59,18 +60,27 @@ export async function addMemberToClassAction(formData: FormData) {
         ] }],
         status: 'ACTIVE',
         OR: [
-          { email: { equals: memberQuery, mode: 'insensitive' } },
           { email: { contains: memberQuery, mode: 'insensitive' } },
           { name: { contains: memberQuery, mode: 'insensitive' } },
         ],
       },
       orderBy: [{ email: 'asc' }],
-      include: { instructorProfile: true, memberships: { include: vipEntitlementInclude } },
+      include: { instructorProfile: true },
     });
-    if (!member) return 'member-not-found';
-    await lockMembershipEntitlements(tx, member.id);
-    // The user search preceded the lock; reread paid entitlement after acquiring it.
-    member.memberships = await tx.membership.findMany({ where: { userId: member.id }, include: vipEntitlementInclude });
+    const exact = matches.filter(candidate => candidate.email.toLowerCase() === memberQuery.toLowerCase());
+    const candidates = exact.length ? exact : matches;
+    if (!candidates.length) return 'member-not-found';
+    if (candidates.length !== 1) return 'member-ambiguous';
+    await lockMembershipEntitlements(tx, candidates[0].id);
+    // Search precedes the lock: reread identity, eligibility and renewal state.
+    const member = await tx.user.findUnique({
+      where: { id: candidates[0].id },
+      include: { instructorProfile: true, memberships: { include: vipRenewalEntitlementInclude } },
+    });
+    if (!member || member.status !== 'ACTIVE' || !(
+      ['MEMBER', 'INSTRUCTOR'].includes(member.role) ||
+      (['OWNER', 'ADMIN', 'MANAGER'].includes(member.role) && member.instructorProfile?.isActive)
+    )) return 'member-not-found';
     const now = new Date();
     const instructorAccess = instructorStandardClassAccess({ user: member, isEvent: occurrence.template.isEvent });
 
@@ -78,6 +88,16 @@ export async function addMemberToClassAction(formData: FormData) {
       where: { occurrenceId_userId: { occurrenceId, userId: member.id } },
     });
     if (existing && existing.status === 'CONFIRMED') return 'member-already-booked';
+    // Recovery is deliberately not an admin-add operation: retain funding/history.
+    const previousSnapshot = existing?.policySnapshot;
+    if (previousSnapshot && typeof previousSnapshot === 'object' && !Array.isArray(previousSnapshot) &&
+      ['vipRenewalReservation', 'vipRenewalRelease', 'vipRenewalRecovery'].some(key => key in previousSnapshot)) {
+      return 'member-renewal-recovery';
+    }
+    const activeWaiver = await tx.waiverVersion.findFirst({ where: { isActive: true, requiresSign: true }, select: { id: true } });
+    if (!activeWaiver || !(await tx.waiverAcceptance.findUnique({
+      where: { waiverVersionId_userId: { waiverVersionId: activeWaiver.id, userId: member.id } },
+    }))) return 'member-waiver';
 
     const overlap = await tx.booking.findFirst({
       where: {
@@ -144,7 +164,8 @@ export async function addMemberToClassAction(formData: FormData) {
         productAllowsOccurrence &&
         validEventAccess &&
         creditAccountCanBook({ membershipStatus: account.sourcePurchase?.membership?.status ?? null }) &&
-        vipCreditAccountCanBook({ account, memberships: member.memberships, now, occurrenceStartsAt: occurrence.startAt }) &&
+        (vipCreditAccountCanBook({ account, memberships: member.memberships, now, occurrenceStartsAt: occurrence.startAt }) ||
+          vipRenewalReservation({ account, memberships: member.memberships, now, occurrenceStartsAt: occurrence.startAt, isEvent: occurrence.template.isEvent })) &&
         validSingleClassCredit &&
         (account.isUnlimited || creditBalance(
           account.entries,
@@ -155,8 +176,11 @@ export async function addMemberToClassAction(formData: FormData) {
     if (!creditAccount && !instructorAccess) return 'member-no-credit';
 
     const accessProductKind = instructorAccess ? null : creditAccount && vipCreditBenefit(creditAccount) ? 'VIP' : currentCreditProduct(creditAccount)?.kind ?? null;
+    const renewal = !instructorAccess && creditAccount
+      ? vipRenewalReservation({ account: creditAccount, memberships: member.memberships, now, occurrenceStartsAt: occurrence.startAt, isEvent: occurrence.template.isEvent })
+      : null;
     const policySnapshot = bookingPolicySnapshotWithAccess({
-      currentSnapshot: { creditAccountId: instructorAccess ? null : creditAccount?.id ?? null, ...(!instructorAccess ? classTicketPolicySnapshot(creditAccount?.sourcePurchase?.policyAcceptance) : {}) },
+      currentSnapshot: { ...(renewal ? { vipRenewalReservation: renewal } : {}), creditAccountId: instructorAccess ? null : creditAccount?.id ?? null, ...(!instructorAccess ? classTicketPolicySnapshot(creditAccount?.sourcePurchase?.policyAcceptance) : {}) },
       accessType: (instructorAccess || isOwnerUnlimitedAccess(creditAccount)) ? 'COMPLIMENTARY' : accessTypeForProductKind(accessProductKind),
       accessProductKind,
     });

@@ -1,3 +1,4 @@
+import { reconcileVipRenewalStripeEvent } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
@@ -86,6 +87,8 @@ export async function POST(request: Request) {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       ),
     );
+    phase = 'vip-renewal-reservations';
+    await reconcileVipRenewalStripeEvent(prisma, hydratedEvent);
     if (account && eventNeedsReceipt(event)) {
       phase = 'receipt-refresh';
       await refreshStripeEventReceipt(prisma, stripe, hydratedEvent, account);

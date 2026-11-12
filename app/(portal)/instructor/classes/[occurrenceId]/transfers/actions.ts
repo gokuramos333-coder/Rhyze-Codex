@@ -1,4 +1,6 @@
 'use server';
+import { renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { ownerUnlimitedAccountsInclude } from '@/lib/domain/credits/owner-unlimited-access';
 import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
@@ -146,6 +148,13 @@ export async function transferBookingAction(formData: FormData) {
     for (const id of [...new Set([booking.occurrenceId, destinationId])].sort()) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
     }
+    let currentSnapshot = booking.policySnapshot;
+    if (renewalFunding(currentSnapshot)) {
+      await lockMembershipEntitlements(tx, booking.userId);
+      const current = await tx.booking.findUnique({ where: { id: booking.id } });
+      if (!current || current.status !== 'CONFIRMED' || current.occurrenceId !== booking.occurrenceId) return false;
+      currentSnapshot = current.policySnapshot;
+    }
     const destination = await tx.classOccurrence.findFirst({
       where: { id: destinationId, status: 'SCHEDULED' },
       include: { template: true },
@@ -184,7 +193,7 @@ export async function transferBookingAction(formData: FormData) {
         occurrenceId: destinationId,
         policySnapshot: {
           ...bookingPolicySnapshotWithAccess({
-            currentSnapshot: booking.policySnapshot,
+            currentSnapshot,
             accessType,
             accessProductKind: reservedProductKind,
           }),

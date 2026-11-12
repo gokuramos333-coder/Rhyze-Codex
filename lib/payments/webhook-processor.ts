@@ -1,3 +1,4 @@
+import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
@@ -213,10 +214,11 @@ async function nativeMembershipEntitlementDecision(
     ReturnType<typeof deriveStripeEventAction>,
     { type: 'INVOICE_PAID' | 'INVOICE_FAILED' | 'SUBSCRIPTION_CHANGED' }
   >,
-  membership: { id: string; purchaseId: string | null },
+  membership: { id: string; userId: string; purchaseId: string | null },
 ) {
   if (!membership.purchaseId)
     return { apply: false, settled: false, periodStart: null };
+  await lockMembershipEntitlements(tx, membership.userId);
   await tx.$queryRaw`SELECT id FROM "Purchase" WHERE id = ${membership.purchaseId} FOR UPDATE`;
   const purchase = await tx.purchase.findUnique({
     where: { id: membership.purchaseId },

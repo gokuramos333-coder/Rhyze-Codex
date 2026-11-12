@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { discountDatabaseDeclaration } from './disposable-discount-database';
+import { kellyTestDatabase } from './kelly-test-database';
+import { adminRenewalTestDatabase } from './admin-test-database';
 
 export const SITE_ID = 'e7002b82-50f2-4760-8a35-e4f9591bec4f';
 export const SITE_NAME = 'rhyze-fitness-rhyze-2';
@@ -230,6 +232,12 @@ export function releaseTestEnvironment(
   const discount = discountDatabaseDeclaration({ ...source, NODE_ENV: 'test' });
   env.DISCOUNT_TEST_DATABASE_URL = discount.url;
   env.DISCOUNT_TEST_DATA_DIRECTORY = discount.dir;
+  const kelly = kellyTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
+  env.KELLY_TEST_DATABASE_URL = kelly.url;
+  env.KELLY_TEST_DATABASE_DIR = kelly.identity.directory;
+  const admin = adminRenewalTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
+  env.ADMIN_RENEWAL_TEST_DATABASE_URL = admin.url;
+  env.ADMIN_RENEWAL_TEST_DATABASE_DIR = admin.identity.directory;
   return env;
 }
 

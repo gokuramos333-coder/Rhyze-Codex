@@ -1,4 +1,5 @@
 'use server';
+import { reconcileVipRenewalBookings } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { isDeepStrictEqual } from 'node:util';
 import type { Prisma } from '@prisma/client';
@@ -697,6 +698,7 @@ async function updateLockedMemberMembership(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
+    await lockMembershipEntitlements(tx, userId);
     await tx.membership.update({
       where: { id: membership.id },
       data: {
@@ -738,10 +740,14 @@ async function updateLockedMemberMembership(formData: FormData) {
       },
       dedupeKey: `membership-status:${membership.id}:${template}:${membership.updatedAt.getTime()}`,
     });
+  }).catch(error => {
+    if (membership.stripeSubscriptionId) throw new UncertainBillingChangeError('Provider changed billing but local transaction failed; review required.');
+    throw error;
   });
   revalidatePath(`/admin/members/${userId}`);
   revalidatePath('/member');
   revalidatePath('/member/membership');
+  await reconcileVipRenewalBookings(prisma, { userId });
   redirect(`/admin/members/${userId}?sent=membership-action`);
 }
 
@@ -781,6 +787,7 @@ async function scheduleLockedMembershipFreeze(formData: FormData) {
 
   const today = new Date().toISOString().slice(0, 10);
   const activateNow = startDate <= today;
+  let providerChanged = false;
   try {
     if (activateNow && membership.stripeSubscriptionId) {
       if (!stripeIsConfigured()) throw new Error('Stripe is not configured');
@@ -789,8 +796,10 @@ async function scheduleLockedMembershipFreeze(formData: FormData) {
         { pause_collection: { behavior: 'void' } },
         { idempotencyKey: `membership-freeze-${membership.id}-${startDate}` },
       );
+      providerChanged = true;
     }
     await prisma.$transaction(async (tx) => {
+      await lockMembershipEntitlements(tx, userId);
       const freeze = await tx.membershipFreeze.create({
         data: {
           membershipId,
@@ -827,12 +836,14 @@ async function scheduleLockedMembershipFreeze(formData: FormData) {
       });
     });
   } catch (error) {
+    if (providerChanged) throw new UncertainBillingChangeError('Provider changed billing but local freeze failed; review required.');
     if (error instanceof UncertainBillingChangeError) throw error;
     redirect(`/admin/members/${userId}?error=freeze`);
   }
   revalidatePath(`/admin/members/${userId}`);
   revalidatePath('/member');
   revalidatePath('/member/membership');
+  await reconcileVipRenewalBookings(prisma, { userId });
   redirect(`/admin/members/${userId}?sent=freeze`);
 }
 
@@ -872,6 +883,7 @@ async function reviewLockedMembershipChangeRequest(formData: FormData) {
         );
       }
       await prisma.$transaction(async (tx) => {
+        await lockMembershipEntitlements(tx, userId);
         await tx.membership.update({
           where: { id: request.membershipId },
           data: { cancelAtPeriodEnd: true },
@@ -953,6 +965,7 @@ async function reviewLockedMembershipChangeRequest(formData: FormData) {
   });
   revalidatePath(`/admin/members/${userId}`);
   revalidatePath('/member/membership');
+  await reconcileVipRenewalBookings(prisma, { userId });
   redirect(`/admin/members/${userId}?sent=request-review`);
 }
 
