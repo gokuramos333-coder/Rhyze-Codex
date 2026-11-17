@@ -32,6 +32,7 @@ async function requestNetlify(operation, data, token, fetcher = fetch) {
     const envPath = `/accounts/${ACCOUNT}/env`;
     const routes = {
       getSite: ['GET', `/sites/${SITE}`],
+      listSiteDeploys: ['GET', `/sites/${SITE}/deploys?per_page=100&page=1`],
       getDeploy: ['GET', `/deploys/${id}`],
       getEnvVars: ['GET', `${envPath}?site_id=${SITE}`],
       getSiteDatabase: ['GET', `/sites/${SITE}/database?role=netlifydb_owner`],
