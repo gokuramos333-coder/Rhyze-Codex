@@ -127,13 +127,24 @@ describe('immutable candidate HTTP checks', () => {
     );
     expect(
       prepare.indexOf('assertHostedReceipt(receipt, approval)'),
-    ).toBeLessThan(prepare.indexOf('evidence.candidateHttp'));
-    expect(prepare.slice(prepare.indexOf('evidence.candidateHttp'))).toContain(
+    ).toBeLessThan(prepare.indexOf('evidence.candidateHttp = await verifyLiveHttp'));
+    expect(prepare.slice(prepare.indexOf('evidence.candidateHttp = await verifyLiveHttp'))).toContain(
       'await unchanged()',
     );
-    expect(prepare.slice(prepare.indexOf('evidence.candidateHttp'))).toContain(
+    expect(prepare.slice(prepare.indexOf('evidence.candidateHttp = await verifyLiveHttp'))).toContain(
       'assertHostedCandidate(await deploy(candidateId)',
     );
+  });
+  it('keeps closed-publication checks distinct from ordinary candidate HTTP verification',()=>{
+    const source=readFileSync('scripts/release/hosted.ts','utf8');
+    const prepare=source.slice(source.indexOf('async prepare()'),source.indexOf('async publish()'));
+    expect(prepare).toContain("if (closed)");
+    expect(prepare).toContain("status: 'DEFERRED_UNTIL_PUBLISHED_CLOSED'");
+    const verify=source.slice(source.indexOf('async verify()'),source.indexOf('async removeApproval()'));
+    expect(verify).toContain('assertHostedReceipt(receipt, hostedApproval)');
+    expect(verify).toContain('await verifyQuarantine(');
+    expect(verify).toContain('evidence.after = await verifyLiveHttp()');
+    expect(source).toContain("'VERIFIED_CLOSED'");
   });
   it.each([
     'identity',

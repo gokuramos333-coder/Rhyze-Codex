@@ -205,6 +205,8 @@ export function verifyBridgeReconciliation(
     scheduler.requestPaginationComplete !== true ||
     !Array.isArray(scheduler.requests) ||
     !identities ||
+    !Number.isFinite(Date.parse(identities.before?.observedAt)) ||
+    !Number.isFinite(Date.parse(identities.after?.observedAt)) ||
     ['before', 'after'].some(
       (k) =>
         identities[k]?.deployId !== expected.deployId ||
