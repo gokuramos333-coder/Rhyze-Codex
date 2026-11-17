@@ -72,6 +72,8 @@ function database(record: ReturnType<typeof linkedRecord> | null) {
   const receipts: any[] = [];
   const receiptRows = new Map<string, any>();
   const db = {
+    $executeRaw:vi.fn(async()=>1),
+    $queryRaw:vi.fn(async()=>[]),
     sombleTransaction: { findMany: vi.fn(async () => []) },
     user: { findFirst: vi.fn(async (_args: unknown) => ({ id: 'user_intro' })) },
     stripeEvent: {
@@ -82,6 +84,7 @@ function database(record: ReturnType<typeof linkedRecord> | null) {
     },
     paymentRecord: {
       findFirst: vi.fn(async () => record),
+      findUnique: vi.fn(async () => record),
       findMany: vi.fn(async () => (record ? [record] : [])),
       update: vi.fn(async (args: unknown) => { writes.push(args); return record; }),
       create: vi.fn(async (args: unknown) => { writes.push(args); return record; }),
@@ -92,6 +95,14 @@ function database(record: ReturnType<typeof linkedRecord> | null) {
 }
 
 describe('scheduled Stripe reconciliation', () => {
+  it('does not overwrite a refund committed while the sync waited for financial ownership', async () => {
+    stripeMocks.chargesList.mockResolvedValue({data:[charge()],has_more:false});
+    const {db,writes}=database(linkedRecord({occurredAt:new Date(0)}));
+    db.paymentRecord.findUnique.mockResolvedValue(linkedRecord({status:'REFUNDED',refundedAmountCents:700}));
+    await syncRecentStripePaymentRecords(db as never,{financialOnly:true});
+    expect(writes).toEqual([]);
+  });
+
   it('keeps a PI-backed Somble import as one payment while recording its provider receipt', async () => {
     stripeMocks.chargesList.mockResolvedValue({ data: [charge()], has_more: false });
     const { db, writes, receipts } = database(null);

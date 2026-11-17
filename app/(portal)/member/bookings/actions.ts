@@ -1,5 +1,7 @@
 'use server';
+import { assertFinancialRelease } from '@/lib/payments/financial-release';
 import { specialEventOfferMatches, specialEventCreditAllowed } from '@/lib/payments/black-friday-new-friend';
+import { confirmAttendanceService } from '@/lib/payments/refund-review';
 import { giftCreditAllows, giftCreditKind } from '@/lib/domain/credits/gift-credit';
 import type { Prisma } from '@prisma/client';
 import { vipRenewalReservation, vipRenewalEntitlementInclude, renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
@@ -224,6 +226,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       orderBy: { createdAt: 'asc' },
     });
     const specialEvent = specialEventOfferMatches(occurrence);
+    if (specialEvent) await assertFinancialRelease(tx);
     const account = prioritizeMemberEventCredits(accounts, occurrence.template).find(
       (item) => {
         if (specialEvent && !specialEventCreditAllowed(item)) return false;
@@ -478,6 +481,8 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       },
     });
     if (!booking) return;
+    if (booking.occurrenceId !== bookingForPolicy.occurrenceId || booking.updatedAt.getTime() !== bookingForPolicy.updatedAt.getTime())
+      throw Error('Booking changed after cancellation preview; review the current booking');
     const cancelledAt = new Date();
     await tx.booking.update({
       where: { id: booking.id },
@@ -593,6 +598,7 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
       creditReturned,
     });
     await notifyWaitlistOpening(tx, booking.occurrenceId, `${booking.id}:${cancelledAt.toISOString()}`);
+    if (feeResult?.status === 'SUCCEEDED') await confirmAttendanceService(tx,bookingId,feeResult.paymentIntentId);
     return { creditReturned };
     });
   } catch (error) {

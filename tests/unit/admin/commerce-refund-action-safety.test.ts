@@ -1,3 +1,4 @@
+vi.mock('@/lib/auth/financial-owner-access',()=>({assertFinancialApprover:vi.fn()}));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({

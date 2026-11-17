@@ -15,6 +15,9 @@ const local = {
     'postgresql://tester@127.0.0.1:51917/membership_plan_test',
   NEWSLETTER_TEST_DATABASE_URL:
     'postgresql://tester@127.0.0.1:51917/rhyze_newsletter_preview',
+  REFUND_TEST_DATABASE_URL: 'postgresql://refund_test@localhost:55479/refund_review_test?host=%2Fprivate%2Ftmp%2Fowned-refund',
+  REFUND_TEST_DATABASE_DIR: '/private/tmp/owned-refund/data',
+  REFUND_TEST_SOCKET_DIR: '/private/tmp/owned-refund',
   ARCHIVE_TEST_DATABASE_URL: 'postgresql://archive_test@localhost:55473/archive_phone_test?host=%2Fprivate%2Ftmp%2Fowned-archive',
   ARCHIVE_TEST_DATABASE_DIR: '/private/tmp/owned-archive/data',
   ARCHIVE_TEST_SOCKET_DIR: '/private/tmp/owned-archive',

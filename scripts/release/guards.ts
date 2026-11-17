@@ -1,3 +1,4 @@
+import { refundTestDatabase } from './refund-test-database';
 import { archiveTestDatabase } from './archive-test-database';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
@@ -239,6 +240,10 @@ export function releaseTestEnvironment(
   const admin = adminRenewalTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
   env.ADMIN_RENEWAL_TEST_DATABASE_URL = admin.url;
   env.ADMIN_RENEWAL_TEST_DATABASE_DIR = admin.identity.directory;
+  const refund = refundTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
+  env.REFUND_TEST_DATABASE_URL = refund.url;
+  env.REFUND_TEST_DATABASE_DIR = refund.identity.dir;
+  env.REFUND_TEST_SOCKET_DIR = refund.socket;
   const archive = archiveTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
   env.ARCHIVE_TEST_DATABASE_URL = archive.url;
   env.ARCHIVE_TEST_DATABASE_DIR = archive.identity.dir;

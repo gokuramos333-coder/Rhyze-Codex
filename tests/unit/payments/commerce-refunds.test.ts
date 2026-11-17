@@ -1,3 +1,4 @@
+vi.mock('@/lib/payments/financial-release',()=>({assertFinancialSubmission:vi.fn(async()=>{}),assertFinancialRelease:vi.fn(),withFinancialRelease:async(db:any,fn:any)=>db.$transaction(fn)}));
 import { describe, expect, it, vi } from 'vitest';
 import { refundCommerceOrderFullRemainder } from '@/lib/payments/commerce-refunds';
 import { queueEmail } from '@/lib/notifications/email-queue';
@@ -97,8 +98,10 @@ function stripe(refundStatus = 'succeeded', chargeRefunds: any[] = []) {
 function db(fixture = order()) {
   let refundOperation: any = null;
   const tx: any = {
+    user: {findUnique:async()=>({email:"melissa@rhyzefit.com",role:"OWNER",status:"ACTIVE"})},
     classOccurrence: { findUnique: vi.fn().mockResolvedValue(null) },
     $executeRaw: vi.fn(),
+    $queryRaw: vi.fn(async () => []),
     commerceOrder: {
       findFirst: vi.fn().mockResolvedValue(fixture),
       findMany: vi.fn().mockResolvedValue([fixture]),
@@ -147,6 +150,7 @@ function db(fixture = order()) {
     auditLog: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
   };
   const client: any = {
+    user: { findUnique: vi.fn(async () => ({id:"owner_event_refund", email:"melissa@rhyzefit.com",role:"OWNER",status:"ACTIVE"})) },
     $transaction: vi.fn(async (callback: (tx: any) => unknown) => callback(tx)),
     commerceRefund: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -205,7 +209,7 @@ describe('safe commerce refunds', () => {
 
     expect(s.refunds.create).toHaveBeenCalledWith(
       expect.objectContaining({ charge: 'ch_event_refund', amount: 3000 }),
-      { idempotencyKey: 'commerce-refund-full:order_event_refund' },
+      { idempotencyKey: 'commerce-refund-full:order_event_refund', maxNetworkRetries: 0, timeout: 20000 },
     );
     expect(f.tx.commerceOrder.update).toHaveBeenCalledWith({
       where: { id: 'order_event_refund' },
@@ -254,7 +258,7 @@ describe('safe commerce refunds', () => {
       f.tx,
       expect.objectContaining({
         template: 'PAYMENT_REFUND_CONFIRMATION',
-        dedupeKey: 'refund-confirmation:commerce:order_event_refund:3000',
+        dedupeKey: 'refund-confirmation:commerce:order_event_refund:re_event_refund',
       }),
     );
   });
@@ -510,4 +514,11 @@ describe('safe commerce refunds', () => {
       }),
     );
   });
+});
+
+it('takes the shared payment lock during commerce reservation and settlement', async () => {
+  const f = db(); const provider = stripe();
+  await refundCommerceOrderFullRemainder(f.client,provider as never,input);
+  const calls = f.tx.$executeRaw.mock.calls;
+  expect(calls.filter(([,key]: any) => key === 'financial:pi_event_refund').length).toBeGreaterThanOrEqual(2);
 });

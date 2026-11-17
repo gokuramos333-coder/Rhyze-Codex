@@ -1,4 +1,5 @@
 'use server';
+import { confirmAttendanceService } from '@/lib/payments/refund-review';
 import { renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { transferCreditAccountsInclude } from '@/lib/domain/transfers/transfer-credit-accounts';
@@ -61,6 +62,7 @@ export async function transferBookingAction(formData: FormData) {
   if (policy === 'BLOCKED') {
     await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.occurrenceId}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
       const changed = await tx.booking.updateMany({ where: { id: booking.id, status: 'CONFIRMED' }, data: { status: 'LATE_CANCELLED', cancelledAt: new Date() } });
       if (!changed.count) return;
       await tx.bookingTransfer.create({ data: { bookingId, memberId: booking.userId, instructorId: instructor.id, fromOccurrenceId: booking.occurrenceId, status: 'BLOCKED', reason } });
@@ -149,7 +151,10 @@ export async function transferBookingAction(formData: FormData) {
     for (const id of [...new Set([booking.occurrenceId, destinationId])].sort()) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
     }
-    let currentSnapshot = booking.policySnapshot;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+    const lockedBooking = await tx.booking.findUniqueOrThrow({where:{id:bookingId}});
+    if (lockedBooking.userId !== booking.userId || lockedBooking.occurrenceId !== booking.occurrenceId || lockedBooking.status !== 'CONFIRMED') return false;
+    let currentSnapshot = lockedBooking.policySnapshot;
     if (renewalFunding(currentSnapshot)) {
       await lockMembershipEntitlements(tx, booking.userId);
       const current = await tx.booking.findUnique({ where: { id: booking.id } });
@@ -232,6 +237,7 @@ export async function transferBookingAction(formData: FormData) {
       },
       dedupeKey: `booking-transfer:${booking.id}:${destination.id}`,
     });
+    if (paymentIntentId) await confirmAttendanceService(tx,bookingId,paymentIntentId);
     return true;
   });
   if (!outcome) {

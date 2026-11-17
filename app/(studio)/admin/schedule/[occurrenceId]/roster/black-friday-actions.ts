@@ -14,7 +14,7 @@ export async function blackFridayStaffAction(form:FormData){
   await claimBlackFridayGuest(prisma,{actorId:actor.id,orderId,userId:String(form.get('userId')||'')});
  }else if(operation==='CANCEL'||operation==='RECONCILE'){
   if(operation==='CANCEL'&&form.get('cancelConfirmed')!=='on')throw new Error('Confirm cancellation and remaining cash refund');
-  await manageBlackFridayTicket(prisma,getStripe(),{actorId:actor.id,orderId,operation,reason:String(form.get('reason')||''),sessionId:String(form.get('sessionId')||'')||undefined});
+  await manageBlackFridayTicket(prisma,getStripe(),{actorId:actor.id,orderId,operation,expectedRefundCents:Number(form.get('expectedRefundCents')),reason:String(form.get('reason')||''),sessionId:String(form.get('sessionId')||'')||undefined});
  }else throw new Error('Unknown operation');
  for (const id of [BLACK_FRIDAY_ID, 'cmw026ajl0001jn09jsqpqzij']) revalidatePath(`/admin/schedule/${id}/roster`);
  for (const id of [BLACK_FRIDAY_ID, 'cmw026ajl0001jn09jsqpqzij']) revalidatePath(`/instructor/classes/${id}/roster`);

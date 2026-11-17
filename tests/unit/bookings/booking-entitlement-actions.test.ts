@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => {
     waitlistEntry: { findUnique: vi.fn(), count: vi.fn(), upsert: vi.fn(), updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     $executeRaw: vi.fn(), user: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
     classOccurrence: { findUnique: vi.fn(), findFirst: vi.fn() }, waiverVersion: { findFirst: vi.fn() }, waiverAcceptance: { findUnique: vi.fn() },
-    booking: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn() },
+    booking: { findUniqueOrThrow: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn() },
     membership: { findFirst: vi.fn(), findMany: vi.fn() }, creditAccount: { findMany: vi.fn() },
     creditLedgerEntry: { create: vi.fn(), findFirst: vi.fn() }, auditLog: { create: vi.fn() }, bookingTransfer: { create: vi.fn() },
   };
@@ -32,6 +32,7 @@ function fixture(isEvent = false, role = 'INSTRUCTOR') {
   mocks.tx.user.findUnique.mockResolvedValue(user); mocks.tx.user.findFirst.mockResolvedValue(user); mocks.tx.user.findMany.mockResolvedValue([user]);
   mocks.tx.classOccurrence.findUnique.mockResolvedValue(occurrence);
   mocks.tx.waiverVersion.findFirst.mockResolvedValue({ id: 'waiver' }); mocks.tx.waiverAcceptance.findUnique.mockResolvedValue({ id: 'accepted' });
+  mocks.tx.booking.findUniqueOrThrow.mockImplementation(async (args: any) => { const row = await mocks.tx.booking.findUnique(args); if (!row) throw Error('Missing booking fixture'); return row; });
   mocks.tx.booking.findUnique.mockResolvedValue(null); mocks.tx.booking.findFirst.mockResolvedValue(null); mocks.tx.booking.count.mockResolvedValue(0);
   mocks.tx.booking.create.mockResolvedValue({ id: 'booking' }); mocks.tx.booking.upsert.mockResolvedValue({ id: 'booking' });
   mocks.tx.membership.findFirst.mockResolvedValue(null);
@@ -180,7 +181,7 @@ describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]
   });
   it.each([rescheduleMemberBookingAction, transferBookingAction])('rejects transferring an occurrence-bound ticket before any fee or booking mutation', async (transfer) => {
     const f = fixture(false, 'MEMBER');
-    const booking = { id: 'booking', source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', userId: mocks.actor.id, user: f.user, policySnapshot: { classTicket: { occurrenceId: 'class' } }, occurrence: { ...f.occurrence, instructorId: mocks.actor.id } };
+    const booking = { updatedAt: now, id: 'booking', source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', userId: mocks.actor.id, user: f.user, policySnapshot: { classTicket: { occurrenceId: 'class' } }, occurrence: { ...f.occurrence, instructorId: mocks.actor.id } };
     mocks.tx.booking.findUnique.mockResolvedValue(booking);
     mocks.tx.booking.findFirst.mockResolvedValue(booking);
     mocks.tx.creditLedgerEntry.findFirst.mockResolvedValue(null);
@@ -209,7 +210,7 @@ describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]
     f.accounts.splice(0, 1, { id: 'legacy', isUnlimited: true, label: 'VIP membership — unlimited standard class credits — September 2026', sourcePurchase: null });
     await expect(action(f.form)).rejects.toThrow(/confirmed|member-added/);
     const saved = _label === 'self' ? mocks.tx.booking.create.mock.calls[0][0].data : mocks.tx.booking.upsert.mock.calls[0][0].create;
-    const booking = { ...saved, id: 'booking', source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', user: f.user,
+    const booking = { updatedAt: now, ...saved, id: 'booking', source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', user: f.user,
       occurrence: { ...f.occurrence, instructorId: mocks.actor.id } };
     mocks.tx.booking.findUnique.mockResolvedValue(booking);
     mocks.tx.booking.findFirst.mockImplementation(async ({ where }: any) => where.id === 'booking' ? booking : null);
@@ -253,7 +254,7 @@ describe.each([['self', bookOccurrenceAction], ['admin', addMemberToClassAction]
 describe.each([['member', rescheduleMemberBookingAction], ['instructor', transferBookingAction]] as const)('%s transfer fresh entitlement', (_label, transfer) => {
   function transferFixture(snapshot: unknown = { accessType: 'STANDARD', accessProductKind: null }) {
     const f = fixture(false, 'MEMBER'); f.user.memberships.push(f.membership);
-    const booking = { id: 'booking', userId: f.user.id, source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', user: f.user, policySnapshot: snapshot,
+    const booking = { updatedAt: now, id: 'booking', userId: f.user.id, source: 'MEMBER', status: 'CONFIRMED', occurrenceId: 'class', user: f.user, policySnapshot: snapshot,
       occurrence: { ...f.occurrence, instructorId: mocks.actor.id } };
     mocks.tx.booking.findUnique.mockResolvedValue(booking);
     mocks.tx.booking.findFirst.mockImplementation(async ({ where }: any) => where.id === 'booking' ? booking : null);
@@ -305,7 +306,7 @@ describe.each([['member', rescheduleMemberBookingAction], ['instructor', transfe
     const f=fixture(false,'MEMBER');
     const trial={...f.membership,id:'trial',status:'TRIALING',activatedAt:new Date('2026-10-17T15:00Z'),currentPeriodEnd:new Date('2026-10-24T15:00Z'),product:{kind:'INTRO_TRIAL'},purchase:{status:'PAID',paidAt:new Date('2026-10-14T15:00Z'),creditAccount:{isUnlimited:true,validFrom:new Date('2026-10-17T15:00Z'),validUntil:new Date('2026-10-24T15:00Z')}}};
     f.user.memberships.push(trial);
-    const booking={id:'booking',userId:mocks.actor.id,occurrenceId:'source',status:'CONFIRMED',source:'MEMBER',user:f.user,policySnapshot:{accessType:'INTRO_TRIAL',creditAccountId:null,accessProductKind:null},occurrence:{...f.occurrence,instructorId:mocks.actor.id,startAt:new Date('2026-10-19T22:10Z')}};
+    const booking={updatedAt:now,id:'booking',userId:mocks.actor.id,occurrenceId:'source',status:'CONFIRMED',source:'MEMBER',user:f.user,policySnapshot:{accessType:'INTRO_TRIAL',creditAccountId:null,accessProductKind:null},occurrence:{...f.occurrence,instructorId:mocks.actor.id,startAt:new Date('2026-10-19T22:10Z')}};
     mocks.tx.booking.findUnique.mockResolvedValue(booking);
     mocks.tx.booking.findFirst.mockResolvedValueOnce(booking).mockResolvedValue(null);
     mocks.tx.creditLedgerEntry.findFirst.mockResolvedValue(null);

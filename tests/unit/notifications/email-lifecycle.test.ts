@@ -119,8 +119,10 @@ describe('Rhyze email lifecycle wiring', () => {
   });
 
   it('confirms Admin-issued refunds to the member', () => {
-    const actions = readFileSync('app/(studio)/admin/payments/actions.ts', 'utf8');
-    expect(actions).toContain("template: 'PAYMENT_REFUND_CONFIRMATION'");
+    const settlement = readFileSync('lib/payments/refund-review.ts', 'utf8');
+    const notification = readFileSync('lib/payments/refund-review-notification.ts', 'utf8');
+    expect(settlement).toMatch(/queueApprovedRefundConfirmation\(\s*tx,\s*original,\s*operation,\s*state,?\s*\)/);
+    expect(notification).toContain("template: 'PAYMENT_REFUND_CONFIRMATION'");
   });
 
   it('queues complete instructor document messages', () => {

@@ -9,13 +9,13 @@ vi.mock('@/lib/notifications/email-queue', () => ({ queueEmail: vi.fn() }));
 import { markAttendanceAction } from '@/app/(portal)/instructor/classes/[occurrenceId]/roster/actions';
 const original = new Date('2026-09-14T16:23:45Z');
 beforeEach(() => {
-  f.booking = { id: 'b', userId: 'u', occurrenceId: 'o', source: 'MEMBER', status: 'LATE_CANCELLED', cancelledAt: original,
-    attendance: { status: 'LATE_CANCELLED' }, policySnapshot: { accessType: 'STANDARD' },
+  f.booking = { id: 'b', userId: 'u', occurrenceId: 'o', source: 'MEMBER', status: 'LATE_CANCELLED', cancelledAt: original, updatedAt:original,
+    attendance: { status: 'LATE_CANCELLED', updatedAt: original }, policySnapshot: { accessType: 'STANDARD' },
     user: { email: 'test@example.test', name: 'Test', memberships: [] }, occurrence: { startAt: original, timezone: 'America/New_York', template: { name: 'Class' } } };
   f.prisma = { $executeRaw: vi.fn(), $queryRaw: vi.fn(), classOccurrence: { findUnique: async () => ({ instructorId: 'teacher' }) },
-    booking: { findFirst: async () => f.booking, update: async ({ data }: any) => Object.assign(f.booking, data) },
-    attendanceRecord: { count: async () => 0, deleteMany: async () => { f.booking.attendance = null; }, upsert: async ({ update }: any) => { f.booking.attendance = update; } },
-    creditLedgerEntry: { findFirst: async () => null }, paymentRecord: { findFirst: async () => null },
+    booking: { findFirst: async () => f.booking, findUniqueOrThrow: async () => f.booking, update: async ({ data }: any) => Object.assign(f.booking, data) },
+    attendanceRecord: { count: async () => 0, deleteMany: async () => { f.booking.attendance = null; }, upsert: async ({ update }: any) => { f.booking.attendance = {...update,updatedAt:original}; } },
+    creditLedgerEntry: { findFirst: async () => null }, paymentRecord: { findFirst: async () => null, findMany:async()=>[] }, auditLog:{create:vi.fn()},
     $transaction: async (fn: any) => fn(f.prisma) };
 });
 describe('attendance changes retain original cancellation history', () => {

@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+vi.mock('@/lib/auth/financial-owner-access',()=>({assertFinancialApprover:vi.fn()}));
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -22,19 +24,24 @@ describe('admin client transaction actions', () => {
     expect(page).toContain('sourceType" value="SOMBLE');
   });
 
-  it('full native refunds close membership access, clear source credits, and refresh Activity', () => {
+  it('approved one-time purchase settlement closes access and credits while renewal cash refunds retain service', () => {
     const memberAction = readFileSync('app/(studio)/admin/members/[userId]/actions.ts', 'utf8');
     const paymentsAction = readFileSync('app/(studio)/admin/payments/actions.ts', 'utf8');
     const commerceRefundHelper = readFileSync('lib/payments/commerce-refunds.ts', 'utf8');
 
     for (const source of [memberAction, paymentsAction]) {
-      expect(source).toContain("data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents }");
-      expect(source).toContain("where: { stripePaymentIntentId: purchase.stripePaymentIntentId }");
-      expect(source).toContain("data: { status: 'CANCELLED', cancelAtPeriodEnd: false");
-      expect(source).toContain('sourcePurchaseId');
-      expect(source).toContain("data: { validUntil:");
-      expect(source).toContain("revalidatePath('/admin/activity')");
+      expect(source).toContain('originalPurchaseRefundPayment');
+      expect(source).toContain('requestFinancialReview');
+      expect(source).not.toContain('stripe.refunds.create');
     }
+    const settlement = readFileSync('lib/payments/refund-review.ts','utf8');
+    const approvalAction = readFileSync('app/(studio)/admin/payments/refund-reviews/actions.ts','utf8');
+    expect(settlement).toMatch(/status: 'REFUNDED',\s*refundedAmountCents: purchase.amountCents/);
+    expect(settlement).toMatch(/status: 'CANCELLED',\s*cancelAtPeriodEnd: false/);
+    expect(settlement).toContain('sourcePurchaseId: purchase.id');
+    expect(settlement).toContain('data: { validUntil: new Date() }');
+    expect(settlement).toContain("operation.payload.servicePolicy !== 'PRESERVE_RECURRING_SERVICE'");
+    expect(approvalAction).toContain("revalidatePath('/admin/activity')");
     expect(paymentsAction).toContain('refundCommerceOrderFullRemainder');
     expect(commerceRefundHelper).toContain('{ commerceOrderId: order.id }');
     expect(commerceRefundHelper).toContain('{ stripePaymentIntentId: order.stripePaymentIntentId }');

@@ -1,3 +1,4 @@
+import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease } from '@/lib/payments/financial-release';
 import { blackFridaySalesEnabled } from './black-friday-release-gate';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
@@ -33,11 +34,13 @@ function ticketBookingPolicy(orderId:string,attendee:'BUYER'|'GUEST',occurrence:
 }
 export async function startBlackFridayCheckout(db: PrismaClient, stripe: Stripe, input: {userId:string; occurrenceId:string; slug:string; origin:string; ticketType:'SINGLE'|'PAIR'; friend?:{fullName:string;phone:string}; firstVisitDeclared?:boolean; useEventCredit?:boolean}, now=new Date()) {
  if(!blackFridaySalesEnabled()) throw new Error('Special ticket sales are not open yet.');
+ await assertFinancialRelease(db);
  if(!specialEventIdentity(input.occurrenceId,input.slug)) throw new Error('This offer is unavailable.');
  const pair=input.ticketType==='PAIR';
  if(pair && (!input.friend || input.firstVisitDeclared!==true)) throw new Error('Full friend contact and first-visit declaration are required.');
  if(!pair && (input.friend || input.useEventCredit || input.firstVisitDeclared)) throw new Error('Use the existing event-credit link for one attendee.');
  const held=await run(db,async tx=>{
+  await assertFinancialRelease(tx);
   // Match member booking and studio cancellation: occurrence admission first, then entitlement.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.occurrenceId}))`;
   await lockMembershipEntitlements(tx,input.userId); await lock(tx,input.occurrenceId);
@@ -78,7 +81,7 @@ export async function startBlackFridayCheckout(db: PrismaClient, stripe: Stripe,
   return {t:(await ticket(tx,id))!,order};
  });
  if(!held.order.stripeCheckoutSessionId && now>=held.t.expiresAt) throw new Error('Checkout outcome is uncertain. Contact staff; seats remain reserved.');
- const session=held.order.stripeCheckoutSessionId?await stripe.checkout.sessions.retrieve(held.order.stripeCheckoutSessionId):await stripe.checkout.sessions.create(held.t.parameters,{idempotencyKey:`black-friday:${held.order.id}`});
+ const session=held.order.stripeCheckoutSessionId?await stripe.checkout.sessions.retrieve(held.order.stripeCheckoutSessionId):await withFinancialRelease(db,async(tx,deadline)=>{await assertFinancialSubmission(tx,deadline);return stripe.checkout.sessions.create(held.t.parameters,{idempotencyKey:`black-friday:${held.order.id}`,maxNetworkRetries:0,timeout:20000});});
  await run(db,async tx=>{await lock(tx,held.t.occurrenceId);const order=await tx.commerceOrder.findUniqueOrThrow({where:{id:held.order.id}});if(order.stripeCheckoutSessionId && order.stripeCheckoutSessionId!==session.id) throw new Error('Checkout identity mismatch');await tx.commerceOrder.update({where:{id:order.id},data:{stripeCheckoutSessionId:session.id}});if(session.status==='expired')await applyBlackFridaySession(tx,session,now);});
  if(session.status!=='open'||!session.url)throw new Error('Checkout is closed. Refresh to start again or contact staff.');
  return {url:session.url,orderId:held.order.id};
@@ -117,8 +120,8 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
 }
 export async function blackFridayRoster(db:Db,occurrenceId:string){
  if(!specialEventIdentity(occurrenceId))return [];
- const tickets=await db.$queryRaw<Ticket[]>`SELECT * FROM "BlackFridayTicket" WHERE "occurrenceId"=${occurrenceId} AND state IN ('HELD','PAID','REVIEW','REVERSING','EXPIRED') ORDER BY "orderId"`;
- return tickets.flatMap(t=>[{orderId:t.orderId,name:t.buyerName,userId:t.userId,bookingId:t.buyerBookingId,manage:true,state:t.state,review:t.state!=='PAID'},...(t.seats===2?[{orderId:t.orderId,name:t.guestName!,userId:t.guestUserId,bookingId:t.guestBookingId,manage:false,state:t.state,review:t.state!=='PAID'}]:[])]);
+ const tickets=await db.$queryRaw<(Ticket & {cashRemainingCents:number})[]>`SELECT t.*,GREATEST(0,o."amountCents"-o."refundedAmountCents") AS "cashRemainingCents" FROM "BlackFridayTicket" t JOIN "CommerceOrder" o ON o.id=t."orderId" WHERE t."occurrenceId"=${occurrenceId} AND t.state IN ('HELD','PAID','REVIEW','REVERSING','EXPIRED') ORDER BY t."orderId"`;
+ return tickets.flatMap(t=>[{orderId:t.orderId,cashRemainingCents:t.cashRemainingCents,hasEventCredit:Boolean(t.creditAccountId),name:t.buyerName,userId:t.userId,bookingId:t.buyerBookingId,manage:true,state:t.state,review:t.state!=='PAID'},...(t.seats===2?[{orderId:t.orderId,cashRemainingCents:t.cashRemainingCents,hasEventCredit:Boolean(t.creditAccountId),name:t.guestName!,userId:t.guestUserId,bookingId:t.guestBookingId,manage:false,state:t.state,review:t.state!=='PAID'}]:[])]);
 }
 /** Authenticated guest claims only their own account. Contact is not login authentication. */
 export async function claimBlackFridayGuest(db:PrismaClient,input:{orderId:string;userId:string;actorId:string},now=new Date()){
@@ -156,12 +159,13 @@ export async function applyBlackFridayRefunds(tx:Tx,orderId:string,paymentIntent
  return reverseBlackFridayTicket(tx,{orderId,paymentIntentId,refundedAmountCents:settled._sum.amountCents||0,disputed:false},now);
 }
 /** Verified provider evidence only. Partial refund/dispute retain seats for staff review. */
-export async function reverseBlackFridayTicket(tx:Tx,input:{orderId:string;paymentIntentId:string;refundedAmountCents:number;disputed:boolean;disputeLost?:boolean},now=new Date()){
+export async function reverseBlackFridayTicket(tx:Tx,input:{orderId:string;paymentIntentId:string;refundedAmountCents:number;disputed:boolean;disputeLost?:boolean;disputeWon?:boolean},now=new Date()){
  const observed=await ticket(tx,input.orderId);if(!observed)throw Error('Ticket not found');await lock(tx,observed.occurrenceId);const t=await ticket(tx,input.orderId);if(!t)return false;
  const order=await tx.commerceOrder.findUniqueOrThrow({where:{id:t.orderId}});
  if(!order.stripePaymentIntentId||order.stripePaymentIntentId!==input.paymentIntentId)throw new Error('Reversal identity mismatch');
  if(['REFUNDED','DISPUTE_LOST'].includes(t.state))return true;
- const full=Boolean(input.disputeLost)||(input.refundedAmountCents>=order.amountCents && !input.disputed);
+ const disputed=input.disputed || (order.status==='DISPUTED' && !input.disputeLost && !input.disputeWon);
+ const full=Boolean(input.disputeLost)||(input.refundedAmountCents>=order.amountCents && !disputed);
  if(full){
   if(t.state!=='EXPIRED'){
   await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state='REVERSING' WHERE "orderId"=${t.orderId}`;
@@ -171,7 +175,7 @@ export async function reverseBlackFridayTicket(tx:Tx,input:{orderId:string;payme
   }
   await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state=${input.disputeLost?'DISPUTE_LOST':'REFUNDED'} WHERE "orderId"=${t.orderId}`;await releaseCredit(tx,t);
  }else if(t.state!=='EXPIRED')await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state='REVIEW' WHERE "orderId"=${t.orderId}`;
- await tx.commerceOrder.update({where:{id:t.orderId},data:{status:input.disputed?'DISPUTED':full?'REFUNDED':'PARTIALLY_REFUNDED',refundedAmountCents:Math.max(order.refundedAmountCents,input.refundedAmountCents)}});
- await tx.paymentRecord.updateMany({where:{commerceOrderId:t.orderId,stripePaymentIntentId:input.paymentIntentId},data:{status:input.disputed?'DISPUTED':full?'REFUNDED':'PARTIALLY_REFUNDED',refundedAmountCents:Math.max(order.refundedAmountCents,input.refundedAmountCents)}});
+ await tx.commerceOrder.update({where:{id:t.orderId},data:{status:disputed||input.disputeLost?'DISPUTED':full?'REFUNDED':'PARTIALLY_REFUNDED',refundedAmountCents:Math.max(order.refundedAmountCents,input.refundedAmountCents)}});
+ await tx.paymentRecord.updateMany({where:{commerceOrderId:t.orderId,stripePaymentIntentId:input.paymentIntentId},data:{status:disputed||input.disputeLost?'DISPUTED':full?'REFUNDED':'PARTIALLY_REFUNDED',refundedAmountCents:Math.max(order.refundedAmountCents,input.refundedAmountCents)}});
  await tx.auditLog.create({data:{action:full?'black-friday.released':'black-friday.reversal-review',entityType:'CommerceOrder',entityId:t.orderId}});return true;
 }

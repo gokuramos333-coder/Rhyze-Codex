@@ -1,3 +1,4 @@
+import { maintainFinancialReviewTasks } from '@/lib/payments/refund-review-tasks';
 import { bookingConfirmationIsDeliverable } from '@/lib/notifications/booking-confirmation-delivery';
 import { waitlistEmailIsDeliverable } from '@/lib/domain/bookings/waitlist';
 import { birthdayReminderExpired } from '@/lib/domain/birthdays/birthday-delivery';
@@ -21,8 +22,16 @@ export async function POST(request: Request) {
   if (!process.env.JOB_SECRET || authorization !== `Bearer ${process.env.JOB_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Financial tasks use existing in-app notifications even while email is paused.
+  let financialTasks: { processed: number; moreMayRemain: boolean } | { blocked: true };
+  try {
+    financialTasks = await maintainFinancialReviewTasks(prisma);
+  } catch {
+    console.error('Financial task assignment/escalation blocked; inspect owner configuration and backlog.');
+    financialTasks = { blocked: true };
+  }
   if (!emailDeliveryEnabled()) {
-    return NextResponse.json({ queued: 0, delivered: 0, failed: 0, paused: true });
+    return NextResponse.json({ queued: 0, delivered: 0, failed: 0, paused: true, financialTasks });
   }
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -189,6 +198,7 @@ export async function POST(request: Request) {
     }
   }
   return NextResponse.json({
+    financialTasks,
     queued: due.length,
     pendingApproval: due.length - expiredBirthdayIds.length - deliverable.length,
     newsletters,

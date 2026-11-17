@@ -1,4 +1,5 @@
 'use server';
+import { requestFinancialReview, confirmAttendanceService } from '@/lib/payments/refund-review';
 import { assertVipRenewalAttendanceFunded, releaseRenewalBookingSpend } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
@@ -128,27 +129,6 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
     }
   }
 
-  if (
-    booking.attendance?.status === 'NO_SHOW' &&
-    (transition.action === 'CLEAR' || status !== 'NO_SHOW')
-  ) {
-    const chargedNoShow = await prisma.paymentRecord.findFirst({
-      where: {
-        bookingId: booking.id,
-        kind: 'NO_SHOW_FEE',
-        status: 'SUCCEEDED',
-        stripePaymentIntentId: { not: null },
-      },
-      orderBy: { occurredAt: 'desc' },
-    });
-    if (chargedNoShow?.stripePaymentIntentId) {
-      await refundAttendanceFee({
-        paymentIntentId: chargedNoShow.stripePaymentIntentId,
-        amountCents: chargedNoShow.amountCents,
-        idempotencyKey: `refund-no-show-fee-${booking.id}`,
-      });
-    }
-  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -164,6 +144,8 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
         if (current.occurrenceId !== occurrenceId) throw Error('renewal-unfunded');
         await assertVipRenewalAttendanceFunded(tx, current);
       }
+      const lockedBooking = await tx.booking.findUniqueOrThrow({where:{id:booking.id},include:{attendance:true}});
+      if (lockedBooking.userId !== booking.userId || lockedBooking.occurrenceId !== occurrenceId || (lockedBooking.attendance?.updatedAt.getTime() ?? null) !== (booking.attendance?.updatedAt.getTime() ?? null)) throw Error('Attendance changed; reload the roster');
       if (transition.action === 'CLEAR') {
         await tx.attendanceRecord.deleteMany({
           where: { occurrenceId, userId: booking.userId },
@@ -194,6 +176,17 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
             booking.cancelledAt ?? (transition.attendanceStatus === 'LATE_CANCELLED' ? new Date() : null),
         },
       });
+      // Attendance and the review obligation commit together; no cash refund here.
+      if (booking.attendance?.status === 'NO_SHOW' && (transition.action === 'CLEAR' || status !== 'NO_SHOW')) {
+        const fees = await tx.paymentRecord.findMany({where:{bookingId:booking.id,kind:'NO_SHOW_FEE',status:'SUCCEEDED'}});
+        for (const fee of fees) if (fee.stripePaymentIntentId) await requestFinancialReview(tx, {
+          paymentIntentId:fee.stripePaymentIntentId, requesterId:actor.id, basisKind:'ATTENDANCE_CORRECTION',
+          reason:`Attendance correction by ${actor.id}: ${booking.attendance.status} to ${transition.action === 'CLEAR' ? 'UNMARKED' : status}; booking version ${booking.updatedAt.toISOString()}`,
+        });
+        await tx.auditLog.create({data:{actorId:actor.id,action:'attendance.corrected-fee-review',entityType:'Booking',entityId:booking.id,
+          before:{status:booking.attendance.status},after:{status:transition.action === 'CLEAR' ? null : status,feeUnchanged:true}}});
+      }
+      if (noShowFeeResult?.status === 'SUCCEEDED') await confirmAttendanceService(tx,booking.id,noShowFeeResult.paymentIntentId);
       if (booking.status === 'CONFIRMED' && transition.bookingStatus === 'LATE_CANCELLED') {
         await notifyWaitlistOpening(tx, occurrenceId, booking.id);
       }
@@ -252,7 +245,7 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
   redirect(attendanceRosterPath(
     actor.role,
     occurrenceId,
-    transition.action === 'CLEAR' ? 'attendance-cleared' : `attendance-${status.toLowerCase()}`,
+    booking.attendance?.status === 'NO_SHOW' && (transition.action === 'CLEAR' || status !== 'NO_SHOW') ? 'attendance-fee-review' : transition.action === 'CLEAR' ? 'attendance-cleared' : `attendance-${status.toLowerCase()}`,
   ));
 }
 

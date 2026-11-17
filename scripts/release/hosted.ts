@@ -1,3 +1,4 @@
+import { assertControlledRefundCutover } from './refund-cutover';
 import { execFile, execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -88,6 +89,7 @@ async function main() {
           'node_modules/netlify-cli/bin/run.js',
         ),
       );
+  assertControlledRefundCutover(git('diff','--name-status',options.baseRef!,'HEAD','--','prisma/migrations','netlify/database/migrations').split('\n'));
   const cli = candidates.find(
     (file) =>
       existsSync(file) &&

@@ -22,6 +22,7 @@ const addMemberMessages: Record<string, { text: string; tone: 'success' | 'error
   'attendance-checked_in': { text: 'Attendance saved: checked in.', tone: 'success' },
   'attendance-no_show': { text: 'Attendance saved: no-show.', tone: 'success' },
   'attendance-late_cancelled': { text: 'Attendance saved: late canceled.', tone: 'success' },
+  'attendance-fee-review': { text: 'Attendance corrected; fee unchanged. Any outstanding no-show fee requires approved-owner financial review.', tone: 'info' },
   'attendance-cleared': { text: 'Attendance mark cleared; booking returned to confirmed.', tone: 'info' },
   unavailable: { text: 'This class is not available for admin booking.', tone: 'error' },
   full: { text: 'This class is full.', tone: 'error' },

@@ -1,3 +1,4 @@
+import { assertControlledRefundCutover } from './refund-cutover';
 import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -112,6 +113,7 @@ async function main() {
     }
   };
   let tokenPromise: Promise<string> | undefined;
+  if (options.mode === 'publish') assertControlledRefundCutover(git('diff','--name-status',options.baseRef!,'HEAD','--','prisma/migrations','netlify/database/migrations').split('\n'));
   async function api<T>(
     operation: string,
     data: Record<string, unknown>,

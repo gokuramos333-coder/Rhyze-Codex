@@ -1,3 +1,4 @@
+import { financialLock, financialLedgerLock } from '@/lib/payments/refund-review';
 import type Stripe from 'stripe';
 import type { PrismaClient } from '@prisma/client';
 import { getStripe, stripeIsConfigured } from '@/lib/payments/stripe';
@@ -232,6 +233,7 @@ export async function syncRecentStripePaymentRecords(
           id: true,
           userId: true,
           stripePaymentIntentId: true,
+          bookingId: true,
           stripeEventId: true,
           status: true,
           amountCents: true,
@@ -323,7 +325,7 @@ export async function syncRecentStripePaymentRecords(
     const existingPaymentRecord = existingByCharge || (checkoutSession
       ? await prisma.paymentRecord.findFirst({
           where: { stripeCheckoutSessionId: checkoutSession.id },
-          select: { id: true, userId: true, purchaseId: true, commerceOrderId: true, membershipId: true },
+          select: { id: true, userId: true, bookingId: true, purchaseId: true, commerceOrderId: true, membershipId: true },
         })
       : null);
     // A billing email identifies the payer, who may be paying for another member.
@@ -351,13 +353,17 @@ export async function syncRecentStripePaymentRecords(
       ...(checkoutSession ? { stripeCheckoutSessionId: checkoutSession.id } : {}),
       ...(user ? { userId: user.id } : {}),
     };
+    const applied = await prisma.$transaction(async tx => {
+      await financialLock(tx, existingPaymentRecord?.bookingId ?? null, paymentIntentId);
+      const current = existingPaymentRecord ? await financialLedgerLock(tx,existingPaymentRecord.id) : await tx.paymentRecord.findUnique({where:{stripePaymentIntentId:paymentIntentId}});
+      if(current && (current.refundedAmountCents > charge.amount_refunded || (current.status === 'DISPUTED' && status !== 'DISPUTED'))) return false;
     if (existingPaymentRecord) {
-      await prisma.paymentRecord.update({
+      await tx.paymentRecord.update({
         where: { id: existingPaymentRecord.id },
         data: paymentRecordData,
       });
     } else {
-      await prisma.paymentRecord.create({
+      await tx.paymentRecord.create({
         data: {
           ...paymentRecordData,
           userId: user?.id || null,
@@ -367,6 +373,9 @@ export async function syncRecentStripePaymentRecords(
         },
       });
     }
+      return true;
+    });
+    if (!applied) { unchanged += 1; continue; }
     if (checkoutSession && !financialOnly && status === 'SUCCEEDED') {
       await prisma.$transaction(async (tx) => {
         await processStripeEvent(tx, syntheticCheckoutEvent(checkoutSession, charge));

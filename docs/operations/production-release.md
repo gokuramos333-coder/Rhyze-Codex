@@ -119,6 +119,13 @@ npm exec --yes --package=netlify-cli@27.8.0 -- netlify --version
 # the declared data directory must be SOCKET_DIR/data. The suite checks database,
 # socket transport, port, server user and exact data_directory before fixture writes.
 # No DATABASE_URL fallback is allowed for this suite. Do not use a shared cluster.
+# REFUND_TEST_DATABASE_URL, REFUND_TEST_DATABASE_DIR and REFUND_TEST_SOCKET_DIR
+# are required for the bounded financial-review suite. Provision a fresh owned
+# socket-only cluster with node scripts/test-refund-review.mjs; it applies the
+# exact mirrored refund-review migration and checks identity before fixture writes.
+# The runner supports -- COMMAND [ARGS] to keep its cluster alive for a parent
+# check. Do not use production or another worker's cluster. Retain the native
+# result, including observed PostgreSQL lock waiters, before release approval.
 # Tests require the current schema and the case-insensitive User-email index.
 # For discount_campaign_test, initialize the pinned pre-campaign baseline
 # schema then apply all six exact mirrored campaign migrations in order,
@@ -169,3 +176,40 @@ Before the Git-hosted migration, the site had no linked Git build. The CLI's man
 The Git-hosted workflow above replaces this manual CLI binding step. Its repository connection and deployment changes were separately approved by the owner; permanent PAT production database write access is not part of that approval.
 
 Provider references: [migration lifecycle](https://docs.netlify.com/build/data-and-storage/netlify-database/migrations/), [database access control](https://docs.netlify.com/build/data-and-storage/netlify-database/access-control/).
+
+## Controlled financial cutover hold (local implementation, unapplied)
+
+The refund-approval source now refuses supported publication while the new
+`20261113010000_refund_review` migration differs from the verified live base.
+See `scripts/release/refund-cutover.ts`. This is a release hold, not an ingress
+fence. Do not remove it on the basis of a publication lock, idle SQL, a new-app
+flag, or elapsed time. The separately investigated host procedure must exclude
+ALL old immutable/skew financial ingress and establish in-flight drain. The
+approved pause is restricted to affected charge/refund actions; it does not
+permit site-wide downtime, shared-key disabling, PAT elevation or destructive
+historical deployment deletion.
+
+Before activating strict deferred refunds, configure `FINANCIAL_REVIEW_OWNERS`
+from the supervisor's read-only evidence of existing Vanessa and Melissa
+identities. It is JSON with `vanessa` and `melissa` objects, each containing the
+exact `id` and `email`, plus `evidenceReference`. No identities are supplied by
+this source change and no roles are granted. Task maintenance verifies active
+approved ownership and exact ID/email matches. Existing persisted assignees
+cannot silently change when configuration changes.
+
+The existing protected five-minute email worker also maintains financial tasks
+in the existing in-app notification mechanism, even while email is paused.
+Both owners receive assignment and one deduplicated escalation when unresolved
+for 24 hours (on the next successful scheduled run). The returned
+`financialTasks.blocked` or `moreMayRemain` and queue backlog need monitoring;
+no new scheduled deployment was added. Failure of this maintenance is reported
+without suppressing unrelated transactional email. Dismissal of a notification
+never resolves the financial obligation.
+
+The queue now includes exact-payment review, recurring renewal cash-only copy,
+stale/legacy-case adjudication, investigation notes, backlog totals and separate
+keyset next-page controls. The earlier hosted synthetic preview does not cover
+these changes. Original recurring purchase refunds, missing-provider-identity
+collection clearance, broader cross-ledger native certification and updated UI
+review remain release blockers. Native PostgreSQL must run outside this worker's
+shared-memory sandbox; do not replace it with mocks or skip assertions.

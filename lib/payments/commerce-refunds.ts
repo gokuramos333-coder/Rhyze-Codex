@@ -1,3 +1,6 @@
+import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease } from '@/lib/payments/financial-release';
+import { assertFinancialApprover } from '@/lib/auth/financial-owner-access';
+import { financialLock } from '@/lib/payments/refund-review';
 import { notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
@@ -411,8 +414,11 @@ async function prepareRefundOperation(db: Db, input: CommerceRefundInput) {
   } = await retrySafeSerializableTransaction(() =>
       db.$transaction(
         async (tx) => {
+          await assertFinancialRelease(tx);
+          await assertFinancialApprover(tx, input.actorId);
           const locked = await getOrderForRefund(tx, input);
           const bookingProof = await proveEventBookingForCashRefund(tx, locked);
+          await financialLock(tx,bookingProof.bookingId,locked.stripePaymentIntentId!);
           // Persist staff-only delivery before contacting Stripe so recovery cannot email later.
           if (input.notifyCustomer === false && !await tx.auditLog.findFirst({
             where: { entityType: 'CommerceOrder', entityId: locked.id, action: 'commerce-refund.notification-suppressed' },
@@ -447,9 +453,7 @@ async function prepareRefundOperation(db: Db, input: CommerceRefundInput) {
           }
           const freshPendingWithoutProviderId =
             existing?.status === 'PENDING' &&
-            !existing.stripeRefundId &&
-            existing.createdAt instanceof Date &&
-            Date.now() - existing.createdAt.getTime() < 2 * 60 * 1000;
+            !existing.stripeRefundId;
           if (!existing) {
             await tx.commerceRefund.create({
               data: {
@@ -852,6 +856,7 @@ async function reconcileSucceededRefunds(
             : params.providerRefundedCents >= order.amountCents
               ? (await proveEventBookingForCashRefund(tx, order)).bookingId
               : null;
+        await financialLock(tx,bookingId,order.stripePaymentIntentId!);
         for (const refund of params.succeededRefunds) {
           await upsertSucceededRefund(tx, input, {
             refund,
@@ -970,7 +975,8 @@ async function reconcileSucceededRefunds(
           where: { entityType: 'CommerceOrder', entityId: order.id, action: 'commerce-refund.notification-suppressed' },
           select: { id: true },
         });
-        if (fullyRefunded && recipient && !notificationSuppressed) {
+        const initiatedRefund = params.succeededRefunds.find(refund => refund.id === params.initiatedRefundId);
+        if (fullyRefunded && recipient && !notificationSuppressed && initiatedRefund) {
           await queueEmail(tx, {
             userId: order.userId || undefined,
             to: recipient,
@@ -979,10 +985,10 @@ async function reconcileSucceededRefunds(
             payload: {
               name: order.user?.name || 'Rhyzer',
               itemName: itemName(order),
-              amount: refundedAmountCents,
+              amount: refundAmount(initiatedRefund),
               billingUrl: '/member/billing',
             },
-            dedupeKey: `refund-confirmation:commerce:${order.id}:${refundedAmountCents}`,
+            dedupeKey: `refund-confirmation:commerce:${order.id}:${initiatedRefund.id}`,
           });
         }
         return {
@@ -1004,6 +1010,8 @@ export async function refundCommerceOrderFullRemainder(
   input: CommerceRefundInput,
 ): Promise<CommerceRefundResult> {
   ensureInput(input);
+  await assertFinancialRelease(db);
+  await assertFinancialApprover(db, input.actorId);
   const {
     order,
     operationKey,
@@ -1144,7 +1152,12 @@ export async function refundCommerceOrderFullRemainder(
     );
   }
 
-  const createdRefund = await stripe.refunds.create(
+  await assertFinancialApprover(db, input.actorId);
+  await assertFinancialRelease(db);
+  const createdRefund = await withFinancialRelease(db,async (tx,deadline) => {
+    await assertFinancialApprover(tx,input.actorId);
+    await assertFinancialSubmission(tx,deadline);
+    return stripe.refunds.create(
     {
       charge: provider.charge.id,
       amount: refundAmountCents,
@@ -1155,8 +1168,9 @@ export async function refundCommerceOrderFullRemainder(
         operationKey,
       },
     },
-    { idempotencyKey: operationKey },
+    { idempotencyKey: operationKey, maxNetworkRetries: 0, timeout: 20000 },
   );
+  });
   const readback = await stripe.refunds.retrieve(createdRefund.id);
   ensureProviderRefundReadbackMatchesRequest(readback, {
     requestedRefundId: createdRefund.id,

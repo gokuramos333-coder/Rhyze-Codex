@@ -1,3 +1,5 @@
+import { assertFinancialRelease, assertFinancialSubmission } from '@/lib/payments/financial-release';
+import { assertUnrefundedAttendanceReceipt, financialLock, requestFinancialReview } from './refund-review';
 import { resolveTrialAttendancePaymentSource, type TrialPaymentSource } from '@/lib/payments/trial-attendance-card';
 import type { PaymentRecordKind, PaymentRecordStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
@@ -205,7 +207,7 @@ const productionGateway: AttendanceFeeGateway = {
         description: request.description,
         metadata: request.metadata,
       },
-      { idempotencyKey: request.idempotencyKey },
+      { idempotencyKey: request.idempotencyKey, maxNetworkRetries: 0, timeout: 20000 },
     );
     return { id: payment.id, status: payment.status };
   },
@@ -227,63 +229,59 @@ const productionGateway: AttendanceFeeGateway = {
   },
 };
 
-export async function chargeAttendanceFee(input: AttendanceFeeInput) {
+export async function chargeAttendanceFee(input: AttendanceFeeInput): Promise<AttendanceFeeResult> {
   const booking = await prisma.booking.findUnique({ where: { id: input.bookingId }, select: { occurrenceId: true } });
   if (booking && ['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(booking.occurrenceId)) return { status: 'FAILED', paymentIntentId: null, reason: 'INELIGIBLE_ACCESS' } as const;
-  return chargeAttendanceFeeWithGateway(input, productionGateway);
+  await assertFinancialRelease(prisma);
+  const owned = await prisma.$transaction(async tx => {
+    await financialLock(tx, input.bookingId, input.idempotencyKey);
+    const open = await tx.$queryRaw<{id:string}[]>`SELECT id FROM "FinancialReview" WHERE "bookingId"=${input.bookingId} AND "resolvedAt" IS NULL`;
+    const replacement = await tx.$queryRaw<{id:string}[]>`SELECT o.id FROM "ApprovedFinancialOperation" o JOIN "PaymentRecord" p ON p.id=o."paymentRecordId" WHERE p."bookingId"=${input.bookingId} AND o.kind='REPLACEMENT'`;
+    if (open.length || replacement.length) throw Error('Financial review blocks collection for this booking');
+    const prior = await tx.$queryRaw<{operationKey:string;state:string;paymentIntentId:string|null}[]>`SELECT * FROM "AttendanceCollection" WHERE "bookingId"=${input.bookingId}`;
+    if (prior[0]) {
+      if (prior[0].operationKey === input.idempotencyKey && prior[0].state === 'SUCCEEDED' && prior[0].paymentIntentId) {
+        await assertUnrefundedAttendanceReceipt(tx, input.bookingId, prior[0].paymentIntentId);
+        return prior[0].paymentIntentId;
+      }
+      throw Error('Existing collection ownership requires review; no automatic retry');
+    }
+    const history = await tx.paymentRecord.count({where:{bookingId:input.bookingId,kind:{in:['NO_SHOW_FEE','LATE_CANCELLATION_FEE','TRANSFER_FEE']},status:{not:'FAILED'}}});
+    if(history) throw Error('Existing historical fee requires reviewed financial ownership');
+    await tx.$executeRaw`INSERT INTO "AttendanceCollection" ("bookingId","operationKey",state) VALUES (${input.bookingId},${input.idempotencyKey},'UNKNOWN')`;
+    return null;
+  });
+  if (owned) return {status:'SUCCEEDED',paymentIntentId:owned};
+  const result = await prisma.$transaction(async tx => {
+    const deadline=Date.now()+60000;
+    await financialLock(tx,input.bookingId,input.idempotencyKey);
+    const open = await tx.$queryRaw<{id:string}[]>`SELECT id FROM "FinancialReview" WHERE "bookingId"=${input.bookingId} AND "resolvedAt" IS NULL`;
+    if(open.length) throw Error('Financial review blocks collection');
+    await assertFinancialRelease(tx);
+    const result = await chargeAttendanceFeeWithGateway(input, {...productionGateway,createPaymentIntent:async request=>{await assertFinancialSubmission(tx,deadline);return productionGateway.createPaymentIntent(request);}});
+    if (result.status === 'SUCCEEDED') await tx.$executeRaw`UPDATE "AttendanceCollection" SET state='SUCCEEDED',"paymentIntentId"=${result.paymentIntentId} WHERE "bookingId"=${input.bookingId} AND "operationKey"=${input.idempotencyKey}`;
+    return result;
+  }, {timeout:60000});
+  // Failure includes an uncertain provider outcome: retain ownership permanently.
+  return result;
+
 }
 
 export type AttendanceFeeRefundGateway = {
-  refundPaymentIntent(input: {
-    paymentIntentId: string;
-    idempotencyKey: string;
-  }): Promise<void>;
-  markPaymentRefunded(input: {
-    paymentIntentId: string;
-    amountCents: number;
-  }): Promise<void>;
+  requestReview(input: {paymentIntentId:string;amountCents:number;idempotencyKey:string}):Promise<void>;
 };
-
 export async function refundAttendanceFeeWithGateway(
-  input: {
-    paymentIntentId: string;
-    amountCents: number;
-    idempotencyKey: string;
-  },
-  gateway: AttendanceFeeRefundGateway,
-) {
-  await gateway.refundPaymentIntent({
-    paymentIntentId: input.paymentIntentId,
-    idempotencyKey: input.idempotencyKey,
-  });
-  await gateway.markPaymentRefunded({
-    paymentIntentId: input.paymentIntentId,
-    amountCents: input.amountCents,
-  });
-}
+  input: {paymentIntentId:string;amountCents:number;idempotencyKey:string},
+  gateway:AttendanceFeeRefundGateway,
+) { await gateway.requestReview(input); }
 
-const productionRefundGateway: AttendanceFeeRefundGateway = {
-  async refundPaymentIntent(input) {
-    await getStripe().refunds.create(
-      { payment_intent: input.paymentIntentId },
-      { idempotencyKey: input.idempotencyKey },
-    );
-  },
-  async markPaymentRefunded(input) {
-    await prisma.paymentRecord.update({
-      where: { stripePaymentIntentId: input.paymentIntentId },
-      data: {
-        status: 'REFUNDED',
-        refundedAmountCents: input.amountCents,
-      },
-    });
-  },
-};
-
-export function refundAttendanceFee(input: {
-  paymentIntentId: string;
-  amountCents: number;
-  idempotencyKey: string;
+/** Detection only. Financial execution requires an exact approved-owner operation. */
+export async function refundAttendanceFee(input: {
+  paymentIntentId: string; amountCents: number; idempotencyKey: string;
 }) {
-  return refundAttendanceFeeWithGateway(input, productionRefundGateway);
+  await prisma.$transaction(tx => requestFinancialReview(tx, {
+    paymentIntentId: input.paymentIntentId,
+    basisKind: 'FAILED_SERVICE',
+    reason: `Urgent failed-service/possible duplicate review: ${input.idempotencyKey}`,
+  }));
 }

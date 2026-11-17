@@ -1,3 +1,5 @@
+import { preserveApprovedRecurringService } from '@/lib/payments/refund-recurring-callback';
+import { financialLock, financialLedgerLock } from '@/lib/payments/refund-review';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { processBlackFridayEvent } from './black-friday-webhook';
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
@@ -959,8 +961,17 @@ export async function processStripeEvent(
 ) {
   assertStripeObjectMode(event);
   if (await processBlackFridayEvent(tx, event)) return;
-  if (await processMembershipPlanChangeEvent(tx, event)) return;
-  if (await processSombleRecoveryEvent(tx, event)) return;
+  if (['charge.refunded','charge.dispute.created'].includes(event.type)) {
+    const financialAction = deriveStripeEventAction(event);
+    if ((financialAction.type === 'PAYMENT_REFUNDED' || financialAction.type === 'PAYMENT_DISPUTED') && financialAction.paymentIntentId) {
+      const payment = await tx.paymentRecord.findUnique({ where: { stripePaymentIntentId: financialAction.paymentIntentId } });
+      if (payment && !payment.commerceOrderId) await financialLedgerLock(tx,payment.id);
+    }
+  }
+  const preserveRecurringService = await preserveApprovedRecurringService(tx, event);
+  if (!preserveRecurringService && await processMembershipPlanChangeEvent(tx, event)) return;
+  if (!preserveRecurringService && await processSombleRecoveryEvent(tx, event)) return;
+
   const action = deriveStripeEventAction(event);
   if (action.type === 'IGNORE') return;
   if (action.type === 'CHECKOUT_PAID') {
@@ -1258,6 +1269,9 @@ export async function processStripeEvent(
     });
     if (!record) return;
     if (action.type === 'PAYMENT_REFUNDED' && record.commerceOrderId) return;
+    await financialLock(tx, record.bookingId, action.paymentIntentId);
+    record = await tx.paymentRecord.findUniqueOrThrow({where:{id:record.id}});
+    if (action.type === 'PAYMENT_REFUNDED' && (record.refundedAmountCents > action.amountCents || record.status === 'DISPUTED')) return;
     // Checkout and native invoice consumers lock Purchase first. Never hold
     // its payment row while waiting for that purchase (the reverse deadlocks).
     if (record.purchaseId) {
@@ -1281,7 +1295,9 @@ export async function processStripeEvent(
             : record.refundedAmountCents,
       },
     });
-    if (record.purchaseId)
+    // A renewal's purchaseId points to the original service anchor, not this invoice.
+    const originalPurchase = record.purchaseId ? await tx.purchase.findUnique({ where: { id: record.purchaseId } }) : null;
+    if (record.purchaseId && originalPurchase?.stripePaymentIntentId === action.paymentIntentId && !preserveRecurringService)
       await tx.purchase.update({
         where: { id: record.purchaseId },
         data:

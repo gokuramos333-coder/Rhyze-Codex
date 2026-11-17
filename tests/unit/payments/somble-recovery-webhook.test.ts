@@ -110,6 +110,7 @@ function fixture() {
   const tx: any = {
     commerceOrder: { findUnique: async () => null },
     $queryRaw: async () => [],
+    $executeRaw: async () => 1,
     purchase: {
       findUnique: async () => state.purchase,
       update: async ({ data }: any) => Object.assign(state.purchase, data),
@@ -165,7 +166,7 @@ function fixture() {
       },
       findUnique: async ({ where }: any) =>
         state.records.find(
-          (r: any) => r.stripePaymentIntentId === where.stripePaymentIntentId,
+          (r: any) => where.id ? r.id === where.id : r.stripePaymentIntentId === where.stripePaymentIntentId,
         ) ?? null,
       findFirst: async ({ where }: any) =>
         state.records.find((r: any) =>

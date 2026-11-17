@@ -34,7 +34,7 @@ beforeAll(async () => {
  await db.classTemplate.create({ data: { id: 'bf-template', categoryId: 'bf-category', name: 'Fixture', slug, description: 'Fixture', durationMinutes: 75, defaultCapacity: 2, tags: [], equipment: [], isEvent: true, dropInPriceCents: 2500 } });
  await db.classOccurrence.create({ data: { id: occurrenceId, templateId: 'bf-template', startAt: new Date('2026-11-28T00:30:00Z'), endAt: new Date('2026-11-28T01:45:00Z'), capacity: 2, priceCents: 2500 } });
  buyer = await user('Buyer Person');
- await db.user.update({where:{id:buyer},data:{role:'OWNER'}});
+ await db.user.update({where:{id:buyer},data:{role:'OWNER',email:'vanessa@rhyzefit.com'}});
 });
 afterAll(async () => { vi.unstubAllEnvs(); await db.$disconnect(); });
 async function emptySeats() {
@@ -48,7 +48,7 @@ async function single(name:string) {
  return {input,...result,session};
 }
 async function paid(s:any){s.status='complete';s.payment_status='paid';await db.$transaction(tx=>applyBlackFridaySession(tx,s,now));}
-async function refund(s:any){await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId:s.metadata.commerceOrderId,paymentIntentId:s.payment_intent,refundedAmountCents:s.amount_total,disputed:false},now));}
+async function refund(s:any,disputeWon=false){await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId:s.metadata.commerceOrderId,paymentIntentId:s.payment_intent,refundedAmountCents:s.amount_total,disputed:false,disputeWon},now));}
 async function used(){return (await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${occurrenceId}`)[0].used;}
 
 vi.mock('@/lib/auth/session',()=>({requireApprovedOwner:async()=>db.user.findUniqueOrThrow({where:{id:buyer}}),requireArea:async()=>db.user.findUniqueOrThrow({where:{id:attendanceActor ?? buyer}}),requireActiveUser:async()=>db.user.findUniqueOrThrow({where:{id:attendanceActor ?? buyer}})}));
@@ -192,11 +192,15 @@ it('retains seats for pending refunds and archives provider success before relea
 });
 it('reconciles staff cancellation only from succeeded provider refunds',async()=>{
  await emptySeats();const a=await single('Staff Refund Buyer');await paid(a.session);
- const charge={id:'ch_staff',payment_intent:a.session.payment_intent,amount:2500,currency:'usd',amount_refunded:0,disputed:true};
+ const charge={id:'ch_staff',payment_intent:a.session.payment_intent,amount:2500,currency:'usd',amount_refunded:0,disputed:false,paid:true,captured:true};
  const refunds:any[]=[];
- const provider:any={checkout:stripe.checkout,disputes:{list:()=>({async *[Symbol.asyncIterator](){yield {id:'dp_won',status:'won',payment_intent:a.session.payment_intent,amount:2500,currency:'usd'};}})},paymentIntents:{retrieve:async()=>({id:a.session.payment_intent,metadata:{commerceOrderId:a.orderId},amount:2500,currency:'usd',latest_charge:charge})},refunds:{create:vi.fn(async()=>{charge.amount_refunded=2500;const r={id:'re_staff',payment_intent:a.session.payment_intent,amount:2500,currency:'usd',status:'pending'};refunds.push(r);return r;}),list:()=>({async *[Symbol.asyncIterator](){yield* refunds;}})}};
- await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',reason:'Fixture cancellation'},now)).rejects.toThrow('pending');
- expect(await used()).toBe(1);refunds[0].status='succeeded';
+ const provider:any={checkout:stripe.checkout,disputes:{list:()=>({async *[Symbol.asyncIterator](){yield {id:'dp_won',status:'won',payment_intent:a.session.payment_intent,amount:2500,currency:'usd'};}})},paymentIntents:{retrieve:async()=>({id:a.session.payment_intent,status:'succeeded',metadata:{commerceOrderId:a.orderId},amount:2500,currency:'usd',latest_charge:charge})},refunds:{create:vi.fn(async()=>{charge.amount_refunded=2500;const r={id:'re_staff',payment_intent:a.session.payment_intent,amount:2500,currency:'usd',status:'pending'};refunds.push(r);return r;}),list:()=>({async *[Symbol.asyncIterator](){yield* refunds;}})}};
+ await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',expectedRefundCents:2500,reason:'Fixture cancellation'},now)).rejects.toThrow('pending');
+ expect(await used()).toBe(1);
+ expect(await db.$queryRaw`SELECT "amountCents","actorId" FROM "EventRefundApproval" WHERE "orderId"=${a.orderId}`).toEqual([{amountCents:2500,actorId:buyer}]);
+ await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',expectedRefundCents:2500,reason:'Duplicate approval'},now)).rejects.toThrow('pending');
+ expect(provider.refunds.create).toHaveBeenCalledTimes(1);
+ refunds[0].status='succeeded';
  await manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'RECONCILE',reason:'Verify refund'},now);
  expect(await used()).toBe(0);expect(provider.refunds.create).toHaveBeenCalledTimes(1);
 });
@@ -218,7 +222,7 @@ it('allows staff to reconcile a recovered provider session after an uncertain cr
 it('rejects a recovered session belonging to another order before provider expiry',async()=>{
  await emptySeats();const a=await single('Wrong Session');await db.commerceOrder.update({where:{id:a.orderId},data:{stripeCheckoutSessionId:null}});
  const expire=vi.fn(async()=>a.session);const provider:any={checkout:{sessions:{retrieve:async()=>({...a.session,metadata:{...a.session.metadata,commerceOrderId:'other'}}),expire}}};
- await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',reason:'Fixture mismatch',sessionId:a.session.id},now)).rejects.toThrow('identity');
+ await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',expectedRefundCents:2500,reason:'Fixture mismatch',sessionId:a.session.id},now)).rejects.toThrow('identity');
  expect(expire).not.toHaveBeenCalled();a.session.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,a.session,now));
 });
 it('counts real ON CONFLICT upserts once and serializes cancelled-row reactivation',async()=>{
@@ -282,7 +286,7 @@ it('FINAL-01 actual roster rejects CHECKED_IN for disputed REVIEW, including raw
  expect(await db.attendanceRecord.findUnique({where:{bookingId:b.id}})).toBeNull();
  await expect(db.attendanceRecord.create({data:{bookingId:b.id,occurrenceId,userId:b.userId,status:'CHECKED_IN',markedById:buyer}})).rejects.toThrow();
  expect(await used()).toBe(1);
- }finally{await refund(a.session);}
+ }finally{await refund(a.session,true);}
 });
 it.each([['NO_SHOW','OWNER'],['LATE_CANCELLED','OWNER'],['NO_SHOW','INSTRUCTOR'],['LATE_CANCELLED','INSTRUCTOR']] as const)('FINAL-02 actual roster records paid %s as %s without releasing or refunding reserved seats',async (status,role)=>{
  await emptySeats();const a=await single('Paid absence');await paid(a.session);
@@ -371,7 +375,7 @@ it('FINAL-01 reversal wins while actual CHECKED_IN waits on the parent fence',as
  try{await waitForLock();}finally{release();}
  await reversal;expect((await checked)[0].status).toBe('rejected');
  expect(await db.attendanceRecord.findUnique({where:{bookingId:b.id}})).toBeNull();expect(await used()).toBe(1);
- await refund(a.session);
+ await refund(a.session,true);
 });
 it.each(['RepeatableRead','Serializable'] as const)('FINAL-01 stale %s attendance cannot admit after a reversal',async isolationLevel=>{
  await emptySeats();const a=await single('Stale check-in');await paid(a.session);
@@ -383,7 +387,7 @@ it.each(['RepeatableRead','Serializable'] as const)('FINAL-01 stale %s attendanc
  const result=Promise.allSettled([attempt]);await began;
  await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId:a.orderId,paymentIntentId:a.session.payment_intent,refundedAmountCents:0,disputed:true},now));release();
  expect((await result)[0].status).toBe('rejected');expect(await db.attendanceRecord.findUnique({where:{bookingId:b.id}})).toBeNull();
- await refund(a.session);
+ await refund(a.session,true);
 });
 
 it('FINAL-01 check-in winning the fence is historical; later REVIEW forbids fresh check-in',async()=>{
@@ -398,7 +402,7 @@ it('FINAL-01 check-in winning the fence is historical; later REVIEW forbids fres
  expect(await db.attendanceRecord.findUnique({where:{bookingId:b.id}})).toMatchObject({status:'CHECKED_IN'});
  await mark(b.id,'CHECKED_IN'); // clearing is permitted, never admission
  await expect(mark(b.id,'CHECKED_IN')).rejects.toThrow();
- expect(await used()).toBe(1);await refund(a.session);
+ expect(await used()).toBe(1);await refund(a.session,true);
 });
 it('FINAL-03 cancellation failure rolls back original credit, reminder, attendance and outbox together',async()=>{
  await emptySeats();const u=await user('Atomic cancellation');const b=await db.booking.create({data:{userId:u,occurrenceId}});
@@ -529,4 +533,21 @@ it('pair checkout waits for occurrence admission before taking the member entitl
   },{timeout:5000});
   const result=await checkout!;const session=[...sessions.values()].find(s=>s.metadata.commerceOrderId===result.orderId);session.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
  } finally {await checkout?.catch(()=>{});await probe.$disconnect();}
+});
+
+it.each([1000,2500])('does not erase an open dispute when a later %s-cent refund arrives',async amount=>{
+ await emptySeats();const a=await single('Disputed refund ordering');await paid(a.session);
+ await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId:a.orderId,paymentIntentId:a.session.payment_intent,refundedAmountCents:0,disputed:true},now));
+ const {applyBlackFridayRefunds}=await import('@/lib/payments/black-friday-checkout');
+ await db.$transaction(tx=>applyBlackFridayRefunds(tx,a.orderId,a.session.payment_intent,[{id:`re_ordered_${amount}`,payment_intent:a.session.payment_intent,amount,currency:'usd',status:'succeeded'}] as any,now));
+ expect(await db.commerceOrder.findUniqueOrThrow({where:{id:a.orderId}})).toMatchObject({status:'DISPUTED',refundedAmountCents:amount});
+ expect(await used()).toBe(1);
+ await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId:a.orderId,paymentIntentId:a.session.payment_intent,refundedAmountCents:amount,disputed:true,disputeLost:true},now));
+ expect(await used()).toBe(0);
+});
+it('rejects other owners before an event refund reaches Stripe',async()=>{
+ const outsider=await user('Other Owner');await db.user.update({where:{id:outsider},data:{role:'OWNER'}});
+ const provider:any={checkout:{sessions:{retrieve:vi.fn()}}};
+ await expect(manageBlackFridayTicket(db,provider,{actorId:outsider,orderId:'unknown',operation:'CANCEL',expectedRefundCents:2500,reason:'Denied owner request'},now)).rejects.toThrow('Vanessa or Melissa');
+ expect(provider.checkout.sessions.retrieve).not.toHaveBeenCalled();
 });

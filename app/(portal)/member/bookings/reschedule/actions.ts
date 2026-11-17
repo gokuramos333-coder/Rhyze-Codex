@@ -1,4 +1,5 @@
 'use server';
+import { confirmAttendanceService } from '@/lib/payments/refund-review';
 import { transferCreditAccountsInclude } from '@/lib/domain/transfers/transfer-credit-accounts';
 import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
@@ -125,6 +126,9 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     for (const id of [...new Set([booking.occurrenceId, destinationId])].sort()) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
     }
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+    const lockedBooking = await tx.booking.findUniqueOrThrow({where:{id:bookingId}});
+    if (lockedBooking.updatedAt.getTime() !== booking.updatedAt.getTime()) throw Error('Booking changed; reload before transfer');
     const destination = await tx.classOccurrence.findFirst({
       where: {
         id: destinationId,
@@ -199,6 +203,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
       },
       dedupeKey: `member-booking-transfer:${booking.id}:${destination.id}`,
     });
+    if (paymentIntentId) await confirmAttendanceService(tx,bookingId,paymentIntentId);
     return true;
   });
 

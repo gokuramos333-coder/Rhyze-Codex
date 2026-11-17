@@ -62,6 +62,9 @@ const localEnv = {
   TRIAL_TEST_DATABASE_DIR: '/private/tmp/owned-trial-cluster',
   DISCOUNT_TEST_DATABASE_URL: 'postgresql://tester@127.0.0.1:55439/discount_campaign_test',
   DISCOUNT_TEST_DATA_DIRECTORY: '/tmp/owned-discount-pg',
+  REFUND_TEST_DATABASE_URL: 'postgresql://refund_test@localhost:55479/refund_review_test?host=%2Fprivate%2Ftmp%2Fowned-refund',
+  REFUND_TEST_DATABASE_DIR: '/private/tmp/owned-refund/data',
+  REFUND_TEST_SOCKET_DIR: '/private/tmp/owned-refund',
   ARCHIVE_TEST_DATABASE_URL: 'postgresql://archive_test@localhost:55473/archive_phone_test?host=%2Fprivate%2Ftmp%2Fowned-archive',
   ARCHIVE_TEST_DATABASE_DIR: '/private/tmp/owned-archive/data',
   ARCHIVE_TEST_SOCKET_DIR: '/private/tmp/owned-archive',
@@ -131,7 +134,7 @@ describe('release input and production isolation', () => {
     expect(args).toEqual(['scripts/release/hosted.ts']);
     let result = '';
     try {
-      execFileSync(resolve('node_modules/.bin', bin), args, {
+      execFileSync(process.execPath, ['--import', 'tsx', ...args], {
         encoding: 'utf8',
         timeout: 10000,
         env: { PATH: process.env.PATH, NODE_ENV: 'test' },

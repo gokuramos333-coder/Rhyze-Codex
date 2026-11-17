@@ -15,8 +15,9 @@ import { LiveDataRefresh } from '@/components/live/LiveDataRefresh';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function InstructorRosterPage(props: { params: Promise<{ occurrenceId: string }> }) {
+export default async function InstructorRosterPage(props: { params: Promise<{ occurrenceId: string }>; searchParams?: Promise<{result?:string}> }) {
   const params = await props.params;
+  const result = (await props.searchParams)?.result;
   const user = await requireArea('instructor');
   const occurrence = await prisma.classOccurrence.findFirst({
     where: {
@@ -78,6 +79,7 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
   return (
     <>
       <LiveDataRefresh />
+      {result === 'attendance-fee-review' && <p role="status" className="border p-4">Attendance corrected; fee unchanged. Any outstanding no-show fee requires approved-owner financial review.</p>}
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class roster</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{instructorOccurrenceTitle(occurrence)}</h1>
       {occurrence.instructorId === user.id && <Link href={`/instructor/classes/${occurrence.id}/artwork`} className="mt-4 inline-block border border-rhyze-orange px-4 py-3 text-xs font-black uppercase tracking-widest text-rhyze-coral">Manage class / event photo</Link>}

@@ -1,4 +1,6 @@
 'use server';
+import { assertFinancialApprover } from '@/lib/auth/financial-owner-access';
+import { requestFinancialReview, originalPurchaseRefundPayment } from '@/lib/payments/refund-review';
 import { reconcileVipRenewalBookings } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { isDeepStrictEqual } from 'node:util';
@@ -457,98 +459,20 @@ export async function returnTransactionCreditAction(formData: FormData) {
 
 export async function refundMemberPurchaseAction(formData: FormData) {
   const actor = await requireApprovedOwner();
-  const userId = String(formData.get('userId') || '');
   const purchaseId = String(formData.get('purchaseId') || '');
-  const purchase = await prisma.purchase.findFirst({
-    where: { id: purchaseId, userId, status: { in: ['PAID', 'PARTIALLY_REFUNDED'] } },
-    include: { user: true, product: true, membership: true, creditAccount: { include: { entries: true } } },
-  });
-  const refundableAmount = purchase
-    ? purchase.amountCents - purchase.refundedAmountCents
-    : 0;
-  if (!purchase?.stripePaymentIntentId || refundableAmount <= 0 || !stripeIsConfigured()) {
-    redirect(`/admin/members/${userId}?error=refund`);
-  }
-
-  try {
-    const refund = await getStripe().refunds.create(
-      { payment_intent: purchase.stripePaymentIntentId, amount: refundableAmount },
-      { idempotencyKey: `admin-member-refund-${purchase.id}-${purchase.refundedAmountCents}` },
-    );
-    if (purchase.membership?.stripeSubscriptionId) {
-      await getStripe().subscriptions.cancel(
-        purchase.membership.stripeSubscriptionId,
-        { prorate: false },
-        { idempotencyKey: `admin-member-refund-cancel-${purchase.id}` },
-      );
-    }
-    await prisma.$transaction(async (tx) => {
-      await tx.refund.create({
-        data: {
-          purchaseId: purchase.id,
-          amountCents: refundableAmount,
-          stripeRefundId: refund.id,
-          reason: 'Admin full refund from client profile',
-        },
-      });
-      await tx.purchase.update({
-        where: { id: purchase.id },
-        data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents },
-      });
-      await tx.paymentRecord.updateMany({
-        where: { stripePaymentIntentId: purchase.stripePaymentIntentId },
-        data: { status: 'REFUNDED', refundedAmountCents: purchase.amountCents },
-      });
-      await tx.membership.updateMany({
-        where: { purchaseId: purchase.id },
-        data: { status: 'CANCELLED', cancelAtPeriodEnd: false, currentPeriodEnd: new Date() },
-      });
-      await tx.creditAccount.updateMany({
-        where: { sourcePurchaseId: purchase.id },
-        data: { validUntil: new Date() },
-      });
-      await tx.referralCommission.updateMany({
-        where: { purchaseId: purchase.id },
-        data: { status: 'REVERSED', reversedAt: new Date() },
-      });
-      await tx.auditLog.create({
-        data: {
-          actorId: actor.id,
-          action: 'purchase.refunded',
-          entityType: 'Purchase',
-          entityId: purchase.id,
-          after: { amountCents: refundableAmount, stripeRefundId: refund.id },
-        },
-      });
-      await queueEmail(tx, {
-        userId: purchase.userId,
-        to: purchase.user.email,
-        subject: 'Your Rhyze refund was issued',
-        template: 'PAYMENT_REFUND_CONFIRMATION',
-        payload: {
-          name: purchase.user.name || 'Rhyzer',
-          itemName: purchase.product.name,
-          amount: refundableAmount,
-          billingUrl: '/member/billing',
-        },
-        dedupeKey: `refund-confirmation:${refund.id}`,
-      });
-    });
-  } catch {
-    redirect(`/admin/members/${userId}?error=refund`);
-  }
-
-  revalidatePath(`/admin/members/${userId}`);
-  revalidatePath('/admin/activity');
-  revalidatePath('/admin');
-  revalidatePath('/admin/payments');
-  revalidatePath('/member');
-  revalidatePath('/member/membership');
-  redirect(`/admin/members/${userId}?sent=refund`);
+  const payment = await originalPurchaseRefundPayment(prisma, purchaseId, String(formData.get('userId') || ''));
+  if (!payment?.stripePaymentIntentId) throw Error('Original payment receipt required for refund review');
+  await prisma.$transaction(tx => requestFinancialReview(tx, {
+    paymentIntentId:payment.stripePaymentIntentId!, requesterId:actor.id,
+    reason:'Owner requested full purchase refund',
+  }));
+  revalidatePath('/admin/payments/refund-reviews');
+  redirect('/admin/payments/refund-reviews');
 }
 
 export async function refundMemberCommerceOrderAction(formData: FormData) {
   const actor = await requireApprovedOwner();
+  await assertFinancialApprover(prisma, actor.id);
   const parsed = commerceRefundActionSchema.safeParse({
     userId: formData.get('userId'),
     commerceOrderId: formData.get('commerceOrderId'),

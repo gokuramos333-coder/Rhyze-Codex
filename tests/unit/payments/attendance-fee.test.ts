@@ -133,30 +133,11 @@ describe('attendance fee charging', () => {
     expect(transfer.records[0]?.kind).toBe('TRANSFER_FEE');
   });
 
-  it('refunds a fee when the booking mutation cannot be completed', async () => {
-    const refunded: Array<{ paymentIntentId: string; idempotencyKey: string }> = [];
-    const marked: Array<{ paymentIntentId: string; amountCents: number }> = [];
-
-    await refundAttendanceFeeWithGateway(
-      {
-        paymentIntentId: 'pi_fee_123',
-        amountCents: 500,
-        idempotencyKey: 'refund-transfer-booking_123',
-      },
-      {
-        refundPaymentIntent: async (request) => {
-          refunded.push(request);
-        },
-        markPaymentRefunded: async (record) => {
-          marked.push(record);
-        },
-      },
-    );
-
-    expect(refunded).toEqual([{
-      paymentIntentId: 'pi_fee_123',
-      idempotencyKey: 'refund-transfer-booking_123',
-    }]);
-    expect(marked).toEqual([{ paymentIntentId: 'pi_fee_123', amountCents: 500 }]);
+  it('persists an urgent review without a refund when the booking mutation fails', async () => {
+    const reviews: unknown[] = [];
+    await refundAttendanceFeeWithGateway({paymentIntentId:'synthetic-intent',amountCents:500,idempotencyKey:'failed-service'}, {
+      requestReview: async input => { reviews.push(input); },
+    });
+    expect(reviews).toEqual([{paymentIntentId:'synthetic-intent',amountCents:500,idempotencyKey:'failed-service'}]);
   });
 });
