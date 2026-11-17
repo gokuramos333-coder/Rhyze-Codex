@@ -113,7 +113,7 @@ export async function addMemberToClassAction(formData: FormData) {
     if (overlap && overlap.occurrenceId !== occurrenceId) return 'member-overlap';
 
     const confirmed = await tx.booking.count({ where: { occurrenceId, status: 'CONFIRMED' } });
-    if (confirmed + occurrence.historicalSignupCount >= occurrence.capacity) return 'full';
+    if (confirmed + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0) >= occurrence.capacity) return 'full';
 
     const accounts = await tx.creditAccount.findMany({
       where: {
@@ -237,7 +237,7 @@ export async function addOwnerComplimentaryBookingAction(formData: FormData) {
     ]);
     if (!occurrence || occurrence.status !== 'SCHEDULED' || !owner || owner.role !== 'OWNER') return;
     const confirmed = await tx.booking.count({ where: { occurrenceId, status: 'CONFIRMED' } });
-    if (confirmed + occurrence.historicalSignupCount >= occurrence.capacity) return;
+    if (confirmed + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0) >= occurrence.capacity) return;
 
     await tx.booking.upsert({
       where: { occurrenceId_userId: { occurrenceId, userId: owner.id } },

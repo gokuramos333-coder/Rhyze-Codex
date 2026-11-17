@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { rosterHistoryBookingWhere, rosterConfirmedBookings } from '@/lib/domain/bookings/roster-history';
+import { BlackFridayPendingRoster } from '@/components/attendance/BlackFridayPendingRoster';
 import { Roster } from '@/components/attendance/Roster';
 import { rosterPaymentDetails } from '@/lib/domain/bookings/roster-payment';
 import { importedBookingParty } from '@/lib/domain/bookings/imported-booking-party';
@@ -107,7 +108,7 @@ export default async function AdminRosterPage(props: {
     <>
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Attendance desk</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{occurrence.template.name}</h1>
-      <p className="mt-3 text-rhyze-black/55">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'} · {confirmedBookings.length + occurrence.historicalSignupCount}/{occurrence.capacity} booked</p>
+      <p className="mt-3 text-rhyze-black/55">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.instructor?.name || 'TBA'} · {confirmedBookings.length + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0)}/{occurrence.capacity} booked</p>
       <section className="mt-6 border-t-4 border-rhyze-gold bg-white p-5">
         <p className="text-xs font-black uppercase tracking-[0.25em] text-rhyze-coral">Waitlist</p>
         <h2 className="mt-2 font-display text-4xl tracking-wider">
@@ -176,6 +177,7 @@ export default async function AdminRosterPage(props: {
           </button>
         </form>
       </section>
+      <BlackFridayPendingRoster occurrenceId={occurrence.id} canManage />
       <Roster occurrenceId={occurrence.id} bookings={rosterBookings} canRestore />
     </>
   );

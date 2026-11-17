@@ -125,7 +125,7 @@ export async function loadPublicScheduleSlots(
       duration: `${occurrenceDurationMinutes(occurrence)} min`,
       capacity: occurrence.capacity,
       booked:
-        occurrence._count.bookings + occurrence.historicalSignupCount,
+        occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
       waitlist: occurrence._count.waitlistEntries,
       price: `$${((occurrence.priceCents || 2500) / 100).toFixed(0)}`,
       bookingHref: publicScheduleDetailHref({

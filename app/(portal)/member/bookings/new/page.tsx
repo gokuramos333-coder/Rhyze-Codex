@@ -1,3 +1,4 @@
+import { specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
 import { occurrenceInstructorName, occurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { isNovember2026EventDate, vipEventAccessCopy } from '@/lib/domain/credits/november-vip-policy';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
@@ -24,7 +25,8 @@ export default async function NewBookingPage(
       })
     : null;
   if (!occurrence || occurrence.status !== 'SCHEDULED' || occurrence.startAt <= new Date()) notFound();
-  const availability = bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount, occurrence.capacity, occurrence._count.waitlistEntries);
+  const specialEvent = specialEventOfferMatches(occurrence);
+  const availability = bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0), occurrence.capacity, occurrence._count.waitlistEntries);
 
   const activeWaiver = await prisma.waiverVersion.findFirst({
     where: { isActive: true, requiresSign: true },
@@ -53,10 +55,11 @@ export default async function NewBookingPage(
         <p className="mt-2 text-sm text-rhyze-black/55">{occurrence.room?.name || 'Room TBA'} · {occurrence.capacity} spots</p>
         {availability.soldOut && <div className="mt-4 border-l-4 border-rhyze-gold bg-rhyze-gold/10 p-4"><p className="font-black">{availability.label}</p><p className="mt-2 text-sm">Up to 5 people can wait. Joining is free and uses no credit. If a place opens before the start, everyone on the list receives an email with a booking link. Places are first come, first served; you must complete booking and are not automatically booked or charged.</p></div>}
         {isMemberClassEvent(occurrence.template) && <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">{MEMBER_CLASS_EVENT_COPY}</p>}
-        {occurrence.template.isEvent && isNovember2026EventDate(occurrence.startAt) && (
+        {occurrence.template.isEvent && !specialEvent && isNovember2026EventDate(occurrence.startAt) && (
           <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">{vipEventAccessCopy(occurrence.startAt)}</p>
         )}
-        {occurrence.template.isEvent && (
+        {specialEvent && <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold">This paid event accepts one available VIP event credit. Regular class credits and VIP unlimited class access do not apply. Your event credit must be valid for this date.</p>}
+        {occurrence.template.isEvent && !specialEvent && (
           <p className="mt-4 border-l-4 border-rhyze-orange bg-rhyze-orange/10 p-3 text-sm font-bold text-rhyze-black/65">
             Cancellation-issued event credits can be used for specialty events or standard classes and expire 30 days after the cancellation that issued them.
           </p>

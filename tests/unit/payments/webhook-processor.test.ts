@@ -601,6 +601,7 @@ describe('Stripe webhook event interpretation', () => {
       },
       purchase: { update: async () => ({}) },
       commerceOrder: {
+        findUnique: async () => ({ id: 'order_event', occurrenceId: 'ordinary-event' }),
         update: async (args: unknown) => {
           calls.commerceOrderUpdate.push(args);
           return {};

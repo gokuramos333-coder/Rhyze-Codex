@@ -116,7 +116,7 @@ export default async function AdminEventsPage(
           const occurrence = event.occurrences[0];
           const memberClassEvent = isMemberClassEvent(event);
           const priceCents = memberClassEvent ? occurrence?.priceCents ?? event.dropInPriceCents : event.dropInPriceCents;
-          const signups = occurrence ? occurrence._count.bookings + occurrence.historicalSignupCount : 0;
+          const signups = occurrence ? occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0) : 0;
           return (
           <article key={event.id} className="grid gap-3 border-l-4 border-rhyze-gold bg-white p-5 md:grid-cols-[1fr_auto] md:items-center">
             <div className="grid gap-4 sm:grid-cols-[3.5rem_1fr] sm:items-center">
@@ -149,7 +149,7 @@ export default async function AdminEventsPage(
     </>
   );
 }
-function EventOccurrenceSection({ title, occurrences, past = false, eventSummaries }: { eventSummaries: ReceiptSummary[]; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; template: { id: string; slug: string; isEvent: boolean; name: string; category: { name: string } }; instructor: { name: string | null } | null; _count: { bookings: number } }>; past?: boolean }) {
+function EventOccurrenceSection({ title, occurrences, past = false, eventSummaries }: { eventSummaries: ReceiptSummary[]; title: string; occurrences: Array<{ id: string; startAt: Date; timezone: string; capacity: number; historicalSignupCount: number; pendingTicketSeats?: number; template: { id: string; slug: string; isEvent: boolean; name: string; category: { name: string } }; instructor: { name: string | null } | null; _count: { bookings: number } }>; past?: boolean }) {
   if (!occurrences.length) return null;
   return (
     <section>
@@ -164,7 +164,7 @@ function EventOccurrenceSection({ title, occurrences, past = false, eventSummari
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-rhyze-coral">{occurrenceAdminDateTimeLabel(occurrence)} · {occurrence.template.category.name}</p>
                 <h3 className="mt-1 font-display text-3xl tracking-wider">{occurrence.template.name}</h3>
-                <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount}/{occurrence.capacity} signups</p>
+                <p className="mt-1 text-sm text-rhyze-black/55">{occurrence.instructor?.name || 'TBA'} · {occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0)}/{occurrence.capacity} signups</p>
                 {memberClassEvent && <p className="mt-2 text-sm">Class credits, active 7-day trial and VIP unlimited access accepted. Paid tickets are listed in Sales under class purchases.</p>}
                 <EventReceiptSummary summary={eventSummary} />
               </div>

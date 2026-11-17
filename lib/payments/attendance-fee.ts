@@ -227,7 +227,9 @@ const productionGateway: AttendanceFeeGateway = {
   },
 };
 
-export function chargeAttendanceFee(input: AttendanceFeeInput) {
+export async function chargeAttendanceFee(input: AttendanceFeeInput) {
+  const booking = await prisma.booking.findUnique({ where: { id: input.bookingId }, select: { occurrenceId: true } });
+  if (booking && ['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(booking.occurrenceId)) return { status: 'FAILED', paymentIntentId: null, reason: 'INELIGIBLE_ACCESS' } as const;
   return chargeAttendanceFeeWithGateway(input, productionGateway);
 }
 

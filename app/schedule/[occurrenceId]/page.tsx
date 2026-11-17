@@ -22,7 +22,7 @@ export default async function ClassOccurrencePage(
     },
   });
   if (!occurrence || occurrence.archivedAt || occurrence.status === 'CANCELLED') notFound();
-  const bookedCount = occurrence._count.bookings + occurrence.historicalSignupCount;
+  const bookedCount = occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0);
   const soldOut = bookedCount >= occurrence.capacity;
   const waitlistFull = occurrence._count.waitlistEntries >= WAITLIST_CAPACITY;
   const instructorName = occurrenceInstructorName(occurrence);

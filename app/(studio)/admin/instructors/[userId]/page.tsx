@@ -113,7 +113,7 @@ export default async function InstructorReviewPage(
     occurrences: instructor.classOccurrences.map((occurrence) => ({
       ...occurrence,
       attendeeCount:
-        occurrence.bookings.length + occurrence.historicalSignupCount,
+        occurrence.bookings.length + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
     })),
   });
   const referralCode = instructor.referralCodes[0];
@@ -213,7 +213,7 @@ export default async function InstructorReviewPage(
                   <span>
                     <strong className="block">{item.template.name}</strong>
                     <small className="text-rhyze-black/45">
-                      {item._count.bookings + item.historicalSignupCount}/{item.capacity} booked
+                      {item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0)}/{item.capacity} booked
                     </small>
                   </span>
                   <span className="text-left md:text-right">

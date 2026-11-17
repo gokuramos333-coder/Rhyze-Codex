@@ -67,7 +67,7 @@ export default async function MemberReschedulePage(
     orderBy: { startAt: 'asc' },
   });
   const openDestinations = destinations.filter(
-    (item) => item._count.bookings + item.historicalSignupCount < item.capacity &&
+    (item) => item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0) < item.capacity &&
       transferEntitlementAllowed({
         accessType,
         creditAccountId: (booking.policySnapshot as { creditAccountId?: string } | null)?.creditAccountId ?? reservation?.creditAccount.id,

@@ -9,6 +9,7 @@ const db = vi.hoisted(() => ({
   creditLedgerEntry: { findMany: vi.fn() },
   user: { findMany: vi.fn() },
 }));
+vi.mock('@/app/(studio)/admin/schedule/[occurrenceId]/roster/black-friday-actions',()=>({blackFridayStaffAction:vi.fn()}));
 vi.mock('@/lib/db/prisma', () => ({ prisma: db }));
 vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('not-found'); } }));
 vi.mock('@/components/attendance/Roster', () => ({ Roster: () => null }));

@@ -14,7 +14,7 @@ export async function notifyWaitlistOpening(tx: Prisma.TransactionClient, occurr
     include: { template: true, instructor: { select: { name: true } }, _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } } },
   });
   if (!occurrence || occurrence.status !== 'SCHEDULED' || occurrence.startAt <= now ||
-    occurrence._count.bookings + occurrence.historicalSignupCount >= occurrence.capacity) return;
+    occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0) >= occurrence.capacity) return;
   const waiting = await tx.waitlistEntry.findMany({
     where: { occurrenceId, status: 'WAITING', user: { status: 'ACTIVE', bookings: { none: { occurrenceId, status: { in: ['CONFIRMED', 'ATTENDED'] } } } } },
     include: { user: { select: { email: true, name: true } } },
@@ -55,5 +55,5 @@ export async function waitlistEmailIsDeliverable(client: PrismaClient | Prisma.T
     include: { occurrence: { include: { _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } } } } },
   });
   if (!waiting || waiting.occurrence.status !== 'SCHEDULED' || waiting.occurrence.startAt <= now) return false;
-  return message.template === 'WAITLIST_JOINED' || waiting.occurrence._count.bookings + waiting.occurrence.historicalSignupCount < waiting.occurrence.capacity;
+  return message.template === 'WAITLIST_JOINED' || waiting.occurrence._count.bookings + waiting.occurrence.historicalSignupCount + (waiting.occurrence.pendingTicketSeats ?? 0) < waiting.occurrence.capacity;
 }

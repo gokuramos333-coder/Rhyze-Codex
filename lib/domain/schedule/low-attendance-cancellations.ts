@@ -38,6 +38,7 @@ export async function cancelLowAttendanceOccurrences(
       status: 'SCHEDULED',
       startAt: { gt: now, lte: cutoff },
       historicalSignupCount: 0,
+      pendingTicketSeats: 0,
       bookings: { none: { status: 'CONFIRMED' } },
     },
     include: {
@@ -59,6 +60,7 @@ export async function cancelLowAttendanceOccurrences(
         id: occurrence.id,
         status: 'SCHEDULED',
         historicalSignupCount: 0,
+      pendingTicketSeats: 0,
         bookings: { none: { status: 'CONFIRMED' } },
       },
       data: {

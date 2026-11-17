@@ -59,7 +59,7 @@ export async function startClassTicketCheckout(db: PrismaClient, stripe: Stripe,
     ]);
     if (booking && ['CONFIRMED', 'ATTENDED'].includes(booking.status)) throw new ClassTicketCheckoutError('already-booked', 'You are already booked for this class.');
     if (paid) throw new ClassTicketCheckoutError('already-paid', 'You already purchased this class ticket.');
-    if (occupied + occurrence.historicalSignupCount >= occurrence.capacity) throw new ClassTicketCheckoutError('full', 'This class is full.');
+    if (occupied + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0) >= occurrence.capacity) throw new ClassTicketCheckoutError('full', 'This class is full.');
     const binding = { occurrenceId: occurrence.id, name: occurrence.titleOverride || occurrence.template.name, startAt: occurrence.startAt.toISOString(), endAt: occurrence.endAt.toISOString(), amountCents };
     const parameters: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment', ...buildCheckoutWalletParameters(),

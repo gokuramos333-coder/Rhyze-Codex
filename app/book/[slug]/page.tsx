@@ -236,7 +236,7 @@ export default async function BookingPage(
   const instructorPhoto = resolveClassArtwork({ ...occurrence, template: artworkTemplate }, instructorName);
   const bookingTitle = occurrence ? occurrenceTitle(occurrence) : stripInstructorFromTitle(cls.name);
   const occurrenceBookingCount = occurrence
-    ? occurrence._count.bookings + occurrence.historicalSignupCount
+    ? occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0)
     : 0;
   const availability = occurrence ? bookingAvailability(occurrenceBookingCount, occurrence.capacity, occurrence._count.waitlistEntries) : null;
   const soldOut = Boolean(availability?.soldOut);

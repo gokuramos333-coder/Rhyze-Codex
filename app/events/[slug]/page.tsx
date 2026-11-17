@@ -56,11 +56,11 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
   const fallback = getOwnedEvent(event.slug);
   const bookingLabel = occurrence
     ? publicBookingCountLabel(
-        occurrence._count.bookings + occurrence.historicalSignupCount,
+        occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
         occurrence.capacity,
       )
     : null;
-  const availability = occurrence ? bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount, occurrence.capacity, occurrence._count.waitlistEntries) : null;
+  const availability = occurrence ? bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0), occurrence.capacity, occurrence._count.waitlistEntries) : null;
   const details = event.description.split(/\n|(?<=[.!?])\s+/).filter(Boolean).slice(0, 5);
 
   return (

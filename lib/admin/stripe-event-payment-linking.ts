@@ -120,7 +120,7 @@ export async function linkStripeEventPayment(db: PrismaClient, stripe: Stripe, i
           const overlap = await tx.booking.findFirst({ where: { userId: user.id, status: { in: ['CONFIRMED', 'ATTENDED'] }, occurrence: { startAt: { lt: occurrence.endAt }, endAt: { gt: occurrence.startAt } } }, select: { id: true } });
           if (overlap) reject('Member has an overlapping booking.');
           const occupied = await tx.booking.count({ where: { occurrenceId: occurrence.id, status: { in: ['CONFIRMED', 'ATTENDED'] } } });
-          if (occupied + occurrence.historicalSignupCount >= occurrence.capacity) reject('Event is full; no booking or financial links were created.');
+          if (occupied + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0) >= occurrence.capacity) reject('Event is full; no booking or financial links were created.');
         }
         const attendance = await tx.attendanceRecord.findUnique({ where: { occurrenceId_userId: { occurrenceId: occurrence.id, userId: user.id } } });
         if (attendance && (attendance.bookingId !== booking?.id || !['CHECKED_IN', 'ATTENDED'].includes(attendance.status))) reject('Existing attendance conflicts with this reconciliation.');

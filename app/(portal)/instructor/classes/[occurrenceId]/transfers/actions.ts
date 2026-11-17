@@ -104,7 +104,7 @@ export async function transferBookingAction(formData: FormData) {
   ]);
   if (
     requestedOverlap ||
-    requestedOccupied + requestedDestination.historicalSignupCount >= requestedDestination.capacity
+    requestedOccupied + requestedDestination.historicalSignupCount + (requestedDestination.pendingTicketSeats ?? 0) >= requestedDestination.capacity
   ) {
     redirect(`/instructor/classes/${booking.occurrenceId}/transfers?booking=${booking.id}&error=destination`);
   }
@@ -115,6 +115,7 @@ export async function transferBookingAction(formData: FormData) {
     user: preflightUser, sourceIsEvent: booking.occurrence.template.isEvent,
     destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date(),
   })) redirect(`/instructor/classes/${booking.occurrenceId}/transfers?booking=${booking.id}&error=destination`);
+  if ([booking.occurrenceId, destinationId].some(id => ['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(id))) throw new Error('Special-event ticket changes require staff ticket management; no transfer fee was charged.');
   const feeResult = feeCents > 0
     ? await chargeAttendanceFee({
         bookingId,
@@ -167,7 +168,7 @@ export async function transferBookingAction(formData: FormData) {
       user: currentUser, sourceIsEvent: booking.occurrence.template.isEvent,
       destinationIsEvent: destination.template.isEvent, destinationStartsAt: destination.startAt, now: new Date() })) return false;
     const occupied = await tx.booking.count({ where: { occurrenceId: destinationId, status: 'CONFIRMED' } });
-    if (occupied + destination.historicalSignupCount >= destination.capacity) return false;
+    if (occupied + destination.historicalSignupCount + (destination.pendingTicketSeats ?? 0) >= destination.capacity) return false;
     const trial = await tx.membership.findFirst({
       where: { userId: booking.userId, status: { in: ['TRIALING', 'ACTIVE'] }, product: { kind: 'INTRO_TRIAL' } },
       orderBy: { createdAt: 'desc' },

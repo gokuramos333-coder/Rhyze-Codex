@@ -27,7 +27,7 @@ export async function fulfillClassTicket(tx: Prisma.TransactionClient, purchaseI
       tx.booking.count({ where: { occurrenceId: occurrence.id, status: { in: ['CONFIRMED', 'ATTENDED'] } } }),
       tx.booking.findFirst({ where: { userId, status: { in: ['CONFIRMED', 'ATTENDED'] }, occurrence: { startAt: { lt: occurrence.endAt }, endAt: { gt: occurrence.startAt } } }, select: { id: true } }),
     ]);
-    if (occupied + occurrence.historicalSignupCount >= occurrence.capacity) reason = 'The class filled before payment completed.';
+    if (occupied + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0) >= occurrence.capacity) reason = 'The class filled before payment completed.';
     else if (overlap) reason = 'The selected class overlaps another booking.';
   }
   let result: { status: 'BOOKED'; bookingId: string } | { status: 'REVIEW'; reason: string };

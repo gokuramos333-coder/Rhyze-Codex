@@ -309,6 +309,10 @@ async function getOrderForRefund(
   if (!order) {
     throw new CommerceRefundError('not_found', 'Commerce order was not found.');
   }
+  if (order.occurrenceId && ['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(order.occurrenceId)) {
+    const tickets = await tx.$queryRaw<{ orderId: string }[]>`SELECT "orderId" FROM "BlackFridayTicket" WHERE "orderId"=${order.id}`;
+    if (tickets.length) throw new CommerceRefundError('not_refundable', 'Use the Black Friday ticket cancellation/refund workflow on its roster.');
+  }
   ensureLocalOrderCanBeRefunded(order);
   return order;
 }

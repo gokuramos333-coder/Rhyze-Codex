@@ -92,10 +92,10 @@ export async function EventsPreview({
           {eventCards.map(({ event, occurrence }) => {
             const artwork = resolveClassArtwork({ ...occurrence, template: event });
             const bookingLabel = publicBookingCountLabel(
-              occurrence._count.bookings + occurrence.historicalSignupCount,
+              occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
               occurrence.capacity,
             );
-            const availability = bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount, occurrence.capacity, occurrence._count.waitlistEntries);
+            const availability = bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0), occurrence.capacity, occurrence._count.waitlistEntries);
             const cardContent = (
               <>
                 <div className="relative aspect-[4/3] overflow-hidden bg-rhyze-black">

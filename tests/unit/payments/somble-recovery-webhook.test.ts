@@ -108,6 +108,7 @@ function fixture() {
     stripeCustomerId: 'cus_verified',
   };
   const tx: any = {
+    commerceOrder: { findUnique: async () => null },
     $queryRaw: async () => [],
     purchase: {
       findUnique: async () => state.purchase,

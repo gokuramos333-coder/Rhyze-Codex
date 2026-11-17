@@ -1,3 +1,6 @@
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
+import { blackFridaySalesEnabled } from '@/lib/payments/black-friday-release-gate';
+import { startBlackFridayCheckout } from '@/lib/payments/black-friday-checkout';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 import { NextResponse } from 'next/server';
 import { attributionMetadata } from '@/lib/attribution/first-touch';
@@ -12,7 +15,11 @@ const requestSchema = z.object({
   slug: z.string().min(1),
   occurrenceId: z.string().min(1).optional(),
   childCount: z.number().int().min(1).max(5).optional(),
-});
+  ticketType: z.enum(['SINGLE','PAIR']).optional(),
+  friend: z.object({ fullName: z.string().min(3).max(120), phone: z.string().min(10).max(30) }).strict().optional(),
+  firstVisitDeclared: z.boolean().optional(),
+  useEventCredit: z.boolean().optional(),
+}).strict();
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -23,7 +30,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Secure event checkout is not connected yet.' }, { status: 503 });
   }
   try {
-    const { slug, occurrenceId, childCount } = requestSchema.parse(await request.json());
+    const input = requestSchema.parse(await request.json());
+    const { slug, occurrenceId, childCount } = input;
+    const specialOffer = specialEventIdentity(occurrenceId, slug);
+    if (specialEventIdentity(occurrenceId) || specialEventIdentity(undefined,slug)) {
+      if (!blackFridaySalesEnabled()) return NextResponse.json({error:'Special ticket sales are not open yet.'},{status:503});
+      if (!specialOffer) throw new Error('Wrong event occurrence');
+      if (childCount !== undefined) throw new Error('Child pricing does not apply to this event.');
+      return NextResponse.json(await startBlackFridayCheckout(prisma, getStripe(), { ...input, occurrenceId: specialOffer.occurrenceId, ticketType: input.ticketType ?? 'SINGLE', userId: session.user.id, origin: new URL(request.url).origin }));
+    }
+    if (input.ticketType || input.friend || input.firstVisitDeclared !== undefined || input.useEventCredit !== undefined) throw new Error('This ticket option is not available for this event.');
     const occurrence = await prisma.classOccurrence.findFirst({
       where: {
         ...(occurrenceId ? { id: occurrenceId } : {}),
@@ -49,7 +65,7 @@ export async function POST(request: Request) {
       startAt: occurrence.startAt,
       priceCents: occurrence.priceCents ?? occurrence.template.dropInPriceCents ?? 3_000,
       capacity: occurrence.capacity,
-      booked: occurrence._count.bookings + occurrence.historicalSignupCount,
+      booked: occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
     }, new Date(), { childCount });
     const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } });
     const activeWaiver = await prisma.waiverVersion.findFirst({

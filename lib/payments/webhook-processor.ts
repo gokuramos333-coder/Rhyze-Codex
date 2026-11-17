@@ -1,4 +1,5 @@
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
+import { processBlackFridayEvent } from './black-friday-webhook';
 import { completeWaitlistBooking } from '@/lib/domain/bookings/waitlist';
 import { grantVipEventCredit } from '@/lib/domain/credits/grant-vip-event-credit';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
@@ -813,7 +814,7 @@ async function fulfillCommerceOrder(
     });
     if (
       order.occurrence.archivedAt ||
-      booked + order.occurrence.historicalSignupCount >=
+      booked + order.occurrence.historicalSignupCount + (order.occurrence.pendingTicketSeats ?? 0) >=
       order.occurrence.capacity
     ) {
       await tx.commerceOrder.update({
@@ -957,6 +958,7 @@ export async function processStripeEvent(
   event: Stripe.Event,
 ) {
   assertStripeObjectMode(event);
+  if (await processBlackFridayEvent(tx, event)) return;
   if (await processMembershipPlanChangeEvent(tx, event)) return;
   if (await processSombleRecoveryEvent(tx, event)) return;
   const action = deriveStripeEventAction(event);

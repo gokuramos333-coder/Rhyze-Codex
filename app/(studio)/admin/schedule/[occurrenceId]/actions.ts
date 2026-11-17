@@ -59,6 +59,9 @@ async function cancelOccurrencesWithNotifications(
     for (const id of [...new Set(occurrenceIds)].sort()) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
     }
+    for (const id of [...new Set(occurrenceIds)].sort()) {
+      await tx.$executeRaw`SELECT id FROM "ClassOccurrence" WHERE id=${id} FOR UPDATE`;
+    }
     const occurrences = await tx.classOccurrence.findMany({
       where: { id: { in: occurrenceIds }, status: 'SCHEDULED' },
       include: { template: true, bookings: { where: { status: 'CONFIRMED' }, include: { user: true } } },
@@ -67,10 +70,10 @@ async function cancelOccurrencesWithNotifications(
       await lockMembershipEntitlements(tx, userId);
     }
     for (const occurrence of occurrences) {
-      await tx.classOccurrence.update({
-        where: { id: occurrence.id },
-        data: { status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason },
-      });
+      if (['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(occurrence.id)) {
+        const liabilities = await tx.$queryRaw<{ orderId: string }[]>`SELECT "orderId" FROM "BlackFridayTicket" WHERE "occurrenceId"=${occurrence.id} AND state NOT IN ('EXPIRED','REFUNDED','DISPUTE_LOST')`;
+        if (liabilities.length) throw new Error('Resolve ticket liabilities before cancelling occurrence');
+      }
       for (const booking of occurrence.bookings) {
         await tx.booking.update({
           where: { id: booking.id },
@@ -82,6 +85,11 @@ async function cancelOccurrencesWithNotifications(
             ...item, bookingId: booking.id, type: 'RELEASE', reason: 'Studio cancelled class',
           } });
         }
+        await tx.attendanceRecord.deleteMany({ where: { bookingId: booking.id } });
+        await tx.emailMessage.updateMany({
+          where: { dedupeKey: `class-reminder:${booking.id}:${occurrence.id}`, template: 'CLASS_REMINDER', status: { in: ['QUEUED', 'PROCESSING'] } },
+          data: { status: 'CANCELLED' },
+        });
         await tx.inAppNotification.upsert({
           where: { dedupeKey: `class-cancelled:${occurrence.id}:${booking.userId}` },
           update: {},
@@ -109,6 +117,11 @@ async function cancelOccurrencesWithNotifications(
           dedupeKey: `class-cancelled-email:${occurrence.id}:${booking.userId}`,
         });
       }
+      // The permanent admission guard stays enabled; release ordinary seats first.
+      await tx.classOccurrence.update({
+        where: { id: occurrence.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), cancellationReason: reason },
+      });
       await tx.auditLog.create({
         data: {
           actorId,

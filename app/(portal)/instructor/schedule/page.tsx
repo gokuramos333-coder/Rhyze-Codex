@@ -148,7 +148,7 @@ export default async function InstructorSchedulePage() {
               )}
             </span>
             <span className="text-left md:text-right">
-              <span className="block text-xs font-black uppercase tracking-widest">{item._count.bookings + item.historicalSignupCount}/{item.capacity} booked</span>
+              <span className="block text-xs font-black uppercase tracking-widest">{item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0)}/{item.capacity} booked</span>
               <span className="mt-2 block text-[10px] font-black uppercase tracking-widest text-rhyze-coral">View attendees →</span>
             </span>
           </Link>

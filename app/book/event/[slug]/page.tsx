@@ -1,3 +1,5 @@
+import { specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
+import { blackFridaySalesEnabled } from '@/lib/payments/black-friday-release-gate';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { vipEventAccessCopy } from '@/lib/domain/credits/november-vip-policy';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
@@ -56,8 +58,9 @@ export default async function EventBookingPage(
     orderBy: { startAt: 'asc' },
   });
   if (searchParams?.occurrence && !occurrence) notFound();
+  const specialTicketSalesEnabled = Boolean(blackFridaySalesEnabled() && occurrence && specialEventOfferMatches({...occurrence,template:event}));
   const booked = occurrence
-    ? occurrence._count.bookings + occurrence.historicalSignupCount
+    ? occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0)
     : 0;
   const durationMinutes = occurrence ? occurrenceDurationMinutes(occurrence) : event.durationMinutes;
   const artwork = resolveClassArtwork({ ...occurrence, template: event });
@@ -66,7 +69,7 @@ export default async function EventBookingPage(
   const soldOut = booked >= capacity;
   const waitlistFull = waiting >= WAITLIST_CAPACITY;
   const bookingLabel = publicBookingCountLabel(booked, capacity);
-  const eventPrice = `$${((event.dropInPriceCents || 0) / 100).toFixed(0)}`;
+  const eventPrice = `$${((occurrence?.priceCents ?? event.dropInPriceCents ?? 0) / 100).toFixed(0)}`;
   const eventDate = occurrence
     ? occurrence.startAt.toLocaleDateString('en-US', {
         timeZone: 'America/New_York',
@@ -141,7 +144,7 @@ export default async function EventBookingPage(
             <Image src={artwork} alt={event.name} fill sizes="(min-width: 1024px) 28rem, 100vw" unoptimized={artwork.startsWith('/api/media/')} className="object-cover object-[center_18%]" />
           </div>
           <p className="mb-3 text-xs uppercase tracking-[0.3em] text-rhyze-gold">
-            Checkout Preview
+            Event Checkout
           </p>
           <div className="rounded-2xl border border-white/10 bg-rhyze-black/50 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -158,7 +161,7 @@ export default async function EventBookingPage(
                 )}
               </div>
               <span className="font-display text-4xl text-rhyze-gold">
-                {eventPrice}
+                {specialTicketSalesEnabled ? 'Choose below' : eventPrice}
               </span>
             </div>
           </div>
@@ -174,20 +177,21 @@ export default async function EventBookingPage(
                   Specialty access
                 </h3>
                 <p className="mt-1 text-sm text-rhyze-cream/70">
-                  {vipEventAccessCopy(occurrence?.startAt)}
+                  {specialTicketSalesEnabled ? 'Pay $25 for one person or $40 for you and a NEW friend. VIPs can use one available event credit for themselves, or one event credit plus $15 for the two-person ticket. Regular class credits and VIP unlimited class access do not cover this paid event.' : vipEventAccessCopy(occurrence?.startAt)}
                 </p>
               </div>
             </div>
           </div>
 
           <EventCheckoutButton
+            specialTicketSalesEnabled={specialTicketSalesEnabled}
             slug={event.slug}
             occurrenceId={occurrence?.id}
             soldOut={soldOut}
             waitlistFull={waitlistFull}
             familyPricing={event.slug === MOMMY_AND_ME_SLUG}
           />
-          {occurrence && !soldOut && (
+          {occurrence && !soldOut && !specialTicketSalesEnabled && (
             <Link
               href={`/member/bookings/new?occurrence=${encodeURIComponent(occurrence.id)}`}
               className="focus-ring mt-3 flex min-h-12 w-full items-center justify-center rounded-full border border-rhyze-gold px-5 text-center text-xs font-black uppercase tracking-widest text-rhyze-gold hover:bg-rhyze-gold hover:text-rhyze-black"

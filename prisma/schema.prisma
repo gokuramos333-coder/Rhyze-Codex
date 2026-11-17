@@ -406,6 +406,7 @@ model ClassOccurrence {
   isSubstitute          Boolean          @default(false)
   cancellationReason    String?
   historicalSignupCount Int              @default(0)
+  pendingTicketSeats    Int              @default(0)
   instructorPayMethod   String           @default("STANDARD_CLASS_RATE")
   instructorPayCents    Int?
   instructorPayNote     String?

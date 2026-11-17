@@ -286,7 +286,7 @@ export async function loadSchedule(
     status: x.status,
     available: Math.max(
       0,
-      x.capacity - Math.max(x.bookings.length, x.historicalSignupCount),
+      x.capacity - Math.max(x.bookings.length, x.historicalSignupCount) - (x.pendingTicketSeats ?? 0),
     ),
     href: publicScheduleDetailHref({
       occurrenceId: x.id,

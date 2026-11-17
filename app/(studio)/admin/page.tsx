@@ -477,7 +477,7 @@ export default async function AdminHomePage(
                     </small>
                   </span>
                   <strong>
-                    {item._count.bookings + item.historicalSignupCount}/{item.capacity} booked
+                    {item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0)}/{item.capacity} booked
                   </strong>
                 </Link>
               ))}

@@ -1,4 +1,5 @@
 'use server';
+import { specialEventOfferMatches, specialEventCreditAllowed } from '@/lib/payments/black-friday-new-friend';
 import { giftCreditAllows, giftCreditKind } from '@/lib/domain/credits/gift-credit';
 import type { Prisma } from '@prisma/client';
 import { vipRenewalReservation, vipRenewalEntitlementInclude, renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
@@ -132,7 +133,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     const nativeBooked = await tx.booking.count({
       where: { occurrenceId, status: 'CONFIRMED' },
     });
-    const booked = nativeBooked + occurrence.historicalSignupCount;
+    const booked = nativeBooked + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0);
     if (booked >= occurrence.capacity) {
       const existingWaitlist = await tx.waitlistEntry.findUnique({
         where: { occurrenceId_userId: { occurrenceId, userId: user.id } },
@@ -222,8 +223,10 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       },
       orderBy: { createdAt: 'asc' },
     });
+    const specialEvent = specialEventOfferMatches(occurrence);
     const account = prioritizeMemberEventCredits(accounts, occurrence.template).find(
       (item) => {
+        if (specialEvent && !specialEventCreditAllowed(item)) return false;
         const productKind = currentCreditProduct(item)?.kind ?? null;
         const isEventCredit = eventCreditCanBook({
           label: item.label,

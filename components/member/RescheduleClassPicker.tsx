@@ -9,7 +9,7 @@ export type RescheduleDestination = {
   titleOverride?: string | null;
   substituteInstructorName?: string | null;
   capacity: number;
-  historicalSignupCount: number;
+  historicalSignupCount: number; pendingTicketSeats?: number;
   _count: { bookings: number };
   template: { name: string };
   instructor: { name: string | null } | null;
@@ -34,7 +34,7 @@ export function RescheduleClassPicker({
         Choose your new class
       </legend>
       {destinations.map((item) => {
-        const booked = item._count.bookings + item.historicalSignupCount;
+        const booked = item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0);
         const spotsAvailable = Math.max(0, item.capacity - booked);
 
         return (
