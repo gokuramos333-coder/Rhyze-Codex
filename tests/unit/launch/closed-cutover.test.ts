@@ -208,6 +208,7 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
       verifyBridgeReconciliation(record, bridge, now).reports.scheduler
         .requests,
     ).toHaveLength(1);
+    reports.scheduler.publishedIdentity.after.observedAt = 'invalid'; save(); expect(()=>verifyBridgeReconciliation(record,bridge,now)).toThrow('boundary'); reports.scheduler.publishedIdentity.after.observedAt=completedAt;
     reports.scheduler.requestPaginationComplete = false;
     save();
     expect(() => verifyBridgeReconciliation(record, bridge, now)).toThrow(
