@@ -33,3 +33,5 @@ it.each([undefined,'','relative/pg','/','/tmp/../pg'])('rejects unsafe or missin
 it.each(['postgresql://tester@localhost:55439/discount_campaign_test','postgresql://tester@127.0.0.1/discount_campaign_test','postgresql://tester@127.0.0.1:55439/callback_test','postgresql://tester@127.0.0.1:55439/discount_campaign_test?host=remote','postgresql://tester@127.0.0.1:55439/discount_campaign_test#override'])('rejects unsafe discount URL %s',url=>{
  expect(()=>releaseTestEnvironment({...source,DISCOUNT_TEST_DATABASE_URL:url})).toThrow();
 });
+
+it('uses only the fixed isolated financial gate identity',()=>{const env=releaseTestEnvironment({...source,DEPLOY_ID:'production-deploy',COMMIT_REF:'production-source'});expect(env.DEPLOY_ID).toBe('a'.repeat(24));expect(env.COMMIT_REF).toBe('b'.repeat(40));});

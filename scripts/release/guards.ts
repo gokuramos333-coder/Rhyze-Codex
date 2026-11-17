@@ -244,6 +244,9 @@ export function releaseTestEnvironment(
   env.REFUND_TEST_DATABASE_URL = refund.url;
   env.REFUND_TEST_DATABASE_DIR = refund.identity.dir;
   env.REFUND_TEST_SOCKET_DIR = refund.socket;
+  // Fixed identity matches the owned disposable gate fixture; never inherit a live deployment.
+  env.DEPLOY_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+  env.COMMIT_REF = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
   const archive = archiveTestDatabase({ ...source, NODE_ENV: env.NODE_ENV });
   env.ARCHIVE_TEST_DATABASE_URL = archive.url;
   env.ARCHIVE_TEST_DATABASE_DIR = archive.identity.dir;
