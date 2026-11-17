@@ -35,3 +35,8 @@ it('a slow lock reacquisition cannot consume the reserved provider timeout',asyn
  const db:any={$queryRaw:vi.fn(async()=>{now=40000;return[{enabledDeployId:deploy,sourceSha:source,evidenceHash:'e'.repeat(64)}];})};
  await expect((async()=>{await assertFinancialSubmission(db,60000,()=>now);submit();})()).rejects.toThrow('deadline');expect(submit).not.toHaveBeenCalled();
 });
+
+it('production requires artifact-stamped identity instead of mutable runtime metadata',()=>{
+ vi.stubEnv('NODE_ENV','production');vi.stubEnv('RHYZE_FINANCIAL_DEPLOY_ID','');vi.stubEnv('RHYZE_FINANCIAL_SOURCE_SHA','');setup();expect(()=>financialRuntimeIdentity()).toThrow('identity');
+ vi.stubEnv('RHYZE_FINANCIAL_DEPLOY_ID',deploy);vi.stubEnv('RHYZE_FINANCIAL_SOURCE_SHA',source);expect(financialRuntimeIdentity()).toEqual({deployId:deploy,sourceSha:source});
+});

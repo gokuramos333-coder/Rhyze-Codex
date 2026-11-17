@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 type DB = Pick<PrismaClient | Prisma.TransactionClient, '$queryRaw'>;
 export type FinancialReleaseState = { generation: number; enabledDeployId: string | null; sourceSha: string | null; evidenceHash: string | null };
-export function financialRuntimeIdentity(env: { DEPLOY_ID?: string; COMMIT_REF?: string } = {DEPLOY_ID:process.env.DEPLOY_ID,COMMIT_REF:process.env.COMMIT_REF}) {
+export function financialRuntimeIdentity(env: { DEPLOY_ID?: string; COMMIT_REF?: string } = {DEPLOY_ID:process.env.RHYZE_FINANCIAL_DEPLOY_ID || (process.env.NODE_ENV === 'test' ? process.env.DEPLOY_ID : undefined),COMMIT_REF:process.env.RHYZE_FINANCIAL_SOURCE_SHA || (process.env.NODE_ENV === 'test' ? process.env.COMMIT_REF : undefined)}) {
   const deployId = env.DEPLOY_ID;
   const sourceSha = env.COMMIT_REF;
   if (!/^[a-f0-9]{24}$/.test(deployId || '') || !/^[a-f0-9]{40}$/.test(sourceSha || '')) throw Error('Trusted financial runtime identity unavailable');
