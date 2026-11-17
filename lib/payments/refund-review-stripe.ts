@@ -299,8 +299,9 @@ export function stripeFinancialProvider(stripe: Stripe): FinancialProvider {
         evidence: createHash('sha256').update(evidence).digest('hex'),
       };
     },
-    async submit(op) {
+    async submit(op,beforeSubmission) {
       await accountMatches(op);
+      await beforeSubmission();
       if (op.kind === 'REFUND') {
         return (
           await stripe.refunds.create(

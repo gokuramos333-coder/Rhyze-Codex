@@ -64,7 +64,7 @@ export interface FinancialProvider {
     paymentRecordId: string,
     kind: FinancialKind,
   ): Promise<FinancialPayload>;
-  submit(operation: FinancialOperation): Promise<string>;
+  submit(operation: FinancialOperation, beforeSubmission:()=>Promise<void>): Promise<string>;
   // Must retrieve/list from the provider independently, never trust create response.
   receipt(operation: FinancialOperation): Promise<BoundReceipt | null>;
 }
@@ -373,7 +373,7 @@ export async function approveFinancialOperation(
           if (!isDeepStrictEqual(fresh, reserved.operation.payload))
             throw Error('Financial proof changed after approval');
           await assertFinancialSubmission(tx,deadline);
-          const providerId = await provider.submit(reserved.operation);
+          const providerId = await provider.submit(reserved.operation,()=>assertFinancialSubmission(tx,deadline));
           await tx.$executeRaw`UPDATE "ApprovedFinancialOperation" SET "providerId"=${providerId} WHERE id=${reserved.operation.id}`;
         },
         { timeout: 60000 },

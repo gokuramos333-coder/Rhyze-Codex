@@ -351,3 +351,12 @@ it('rejects a commerce intent even when its local payment association is missing
   ).rejects.toThrow(/commerce/i);
   expect(f.stripe.paymentIntents.create).not.toHaveBeenCalled();
 });
+it.each(['REFUND','REPLACEMENT'] as const)('a slow account check cannot submit %s after transaction expiry',async kind=>{
+ const f=fixture();let release!:()=>void;const accountReady=new Promise<void>(r=>{release=r;});
+ f.stripe.accounts.retrieve=vi.fn(async()=>{await accountReady;return{id:'synthetic-account'};});
+ f.stripe.paymentIntents.create=vi.fn();
+ const guard=vi.fn(async()=>{throw Error('Financial preparation deadline expired');});
+ const pending=f.provider.submit({kind,payload:{accountId:'synthetic-account'}} as FinancialOperation,guard);
+ expect(guard).not.toHaveBeenCalled();release();await expect(pending).rejects.toThrow('deadline');
+ expect(guard).toHaveBeenCalledTimes(1);expect(f.stripe.refunds.create).not.toHaveBeenCalled();expect(f.stripe.paymentIntents.create).not.toHaveBeenCalled();
+});

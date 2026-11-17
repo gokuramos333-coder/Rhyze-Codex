@@ -277,8 +277,8 @@ describe('durable owner financial operations on native PostgreSQL', () => {
   it('retains timeout ownership across repeats and reconciles lost provider acknowledgment', async () => {
     const f = await fixture();
     const submit = f.provider.submit;
-    f.provider.submit = vi.fn(async (op) => {
-      await submit(op);
+    f.provider.submit = vi.fn(async (op, beforeSubmission) => {
+      await submit(op,beforeSubmission);
       throw Error('Lost acknowledgment');
     });
     const op = await approveFinancialOperation(db, f.provider, f.input);
@@ -292,8 +292,8 @@ describe('durable owner financial operations on native PostgreSQL', () => {
     async (status) => {
       const f = await fixture();
       const submit = f.provider.submit;
-      f.provider.submit = vi.fn(async (op) => {
-        const id = await submit(op);
+      f.provider.submit = vi.fn(async (op, beforeSubmission) => {
+        const id = await submit(op,beforeSubmission);
         f.setReceipt({ ...f.getReceipt()!, status });
         return id;
       });
@@ -315,8 +315,8 @@ describe('durable owner financial operations on native PostgreSQL', () => {
   it('rejects a mismatched independent receipt', async () => {
     const f = await fixture();
     const submit = f.provider.submit;
-    f.provider.submit = vi.fn(async (op) => {
-      const id = await submit(op);
+    f.provider.submit = vi.fn(async (op, beforeSubmission) => {
+      const id = await submit(op,beforeSubmission);
       f.setReceipt({ ...f.getReceipt()!, amountCents: 999 });
       return id;
     });
@@ -426,8 +426,8 @@ describe('durable owner financial operations on native PostgreSQL', () => {
   it('reconciles a webhook-first refund without reversing the accounting or attendance', async () => {
     const f = await fixture();
     const submit = f.provider.submit;
-    f.provider.submit = vi.fn(async (op) => {
-      await submit(op);
+    f.provider.submit = vi.fn(async (op, beforeSubmission) => {
+      await submit(op,beforeSubmission);
       throw Error('Process lost after provider success');
     });
     const op = await approveFinancialOperation(db, f.provider, f.input);
@@ -492,10 +492,10 @@ describe('durable owner financial operations on native PostgreSQL', () => {
         second = approveFinancialOperation(db, f.provider, f.input);
       } else {
         const submit = f.provider.submit;
-        f.provider.submit = async (op) => {
+        f.provider.submit = async (op, beforeSubmission) => {
           entered();
           await gate;
-          return submit(op);
+          return submit(op,beforeSubmission);
         };
         first = approveFinancialOperation(db, f.provider, f.input);
         await ready;
@@ -665,10 +665,10 @@ describe('actual roster and member transfer against native ownership', () => {
           );
         } else {
           const submit = f.provider.submit;
-          f.provider.submit = vi.fn(async (op) => {
+          f.provider.submit = vi.fn(async (op, beforeSubmission) => {
             locked.resolve();
             await release.promise;
-            return submit(op);
+            return submit(op,beforeSubmission);
           });
           approval = approveFinancialOperation(db, f.provider, input).then(
             (op) => op,
@@ -859,8 +859,8 @@ async function actionFixture(
     originalAmountCents: amount,
   });
   const submit = f.provider.submit;
-  f.provider.submit = vi.fn(async (op) => {
-    const id = await submit(op);
+  f.provider.submit = vi.fn(async (op, beforeSubmission) => {
+    const id = await submit(op,beforeSubmission);
     f.setReceipt({ ...f.getReceipt()!, amountCents: amount });
     return id;
   });
@@ -1088,8 +1088,8 @@ describe('controlled-switch additional native coverage', () => {
       invoiceId,
     });
     const submit = f.provider.submit;
-    f.provider.submit = vi.fn(async (op) => {
-      const result = await submit(op);
+    f.provider.submit = vi.fn(async (op, beforeSubmission) => {
+      const result = await submit(op,beforeSubmission);
       // A separate provider callback lands before local reconciliation, after submit commits.
       return result;
     });
