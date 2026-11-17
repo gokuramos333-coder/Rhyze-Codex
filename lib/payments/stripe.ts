@@ -1,3 +1,4 @@
+import { closeLegacyFinancialWriters } from './financial-bridge';
 import Stripe from 'stripe';
 import { requiresLiveStripe } from '@/lib/payments/stripe-mode';
 
@@ -30,7 +31,7 @@ export function getStripe() {
     throw new Error('Production requires a live Stripe key; test payments are disabled.');
   }
   if (!stripeClient || clientKey !== key) {
-    stripeClient = new Stripe(key);
+    stripeClient = closeLegacyFinancialWriters(new Stripe(key));
     clientKey = key;
   }
   return stripeClient;

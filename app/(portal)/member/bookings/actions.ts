@@ -1,4 +1,5 @@
 'use server';
+import { assertLegacyEventAdmission } from '@/lib/payments/financial-bridge';
 import { giftCreditAllows, giftCreditKind } from '@/lib/domain/credits/gift-credit';
 import type { Prisma } from '@prisma/client';
 import { vipRenewalReservation, vipRenewalEntitlementInclude, renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
@@ -70,6 +71,7 @@ function emailTime(value: Date) {
 export async function bookOccurrenceAction(formData: FormData): Promise<void> {
   const user = await requireArea('member');
   const occurrenceId = String(formData.get('occurrenceId') || '');
+  assertLegacyEventAdmission(occurrenceId);
 
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${occurrenceId}))`;

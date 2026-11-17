@@ -1,3 +1,4 @@
+import { assertLegacyEventAdmission } from '@/lib/payments/financial-bridge';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 import { NextResponse } from 'next/server';
 import { attributionMetadata } from '@/lib/attribution/first-touch';
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
     if (!occurrence) {
       return NextResponse.json({ error: 'No upcoming event date is available.' }, { status: 404 });
     }
+    assertLegacyEventAdmission(occurrence.id);
     const priced = priceEventOrder({
       id: occurrence.id,
       slug: occurrence.template.slug,

@@ -1,4 +1,5 @@
 'use server';
+import { assertLegacyEventAdmission } from '@/lib/payments/financial-bridge';
 import { giftCreditAllows } from '@/lib/domain/credits/gift-credit';
 import { vipRenewalReservation, vipRenewalEntitlementInclude } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { isOwnerUnlimitedAccess } from '@/lib/domain/credits/owner-unlimited-access';
@@ -42,6 +43,7 @@ function creditBalance(entries: { quantity: number }[], includedCredits: number 
 export async function addMemberToClassAction(formData: FormData) {
   const actor = await requireApprovedOwner();
   const occurrenceId = String(formData.get('occurrenceId') || '');
+  assertLegacyEventAdmission(occurrenceId);
   const memberQuery = String(formData.get('memberQuery') || '').trim();
   if (!occurrenceId || memberQuery.length < 2) redirect(rosterPath(occurrenceId, 'member-search'));
 
@@ -226,6 +228,7 @@ export async function addMemberToClassAction(formData: FormData) {
 export async function addOwnerComplimentaryBookingAction(formData: FormData) {
   const actor = await requireApprovedOwner();
   const occurrenceId = String(formData.get('occurrenceId') || '');
+  assertLegacyEventAdmission(occurrenceId);
   const email = String(formData.get('email') || '').trim().toLowerCase();
   if (!occurrenceId || !ownerEmails.has(email)) return;
 

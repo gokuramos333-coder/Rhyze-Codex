@@ -1,4 +1,5 @@
 'use server';
+import { assertLegacyEventAdmission } from '@/lib/payments/financial-bridge';
 import { renewalFunding } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
 import { transferCreditAccountsInclude } from '@/lib/domain/transfers/transfer-credit-accounts';
@@ -21,6 +22,7 @@ export async function transferBookingAction(formData: FormData) {
   const instructor = await requireArea('instructor');
   const bookingId = String(formData.get('bookingId') || '');
   const destinationId = String(formData.get('destinationId') || '');
+  assertLegacyEventAdmission(destinationId);
   const reason = String(formData.get('reason') || '').trim() || null;
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },

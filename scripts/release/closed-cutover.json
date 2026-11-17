@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "phase": "BRIDGE",
+  "base": "48460727d4e17484c4826b08e6087d4c18e32283",
+  "runtimeFiles": {
+    "lib/payments/financial-bridge.ts": "7c2dd59b1247aa5c9899728690dc995a39c174b71b0e14f21f0d7b20b4134435",
+    "lib/payments/stripe.ts": "073d448f5c94144b2822a59eac98d3bac2c54c33d1dd47dce2403ce6ca6dc824",
+    "app/api/checkout/event/route.ts": "beab7c2da8a62ea650d25e685b1d2e7d054925232b7792d8477897cd70a9008f",
+    "app/(portal)/member/bookings/actions.ts": "12c890770d8209cfd91ec846fa68e1c37f3a1a4e41f6853bc3f6a9ad9867b5d0",
+    "app/(studio)/admin/schedule/[occurrenceId]/roster/actions.ts": "6dfb671824f9bbd0c2e4a25e225b417f45d95710790c41a276e7f71ad0a67055",
+    "app/(portal)/member/bookings/reschedule/actions.ts": "4c80333450475431ec204319b2b3bea6cbe5d3cb6ee5ff5f06d41851fd1914d8",
+    "app/(portal)/instructor/classes/[occurrenceId]/transfers/actions.ts": "a34ce779592f3dfce2da63de99eaf3d198b782e688d700e56b2f0eed08c3d9ed"
+  }
+}

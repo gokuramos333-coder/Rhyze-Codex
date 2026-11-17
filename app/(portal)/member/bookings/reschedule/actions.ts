@@ -1,4 +1,5 @@
 'use server';
+import { assertLegacyEventAdmission } from '@/lib/payments/financial-bridge';
 import { transferCreditAccountsInclude } from '@/lib/domain/transfers/transfer-credit-accounts';
 import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
 import { classTicketCanTransfer } from '@/lib/payments/class-ticket';
@@ -18,6 +19,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
   const user = await requireArea('member');
   const bookingId = String(formData.get('bookingId') || '');
   const destinationId = String(formData.get('destinationId') || '');
+  assertLegacyEventAdmission(destinationId);
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, userId: user.id, status: 'CONFIRMED' },
     include: {

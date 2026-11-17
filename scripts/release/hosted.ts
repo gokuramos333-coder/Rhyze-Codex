@@ -1,3 +1,8 @@
+import {
+  closedCutoverPlan,
+  verifyQuarantine,
+  verifyBridgeReconciliation,
+} from './closed-cutover';
 import { execFile, execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -88,6 +93,13 @@ async function main() {
           'node_modules/netlify-cli/bin/run.js',
         ),
       );
+  const closed = closedCutoverPlan(
+    root,
+    git('rev-parse', options.baseRef!),
+    git('diff', '--name-only', options.baseRef!, 'HEAD')
+      .split('\n')
+      .filter(Boolean),
+  );
   const cli = candidates.find(
     (file) =>
       existsSync(file) &&
@@ -150,6 +162,28 @@ async function main() {
   const base = git('rev-parse', options.baseRef!);
   if (current.commit_ref !== base && !current.title?.includes(base))
     throw Error('Live source does not match the supplied base.');
+  let priorQuarantine: any;
+  let cutoverEvidence: any;
+  let quarantineSample: string | undefined;
+  if (closed) {
+    const old = await api<HostedDeploy[]>('listSiteDeploys', {
+      site_id: SITE_ID,
+      per_page: 100,
+      page: 1,
+    });
+    const sample = old.find((d) => d.state === 'ready' && d.id !== current.id);
+    if (!sample) throw Error('Legacy quarantine sample required');
+    quarantineSample = sample.id;
+    priorQuarantine = await verifyQuarantine(sample.id, current.id);
+    if (closed.phase === 'FINAL') {
+      const file = process.env.RHYZE_CUTOVER_EVIDENCE_FILE;
+      if (!file) throw Error('Bridge reconciliation file required');
+      cutoverEvidence = verifyBridgeReconciliation(
+        JSON.parse(readFileSync(file, 'utf8')),
+        { deployId: current.id, sourceSha: base },
+      );
+    }
+  }
   const initialVars = await variables();
   if (initialVars.some((item) => item.key === APPROVAL_KEY))
     throw Error('An existing hosted approval requires reconciliation first.');
@@ -200,6 +234,9 @@ async function main() {
     expectedDeploy: options.expectedDeploy,
     configHash,
     status: 'BLOCKED',
+    closedCutover: closed,
+    priorQuarantine,
+    cutoverEvidenceHash: cutoverEvidence?.evidenceHash,
     at: new Date().toISOString(),
   };
   const save = () =>
@@ -210,6 +247,7 @@ async function main() {
     );
   let approvalMayExist = false;
   let candidateId = '';
+  let hostedApproval: any;
 
   async function unchanged() {
     if (git('rev-parse', 'HEAD') !== revision || git('status', '--porcelain'))
@@ -219,6 +257,18 @@ async function main() {
     if (fingerprint(vars) !== configHash)
       throw Error('Production configuration changed during release.');
     assertProductionEnvironment(vars, current.created_at);
+    if (closed && quarantineSample)
+      await verifyQuarantine(quarantineSample, current.id);
+    if (closed?.phase === 'FINAL') {
+      const refreshed = verifyBridgeReconciliation(
+        JSON.parse(
+          readFileSync(process.env.RHYZE_CUTOVER_EVIDENCE_FILE!, 'utf8'),
+        ),
+        { deployId: current.id, sourceSha: base },
+      );
+      if (refreshed.evidenceHash !== cutoverEvidence.evidenceHash)
+        throw Error('Cutover evidence changed during release');
+    }
   }
   try {
     const result = await runHostedWorkflow(
@@ -247,6 +297,7 @@ async function main() {
             nonce: randomBytes(24).toString('hex'),
             expiresAt: Date.now() + 60 * 60 * 1000,
           };
+          hostedApproval = approval;
           approvalMayExist = true;
           await api('createEnvVars', {
             account_id: ACCOUNT_ID,
@@ -261,6 +312,7 @@ async function main() {
               },
             ],
           });
+          await unchanged(); // Revalidate evidence and ingress immediately before migration-bearing build.
           const build = await api<{ id: string; deploy_id: string }>(
             'createSiteBuild',
             {
@@ -304,35 +356,50 @@ async function main() {
             deployId: candidateId,
           });
           const origin = immutableDeployOrigin(candidate);
-          const response = await fetch(`${origin}/_rhyze-release.json`, {
-            redirect: 'error',
-            cache: 'no-store',
-            signal: AbortSignal.timeout(30000),
-          });
-          if (!response.ok) throw Error('Hosted build receipt unavailable.');
-          const receipt = await response.json();
-          assertHostedReceipt(receipt, approval);
-          evidence.hostedReceipt = receipt;
-          for (const route of ['/classes', '/api/auth/session']) {
-            const smoke = await fetch(origin + route, {
+          if (closed) {
+            const denied = await fetch(`${origin}/api/auth/session`, {
+              redirect: 'manual',
+              signal: AbortSignal.timeout(30000),
+            });
+            if (![403, 404].includes(denied.status))
+              throw Error('Unpublished candidate must remain quarantined');
+            await denied.body?.cancel();
+            evidence.candidateHttp = {
+              status: 'DEFERRED_UNTIL_PUBLISHED_CLOSED',
+              reason:
+                'Unpublished artifacts remain blocked; no pre-publication HTTP pass is claimed.',
+            };
+          } else {
+            const response = await fetch(`${origin}/_rhyze-release.json`, {
               redirect: 'error',
               cache: 'no-store',
               signal: AbortSignal.timeout(30000),
             });
-            if (!smoke.ok)
-              throw Error(
-                'Hosted application route failed before publication.',
-              );
-            if (route === '/api/auth/session') await smoke.json();
-            else if (!(await smoke.text()).includes('Rhyze'))
-              throw Error('Hosted application HTML missing.');
+            if (!response.ok) throw Error('Hosted build receipt unavailable.');
+            const receipt = await response.json();
+            assertHostedReceipt(receipt, approval);
+            evidence.hostedReceipt = receipt;
+            for (const route of ['/classes', '/api/auth/session']) {
+              const smoke = await fetch(origin + route, {
+                redirect: 'error',
+                cache: 'no-store',
+                signal: AbortSignal.timeout(30000),
+              });
+              if (!smoke.ok)
+                throw Error(
+                  'Hosted application route failed before publication.',
+                );
+              if (route === '/api/auth/session') await smoke.json();
+              else if (!(await smoke.text()).includes('Rhyze'))
+                throw Error('Hosted application HTML missing.');
+            }
+            evidence.hostedApplicationRoutes = true;
+            // Same verifier as canonical production, bound to this receipt-pinned
+            // immutable artifact. Any auth/role/asset failure blocks publication.
+            evidence.candidateHttp = await verifyLiveHttp({
+              immutableDeploy: candidate,
+            });
           }
-          evidence.hostedApplicationRoutes = true;
-          // Same verifier as canonical production, bound to this receipt-pinned
-          // immutable artifact. Any auth/role/asset failure blocks publication.
-          evidence.candidateHttp = await verifyLiveHttp({
-            immutableDeploy: candidate,
-          });
           save();
           if ((await patOff()) !== databaseId)
             throw Error('Site database identity changed.');
@@ -344,7 +411,7 @@ async function main() {
           });
         },
         async publish() {
-          evidence.status = 'PUBLISHING';
+          evidence.status = closed ? 'PUBLISHING_CLOSED' : 'PUBLISHING';
           save();
           // This is a READY production-context Git build, never a preview promotion.
           await api('restoreSiteDeploy', {
@@ -357,6 +424,24 @@ async function main() {
         },
         async verify() {
           await locked(candidateId);
+          if (closed) {
+            const r = await fetch(
+              'https://www.rhyzefitness.com/_rhyze-release.json',
+              {
+                cache: 'no-store',
+                redirect: 'error',
+                signal: AbortSignal.timeout(30000),
+              },
+            );
+            if (!r.ok) throw Error('Published closed receipt unavailable');
+            const receipt = await r.json();
+            assertHostedReceipt(receipt, hostedApproval);
+            evidence.hostedReceipt = receipt;
+            evidence.closedIngress = await verifyQuarantine(
+              options.expectedDeploy,
+              candidateId,
+            );
+          }
           evidence.after = await verifyLiveHttp();
           await locked(candidateId);
           await patOff();
@@ -393,9 +478,13 @@ async function main() {
       },
     );
     Object.assign(evidence, result);
+    if (closed && result.status === 'VERIFIED') {
+      evidence.status = 'VERIFIED_CLOSED';
+      save();
+    }
     if (result.status !== 'VERIFIED') process.exitCode = 1;
     console.info(
-      `Hosted release status: ${result.status}; failed steps: ${result.failures.join(', ') || 'none'}.`,
+      `Hosted release status: ${evidence.status}; failed steps: ${result.failures.join(', ') || 'none'}.`,
     );
   } finally {
     save();
