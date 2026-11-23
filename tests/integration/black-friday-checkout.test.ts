@@ -1295,3 +1295,80 @@ it.each(['NO_SHOW','LATE_CANCELLED'] as const)('review R1 cutover requires new p
  await expect(db.booking.update({where:{id:historical.id},data:{status:'CONFIRMED'}})).rejects.toThrow('native event admission');
  expect((await db.booking.findUniqueOrThrow({where:{id:historical.id}})).status).toBe(status);
 });
+
+const nativeCorrections = [
+ {absence:'NO_SHOW',click:'NO_SHOW',source:'MEMBER'},
+ {absence:'NO_SHOW',click:'CHECKED_IN',source:'ADMIN_ADDED'},
+ {absence:'LATE_CANCELLED',click:'LATE_CANCELLED',source:'ADMIN_ADDED'},
+ {absence:'LATE_CANCELLED',click:'CHECKED_IN',source:'MEMBER'},
+] as const;
+
+async function nativeAbsenceFixture(absence:'NO_SHOW'|'LATE_CANCELLED',source:'MEMBER'|'ADMIN_ADDED') {
+ const e=decemberEvents[1];await decemberDate(e);
+ const instructor=await user('Correction Instructor');
+ await db.user.update({where:{id:instructor},data:{role:'INSTRUCTOR'}});
+ await db.classOccurrence.update({where:{id:e.id},data:{capacity:50,instructorId:instructor}});
+ const vip=await vipFixture('Correction Member');const member=vip.u,bookedAt=new Date('2026-12-04T16:00:00Z');
+ const month=vipMonthlyBenefitWindowForDate(bookedAt);
+ await db.membership.update({where:{id:vip.m.id},data:{currentPeriodStart:month.validFrom,currentPeriodEnd:month.validUntil}});
+ await db.creditAccount.updateMany({where:{userId:member,isUnlimited:true},data:{validUntil:month.validUntil}});
+ const credit=await db.creditAccount.create({data:{userId:member,label:month.eventCreditLabel,validFrom:month.validFrom,validUntil:month.validUntil,entries:{create:{type:'GRANT',quantity:1}}}});
+ const {authorizeNativeEventAdmission}=await import('@/lib/payments/special-event-credit');
+ const booking=await db.$transaction(async tx=>{
+  await authorizeNativeEventAdmission(tx,e.id,member,credit.id);
+  const b=await tx.booking.create({data:{occurrenceId:e.id,userId:member,bookedAt,source,policySnapshot:{accessType:'VIP',creditAccountId:credit.id}}});
+  await tx.creditLedgerEntry.create({data:{creditAccountId:credit.id,bookingId:b.id,type:'RESERVE',quantity:-1,createdAt:bookedAt}});
+  return b;
+ });
+ const {markAttendanceAction}=await import('@/app/(portal)/instructor/classes/[occurrenceId]/roster/actions');
+ const mark=async(status:string)=>{
+  const form=new FormData();form.set('bookingId',booking.id);form.set('occurrenceId',e.id);form.set('status',status);
+  attendanceActor=instructor;
+  try {return await markAttendanceAction(form);} finally {attendanceActor=null;}
+ };
+ const capacity=async()=>(await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${e.id}`)[0].used;
+ const ledger=()=>db.creditLedgerEntry.findMany({where:{creditAccountId:credit.id},orderBy:{id:'asc'}});
+ const row=()=>db.booking.findUniqueOrThrow({where:{id:booking.id},include:{attendance:true}});
+ await expect(mark(absence)).rejects.toThrow('attendance-'+absence.toLowerCase());
+ expect((await row()).status).toBe(absence);
+ return {e,credit,booking,instructor,member,membershipId:vip.m.id,mark,capacity,ledger,row};
+}
+
+it.each(nativeCorrections)('review fix2 corrects $source $absence with $click using the original fully spent credit',async({absence,click,source})=>{
+ const f=await nativeAbsenceFixture(absence,source);
+ if(source==='ADMIN_ADDED' && click==='CHECKED_IN')await db.membership.update({where:{id:f.membershipId},data:{status:'EXPIRED'}});
+ const used=await f.capacity(),originalLedger=await f.ledger(),before=await f.row();
+ expect(originalLedger.reduce((n,entry)=>n+entry.quantity,0)).toBe(0);
+ const result=absence==='NO_SHOW'?'attendance-fee-review':click===absence?'attendance-cleared':'attendance-checked_in';
+ await expect(f.mark(click)).rejects.toThrow(result);
+ const b=await f.row();
+ expect(b).toMatchObject({id:f.booking.id,occurrenceId:f.e.id,userId:f.member,source,status:'CONFIRMED',policySnapshot:f.booking.policySnapshot,bookedAt:f.booking.bookedAt,cancelledAt:before.cancelledAt});
+ if(click===absence)expect(b.attendance).toBeNull();
+ else expect(b.attendance).toMatchObject({status:'CHECKED_IN',bookingId:b.id,markedById:f.instructor,checkedInAt:expect.any(Date)});
+ expect(await f.ledger()).toEqual(originalLedger);
+ expect(await f.capacity()).toBe(used+1);
+});
+
+it.each(['released','replaced','refunded','full','closed','reassigned'] as const)('review fix2 refuses correction when %s while preserving the absence and ledger',async reason=>{
+ const f=await nativeAbsenceFixture('LATE_CANCELLED','MEMBER');
+ const used=await f.capacity();
+ const [release]=await db.$queryRaw<{enabledDeployId:string;sourceSha:string;evidenceHash:string;activatedAt:Date}[]>`SELECT * FROM "FinancialRelease" WHERE id='rhyze'`;
+ if(reason==='released')await db.creditLedgerEntry.create({data:{creditAccountId:f.credit.id,bookingId:f.booking.id,type:'RELEASE',quantity:1}});
+ if(reason==='replaced')await db.creditAccount.create({data:{userId:f.member,label:'Event cancellation credit',entries:{create:{bookingId:f.booking.id,type:'GRANT',quantity:1}}}});
+ if(reason==='refunded'){
+  const order=await db.commerceOrder.create({data:{userId:f.member,occurrenceId:f.e.id,kind:'EVENT',status:'REFUNDED',amountCents:3000,refundedAmountCents:3000}});
+  await db.commerceRefund.create({data:{commerceOrderId:order.id,bookingId:f.booking.id,amountCents:3000,status:'SUCCEEDED'}});
+ }
+ if(reason==='full')await db.classOccurrence.update({where:{id:f.e.id},data:{historicalSignupCount:50-used}});
+ if(reason==='closed')await db.$executeRaw`UPDATE "FinancialRelease" SET "enabledDeployId"=NULL,"sourceSha"=NULL,"evidenceHash"=NULL,"activatedAt"=NULL WHERE id='rhyze'`;
+ if(reason==='reassigned')await db.classOccurrence.update({where:{id:f.e.id},data:{instructorId:null}});
+ const before=await f.row(),entries=await f.ledger();
+ try{
+  if(reason==='reassigned')await expect(f.mark('CHECKED_IN')).resolves.toBeUndefined();
+  else await expect(f.mark('CHECKED_IN')).rejects.toThrow({released:'original event credit',replaced:'original event credit',refunded:'cash refund',full:'seats unavailable',closed:'temporarily paused'}[reason]);
+  expect(await f.row()).toEqual(before);expect(await f.ledger()).toEqual(entries);expect(await f.capacity()).toBe(used);
+ }finally{
+  if(reason==='full')await db.classOccurrence.update({where:{id:f.e.id},data:{historicalSignupCount:0}});
+  if(reason==='closed')await db.$executeRaw`UPDATE "FinancialRelease" SET "enabledDeployId"=${release.enabledDeployId},"sourceSha"=${release.sourceSha},"evidenceHash"=${release.evidenceHash},"activatedAt"=${release.activatedAt} WHERE id='rhyze'`;
+ }
+});

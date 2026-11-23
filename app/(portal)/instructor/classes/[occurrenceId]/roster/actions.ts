@@ -26,6 +26,8 @@ import {
 import { noShowFeeDecision } from '@/lib/domain/bookings/booking-rules';
 import { bookingAccessType } from '@/lib/domain/bookings/booking-access';
 import { hasPermission } from '@/lib/auth/permissions';
+import { authorizeNativeEventAttendanceCorrection } from '@/lib/payments/special-event-credit';
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
 import { assertNoCashRefundForBooking } from '@/lib/domain/bookings/cash-refund-guard';
 
 const validStatuses = new Set<AttendanceStatus>([
@@ -148,12 +150,22 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
       if (lockedBooking.userId !== booking.userId || lockedBooking.occurrenceId !== occurrenceId || (lockedBooking.attendance?.updatedAt.getTime() ?? null) !== (booking.attendance?.updatedAt.getTime() ?? null)) throw Error('Attendance changed; reload the roster');
       // Recheck the staff assignment after admission is locked, including native controls
       // used for a guest who has been linked to an account.
-      if (lockedBooking.policySnapshot && typeof lockedBooking.policySnapshot==='object' &&
-          'blackFridayOrderId' in lockedBooking.policySnapshot) {
+      const nativeCorrection = (lockedBooking.source === 'MEMBER' || lockedBooking.source === 'ADMIN_ADDED') &&
+        (lockedBooking.status === 'NO_SHOW' || lockedBooking.status === 'LATE_CANCELLED') &&
+        transition.bookingStatus === 'CONFIRMED' && specialEventIdentity(occurrenceId)?.startAt.startsWith('2026-12-');
+      if (nativeCorrection || (lockedBooking.policySnapshot && typeof lockedBooking.policySnapshot==='object' &&
+          'blackFridayOrderId' in lockedBooking.policySnapshot)) {
         const staff=await tx.user.findUniqueOrThrow({where:{id:actor.id},select:{status:true,role:true}});
-        const current=await tx.classOccurrence.findUniqueOrThrow({where:{id:occurrenceId},select:{instructorId:true}});
+        const current=await tx.classOccurrence.findUniqueOrThrow({where:{id:occurrenceId},include:{template:true}});
         if(staff.status!=='ACTIVE' || !hasPermission(staff.role,'roster:manage-assigned') ||
            (staff.role==='INSTRUCTOR' && current.instructorId!==actor.id)) throw Error('Staff authorization required.');
+        if (nativeCorrection) {
+          const mark = lockedBooking.attendance;
+          if (lockedBooking.cancelledAt?.getTime() !== booking.cancelledAt?.getTime() ||
+              mark?.status !== lockedBooking.status || mark.bookingId !== bookingId || mark.occurrenceId !== occurrenceId ||
+              mark.userId !== lockedBooking.userId) throw Error('Attendance changed; reload the roster');
+          await authorizeNativeEventAttendanceCorrection(tx, lockedBooking, current);
+        }
       }
       if (transition.action === 'CLEAR') {
         await tx.attendanceRecord.deleteMany({

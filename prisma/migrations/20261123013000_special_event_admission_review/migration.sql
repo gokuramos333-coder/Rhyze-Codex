@@ -71,8 +71,13 @@ CREATE FUNCTION bf_native_event_admission() RETURNS trigger LANGUAGE plpgsql AS 
 DECLARE credit text:=NEW."policySnapshot"->>'creditAccountId';
 BEGIN
  IF TG_OP='UPDATE' AND OLD.id=NEW.id AND OLD."occurrenceId"=NEW."occurrenceId" AND OLD."userId"=NEW."userId"
-   AND OLD.source=NEW.source AND OLD."bookedAt"=NEW."bookedAt" AND OLD.status IN ('CONFIRMED','ATTENDED')
-   AND OLD."policySnapshot" IS NOT DISTINCT FROM NEW."policySnapshot" THEN RETURN NULL; END IF;
+   AND OLD.source=NEW.source AND OLD."bookedAt"=NEW."bookedAt" AND OLD."policySnapshot" IS NOT DISTINCT FROM NEW."policySnapshot" THEN
+   IF OLD.status IN ('CONFIRMED','ATTENDED') THEN RETURN NULL; END IF;
+   IF OLD.status IN ('NO_SHOW','LATE_CANCELLED') AND NEW.status='CONFIRMED' AND credit IS NOT NULL AND
+      OLD."cancelledAt" IS NOT DISTINCT FROM NEW."cancelledAt" AND
+      current_setting('rhyze.native_event_attendance_correction',true) IS NOT DISTINCT FROM
+        jsonb_build_array(OLD.id,OLD."occurrenceId",OLD."userId",credit,OLD.status)::text THEN RETURN NULL; END IF;
+ END IF;
  IF credit IS NULL OR current_setting('rhyze.native_event_admission',true) IS DISTINCT FROM
      jsonb_build_array(NEW."occurrenceId",NEW."userId",credit)::text THEN
    RAISE EXCEPTION 'Verified native event admission is required';

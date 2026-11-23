@@ -1,4 +1,4 @@
-import { earnedEventCreditCovers } from '@/lib/payments/special-event-credit';
+import { earnedEventCreditCovers, hasRetainedEventReservation } from '@/lib/payments/special-event-credit';
 import {expect,it} from 'vitest';
 import {blackFridayOffer,specialEventOffers,specialEventCreditAllowed} from '@/lib/payments/black-friday-new-friend';
 it.each(specialEventOffers)('validates exact terms for $slug and rejects stale $30/date input',offer=>{
@@ -25,4 +25,20 @@ it('requires a spendable earned event-month account covering purchase time and t
  for(const change of [{id:'gift-credit:BOTH:fixture'}, {sourcePurchaseId:'purchase'}, {isUnlimited:true}, {validUntil:start}, {validFrom:start}, {validUntil:null},
    {entries:[{quantity:1},{quantity:-1}]}, {label:'Event credit — November 2026 VIP complimentary event credit — expires 2026-11-30'}])
    expect(earnedEventCreditCovers({...account,...change},now,start)).toBe(false);
+});
+
+it('requires exactly one original net event reservation on the recorded account',()=>{
+ const bookedAt=new Date('2026-12-02T12:00Z'),start=new Date('2026-12-27T16:00Z');
+ const account={id:'original',isUnlimited:false,sourcePurchaseId:null,label:'Event credit — December 2026 VIP complimentary event credit — expires 2026-12-31',
+   validFrom:new Date('2026-12-01T05:00Z'),validUntil:new Date('2027-01-01T05:00Z'),entries:[{quantity:1},{quantity:-1}]};
+ const reserve={creditAccountId:'original',type:'RESERVE',quantity:-1};
+ const release={...reserve,type:'RELEASE',quantity:1};
+ expect(hasRetainedEventReservation(account,bookedAt,start,[reserve])).toBe(true);
+ expect(hasRetainedEventReservation({...account,entries:[{quantity:-1}]},bookedAt,start,[reserve])).toBe(false);
+ expect(hasRetainedEventReservation(account,bookedAt,start,[reserve,release,reserve])).toBe(true);
+ expect(hasRetainedEventReservation(account,bookedAt,start,[{...reserve,creditAccountId:'prior'},{...release,creditAccountId:'prior'},reserve])).toBe(true);
+ for (const entries of [[],[reserve,release],[reserve,reserve],[{...reserve,creditAccountId:'other'}],
+   [reserve,{...reserve,creditAccountId:'other'}],[reserve,{...release,type:'GRANT',creditAccountId:'replacement'}]]) {
+   expect(hasRetainedEventReservation(account,bookedAt,start,entries)).toBe(false);
+ }
 });
