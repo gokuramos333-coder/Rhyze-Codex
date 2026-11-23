@@ -70,8 +70,8 @@ $$;
 CREATE FUNCTION bf_native_event_admission() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE credit text:=NEW."policySnapshot"->>'creditAccountId';
 BEGIN
- IF TG_OP='UPDATE' AND OLD."occurrenceId"=NEW."occurrenceId" AND OLD."userId"=NEW."userId"
-   AND OLD.source=NEW.source AND OLD."bookedAt"=NEW."bookedAt" AND OLD.status<>'CANCELLED'
+ IF TG_OP='UPDATE' AND OLD.id=NEW.id AND OLD."occurrenceId"=NEW."occurrenceId" AND OLD."userId"=NEW."userId"
+   AND OLD.source=NEW.source AND OLD."bookedAt"=NEW."bookedAt" AND OLD.status IN ('CONFIRMED','ATTENDED')
    AND OLD."policySnapshot" IS NOT DISTINCT FROM NEW."policySnapshot" THEN RETURN NULL; END IF;
  IF credit IS NULL OR current_setting('rhyze.native_event_admission',true) IS DISTINCT FROM
      jsonb_build_array(NEW."occurrenceId",NEW."userId",credit)::text THEN
@@ -89,6 +89,9 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM "FinancialRelease" WHERE id='rhyze' AND "enabledDeployId" IS NOT NULL
     AND "sourceSha" IS NOT NULL AND "evidenceHash" IS NOT NULL FOR SHARE)
  THEN RAISE EXCEPTION 'Special event cash checkout is paused'; END IF;
+ IF current_setting('rhyze.verified_special_order',true) IS DISTINCT FROM NEW.id THEN
+   RAISE EXCEPTION 'Verified special event cash checkout is required';
+ END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER bf_closed_legacy_cash_admission BEFORE INSERT ON "CommerceOrder" FOR EACH ROW

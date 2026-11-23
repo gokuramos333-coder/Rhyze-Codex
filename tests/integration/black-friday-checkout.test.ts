@@ -1036,9 +1036,13 @@ it('December guest signs paper, arrives without account, links later and appears
 });
 
 
-async function legacyDecember(occ:string,userId:string,amountCents=3000) {
+async function legacyDecember(occ:string,userId:string,amountCents=3000,existingBeforeMigration=true) {
  const id=randomUUID(), sessionId='cs_'+randomUUID();
- await db.commerceOrder.create({data:{id,kind:'EVENT',occurrenceId:occ,userId,amountCents,stripeCheckoutSessionId:sessionId}});
+ await db.$transaction(async tx=>{
+  // Seed the already-issued order for callback/reconciliation tests. Actual old writers omit this proof.
+  if(existingBeforeMigration)await tx.$queryRaw`SELECT set_config('rhyze.verified_special_order',${id},true)`;
+  await tx.commerceOrder.create({data:{id,kind:'EVENT',occurrenceId:occ,userId,amountCents,stripeCheckoutSessionId:sessionId}});
+ });
  const session={id:sessionId,mode:'payment',status:'open',payment_status:'unpaid',currency:'usd',amount_total:amountCents,
    client_reference_id:id,payment_intent:null as string|null,metadata:{purchaseType:'EVENT',userId,occurrenceId:occ,commerceOrderId:id}};
  sessions.set('legacy:'+id,session);
@@ -1054,7 +1058,7 @@ it('December verifies legacy expiry before retry, records late conflicting money
  const e=decemberEvents[1];await decemberDate(e);
  const userId=await user('Legacy Conflict Buyer'),guest={fullName:'Conflict Friend',phone:'2015550156'};
  const legacy=await legacyDecember(e.id,userId);
- await expect(legacyDecember(e.id,userId)).rejects.toThrow('earlier checkout');
+ await expect(legacyDecember(e.id,userId,3000,false)).rejects.toThrow('cash checkout');
  const input={userId,occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'PAIR' as const,friend:guest};
  await expect(startBlackFridayCheckout(db,stripe,input,now)).rejects.toThrow('earlier event');
  legacy.status='expired';
@@ -1247,7 +1251,7 @@ it('review R1 gate rejects old native writers after migration and new writers du
  try{
   await db.$executeRaw`UPDATE "FinancialRelease" SET "enabledDeployId"=NULL,"sourceSha"=NULL,"evidenceHash"=NULL,"activatedAt"=NULL WHERE id='rhyze'`;
   await expect(bookOccurrenceAction(form)).rejects.toThrow('temporarily paused');
-  await expect(legacyDecember(e.id,vip.u)).rejects.toThrow('cash checkout');
+  await expect(legacyDecember(e.id,vip.u,3000,false)).rejects.toThrow('cash checkout');
   expect(await db.creditLedgerEntry.count({where:{creditAccountId:credit.id,type:'RESERVE'}})).toBe(0);
  }finally{
   await db.$executeRaw`UPDATE "FinancialRelease" SET "enabledDeployId"=${release.enabledDeployId},"sourceSha"=${release.sourceSha},"evidenceHash"=${release.evidenceHash},"activatedAt"=${release.activatedAt} WHERE id='rhyze'`;
@@ -1258,5 +1262,36 @@ it('review R1 gate rejects old native writers after migration and new writers du
  try {
   await expect(addMemberToClassAction(form)).rejects.toThrow('result=member-added');
   expect(await db.creditLedgerEntry.count({where:{creditAccountId:credit.id,type:'RESERVE'}})).toBe(1);
+  const booking=await db.booking.findUniqueOrThrow({where:{occurrenceId_userId:{occurrenceId:e.id,userId:vip.u}}});
+  await db.booking.update({where:{id:booking.id},data:{status:'ATTENDED'}});
+  await expect(db.booking.update({where:{id:booking.id},data:{status:'CONFIRMED',policySnapshot:{creditAccountId:'changed'}}})).rejects.toThrow('native event admission');
+  await db.booking.update({where:{id:booking.id},data:{status:'CONFIRMED'}});
  }finally{vi.useRealTimers();}
+});
+
+it('review R1 cutover rejects a fresh December order from the ordinary checkout route even while open',async()=>{
+ const e=decemberEvents[1];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:40}});
+ const oldBuyer=buyer;buyer=await user('Legacy ordinary route');
+ const offers=await import('@/lib/payments/black-friday-new-friend');
+ const {POST}=await import('@/app/api/checkout/event/route');
+ const body=()=>new Request('http://localhost/api/checkout/event',{method:'POST',body:JSON.stringify({slug:e.slug,occurrenceId:e.id})});
+ const calls=stripe.checkout.sessions.create.mock.calls.length;
+ const legacyRegistry=vi.spyOn(offers,'specialEventIdentity').mockReturnValue(undefined);
+ vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-12-01T18:00Z'));
+ try{
+  expect((await POST(body())).status).toBe(400);
+  expect(await db.commerceOrder.count({where:{occurrenceId:e.id,userId:buyer}})).toBe(0);
+  expect(stripe.checkout.sessions.create.mock.calls).toHaveLength(calls);
+  legacyRegistry.mockRestore();
+  expect((await POST(body())).status).toBe(200);
+  expect(await db.commerceOrder.count({where:{occurrenceId:e.id,userId:buyer,status:'PENDING'}})).toBe(1);
+  expect(stripe.checkout.sessions.create.mock.calls).toHaveLength(calls+1);
+ }finally{legacyRegistry.mockRestore();buyer=oldBuyer;vi.useRealTimers();}
+});
+it.each(['NO_SHOW','LATE_CANCELLED'] as const)('review R1 cutover requires new proof to restore a %s credit booking',async status=>{
+ const e=decemberEvents[2];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:40}});
+ const userId=await user('Legacy reentry '+status);
+ const historical=await db.booking.create({data:{source:'MEMBER',status,userId,occurrenceId:e.id,policySnapshot:{creditAccountId:'historical-funding'}}});
+ await expect(db.booking.update({where:{id:historical.id},data:{status:'CONFIRMED'}})).rejects.toThrow('native event admission');
+ expect((await db.booking.findUniqueOrThrow({where:{id:historical.id}})).status).toBe(status);
 });
