@@ -122,6 +122,39 @@ export async function verifyQuarantine(
       'Ingress denial is not scheduler drain or provider reconciliation proof.',
   };
 }
+function verifyReviewedClose(approval: any, bridge: { deployId: string; sourceSha: string }) {
+  const dir = join(approval.operationalRoot, 'release-evidence');
+  const read = (name: string) => readFileSync(join(dir, name), 'utf8');
+  const { evidenceHash, ...attempt } = JSON.parse(read('close-attempt.json'));
+  const closeBytes = read('close-result.json');
+  const auditBytes = read('close-audit.json');
+  const close = JSON.parse(closeBytes);
+  const snapshot = JSON.parse(auditBytes);
+  const audit = snapshot.audits?.[0];
+  const sameRuntime = (value: any) =>
+    value?.deployId === bridge.deployId && value?.sourceSha === bridge.sourceSha;
+  const sameState = (left: any, right: any) => left && right &&
+    ['generation', 'enabledDeployId', 'sourceSha', 'evidenceHash'].every(key => left[key] === right[key]);
+  const before = close.before?.state;
+  const after = close.after?.state;
+  if (sha(JSON.stringify(attempt)) !== evidenceHash || evidenceHash !== approval.evidenceHash ||
+      evidenceHash !== close.evidenceHash || close.confirmed !== true ||
+      sha(closeBytes) !== approval.closeResultSha256 || sha(auditBytes) !== approval.closeAuditSha256 ||
+      ['candidateSha','reviewPath','reviewSha256','reportSha256','operationalRoot'].some(key => approval[key] !== attempt[key]) ||
+      JSON.stringify(attempt.operationalFiles) !== JSON.stringify(approval.operationalFiles) ||
+      close.candidateSha !== attempt.candidateSha || !sameRuntime(attempt.runtime) ||
+      !sameRuntime(close.before?.runtime) || !sameRuntime(close.after?.runtime) || !sameRuntime(snapshot.production) ||
+      !sameState(before, attempt.state) || before.enabledDeployId !== bridge.deployId || before.sourceSha !== bridge.sourceSha ||
+      !after || after.generation !== before.generation + 1 || after.generation !== approval.closedGeneration ||
+      after.enabledDeployId !== null || after.sourceSha !== null || after.evidenceHash !== null ||
+      snapshot.databaseIdentity !== approval.databaseIdentity || snapshot.readOnly !== true ||
+      snapshot.gate?.length !== 1 || !sameState(snapshot.gate[0], after) ||
+      snapshot.audits?.length !== 1 || audit.id !== approval.auditId || !attempt.actorId || audit.actorId !== attempt.actorId ||
+      audit.action !== 'financial.release.close' || audit.entityType !== 'FinancialRelease' || audit.entityId !== 'rhyze' ||
+      !sameState(audit.before, before) || !sameState(audit.after, after) || audit.after.approvalEvidenceHash !== evidenceHash) {
+    throw Error('Reviewed candidate differs from original audited CLOSE');
+  }
+}
 export function verifyBridgeReconciliation(
   value: unknown,
   expected: { deployId: string; sourceSha: string; candidateSha: string },
@@ -165,6 +198,7 @@ export function verifyBridgeReconciliation(
         !/^[a-z0-9_.-]+$/.test(name) || sha(readFileSync(join(approval.operationalRoot, name))) !== hash)) {
     throw Error('Technical review or operational files changed');
   }
+  verifyReviewedClose(approval, expected);
   // CLOSE on the previous artifact protects its registered November offers.
   // December's legacy writers are fenced by the new migration, so this
   // pre-build inventory cannot replace a drained, bidirectional final receipt.

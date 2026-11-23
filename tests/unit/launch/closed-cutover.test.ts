@@ -102,7 +102,27 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
   writeFileSync(join(root,'verifier.py'),'fixture');
   const review = { verdict:'APPROVED', candidateSha, reportPath, reportSha256:hash('reviewed'), operationalFiles };
   writeFileSync(reviewPath,JSON.stringify(review));
-  const approval = { operationalRoot: root, candidateSha, reviewPath, reviewSha256:hash(JSON.stringify(review)), reportSha256:review.reportSha256, operationalFiles, auditId:'close-audit', closedGeneration:2, evidenceHash:'a'.repeat(64) };
+  const evidenceDir = join(root, 'release-evidence');
+  mkdirSync(evidenceDir);
+  const initialState = { generation: 1, enabledDeployId: bridge.deployId, sourceSha: bridge.sourceSha, evidenceHash: '1'.repeat(64) };
+  const closedState = { generation: 2, enabledDeployId: null, sourceSha: null, evidenceHash: null };
+  const closeRequest = { candidateSha, reviewPath, reviewSha256:hash(JSON.stringify(review)), reportSha256:review.reportSha256,
+    actorId:'owner', runtime:bridge, state:initialState, operationalFiles, operationalRoot:root };
+  const evidenceHash = hash(JSON.stringify(closeRequest));
+  const approval = { ...closeRequest, auditId:'close-audit', closedGeneration:2, evidenceHash,
+    closeResultSha256:'', closeAuditSha256:'', databaseIdentity:'d'.repeat(64) };
+  const close = { before:{runtime:bridge,state:initialState}, after:{runtime:bridge,state:closedState}, confirmed:true, candidateSha, evidenceHash };
+  const audit = { production:bridge, databaseIdentity:approval.databaseIdentity, readOnly:true, gate:[closedState],
+    audits:[{id:approval.auditId,actorId:'owner',action:'financial.release.close',entityId:'rhyze',entityType:'FinancialRelease',before:initialState,
+      after:{...closedState,approvalEvidenceHash:evidenceHash}}] };
+  function writeEvidence(name:string,value:unknown) {
+    const bytes=JSON.stringify(value);
+    writeFileSync(join(evidenceDir,name),bytes);
+    return hash(bytes);
+  }
+  writeEvidence('close-attempt.json',{...closeRequest,evidenceHash});
+  approval.closeResultSha256 = writeEvidence('close-result.json',close);
+  approval.closeAuditSha256 = writeEvidence('close-audit.json',audit);
   const now = Date.now(),
     fencedAt = new Date(now - 120000).toISOString(),
     completedAt = new Date(now - 1000).toISOString();
@@ -236,6 +256,16 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
     writeFileSync(reportPath,'changed');
     expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow('review');
     writeFileSync(reportPath,'reviewed');
+    const transplantedReview = { ...review, reportSha256: hash('another full report') };
+    writeFileSync(reportPath, 'another full report');
+    writeFileSync(reviewPath, JSON.stringify(transplantedReview));
+    const transplanted = { ...record, approval: { ...approval, reviewSha256:hash(JSON.stringify(transplantedReview)), reportSha256:transplantedReview.reportSha256 } };
+    expect(() => verifyBridgeReconciliation(transplanted, expected, now)).toThrow('CLOSE');
+    writeFileSync(reportPath, 'reviewed');
+    writeFileSync(reviewPath, JSON.stringify(review));
+    writeEvidence('close-audit.json', { ...audit, audits: [] });
+    expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow('CLOSE');
+    writeEvidence('close-audit.json', audit);
     const decemberAdmission = record.decemberAdmission;
     delete record.decemberAdmission;
     expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow('Scoped December');
