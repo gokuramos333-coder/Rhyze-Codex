@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { prisma } from '@/lib/db/prisma';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
@@ -153,6 +154,10 @@ export default async function AdminClassesPage(
   const revenueRecords = recordsInRange(allRevenueRecords, range.start, range.end);
   const summary = summarizeRevenue(revenueRecords);
   const series = buildDailyRevenueSeries(revenueRecords, range.start, range.end);
+  const paidCounts = await paidEventDisplayCounts([
+    ...scheduledOccurrences.map((occurrence) => occurrence.id),
+    ...templates.flatMap((template) => template.occurrences.map((occurrence) => occurrence.id)),
+  ]);
   const adminCalendarOccurrences: AdminCalendarOccurrence[] =
     scheduledOccurrences.map((occurrence) => {
       const timezone = occurrence.timezone || 'America/New_York';
@@ -188,7 +193,7 @@ export default async function AdminClassesPage(
         instructor,
         photo: resolveClassArtwork(occurrence),
         capacity: occurrence.capacity,
-        booked: occurrence.bookings.length + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
+        booked: paidCounts.get(occurrence.id) ?? (occurrence.bookings.length + occurrence.historicalSignupCount),
         attended: occurrence.bookings.filter(
           (booking) =>
             booking.status === 'ATTENDED' ||
@@ -199,7 +204,7 @@ export default async function AdminClassesPage(
           occurrence.bookings.filter(
             (booking) =>
               booking.status === 'CONFIRMED' && !booking.attendance,
-          ).length + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
+          ).length + occurrence.historicalSignupCount,
         isPast: occurrence.endAt <= now,
         waitlist: occurrence._count.waitlistEntries,
         status: occurrence.status,
@@ -369,7 +374,7 @@ export default async function AdminClassesPage(
               </p>
               <p className="mt-2 text-xs font-bold uppercase tracking-widest text-rhyze-black/45">
                 {template.occurrences[0] ? `Next: ${template.occurrences[0].startAt.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'No upcoming date'}
-                {template.occurrences[0] ? ` · ${template.occurrences[0]._count.bookings + template.occurrences[0].historicalSignupCount + (template.occurrences[0].pendingTicketSeats ?? 0)} signups` : ''}
+                {template.occurrences[0] ? ` · ${paidCounts.get(template.occurrences[0].id) ?? (template.occurrences[0]._count.bookings + template.occurrences[0].historicalSignupCount)} signups` : ''}
               </p>
               </div>
             </div>

@@ -1,3 +1,4 @@
+import type { bookingAvailability } from '@/lib/catalog/booking-availability';
 import { expandWeeklyRecurrence } from './recurrence-service';
 
 export type PublicCalendarSlot = {
@@ -20,6 +21,7 @@ export type PublicCalendarSlot = {
   duration: string;
   capacity: number;
   booked: number;
+  availability?: ReturnType<typeof bookingAvailability>;
   waitlist: number;
   price: string;
   bookingHref: string;

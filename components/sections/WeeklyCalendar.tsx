@@ -355,7 +355,7 @@ function CustomerScheduleCard({
   compact?: boolean;
 }) {
   const past = publicSlotIsPast(slot);
-  const { soldOut: full, label: availabilityLabel } = bookingAvailability(slot.booked, slot.capacity, slot.waitlist);
+  const { soldOut: full, label: availabilityLabel } = slot.availability ?? bookingAvailability(slot.booked, slot.capacity, slot.waitlist);
   const bookingLabel = publicBookingCountLabel(slot.booked, slot.capacity);
 
   return (

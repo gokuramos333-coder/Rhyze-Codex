@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -56,6 +57,8 @@ export async function EventsPreview({
       (a, b) => a.occurrence.startAt.getTime() - b.occurrence.startAt.getTime(),
     );
 
+  const paidCounts = await paidEventDisplayCounts(eventCards.map(({ occurrence }) => occurrence.id));
+
   return (
     <section
       id="events"
@@ -92,7 +95,7 @@ export async function EventsPreview({
           {eventCards.map(({ event, occurrence }) => {
             const artwork = resolveClassArtwork({ ...occurrence, template: event });
             const bookingLabel = publicBookingCountLabel(
-              occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
+              paidCounts.get(occurrence.id) ?? (occurrence._count.bookings + occurrence.historicalSignupCount),
               occurrence.capacity,
             );
             const availability = bookingAvailability(occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0), occurrence.capacity, occurrence._count.waitlistEntries);

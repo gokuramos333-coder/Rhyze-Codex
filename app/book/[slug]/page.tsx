@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import type { Metadata } from 'next';
@@ -235,10 +236,14 @@ export default async function BookingPage(
   });
   const instructorPhoto = resolveClassArtwork({ ...occurrence, template: artworkTemplate }, instructorName);
   const bookingTitle = occurrence ? occurrenceTitle(occurrence) : stripInstructorFromTitle(cls.name);
-  const occurrenceBookingCount = occurrence
+  const paidCounts = await paidEventDisplayCounts(occurrence ? [occurrence.id] : []);
+  const occurrenceOccupiedCount = occurrence
     ? occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0)
     : 0;
-  const availability = occurrence ? bookingAvailability(occurrenceBookingCount, occurrence.capacity, occurrence._count.waitlistEntries) : null;
+  const availability = occurrence ? bookingAvailability(occurrenceOccupiedCount, occurrence.capacity, occurrence._count.waitlistEntries) : null;
+  const occurrenceBookingCount = occurrence
+    ? paidCounts.get(occurrence.id) ?? (occurrence._count.bookings + occurrence.historicalSignupCount)
+    : 0;
   const soldOut = Boolean(availability?.soldOut);
   const effectiveBookingHref = soldOut && occurrence
     ? session?.user

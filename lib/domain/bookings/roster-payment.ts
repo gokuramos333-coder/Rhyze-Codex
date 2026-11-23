@@ -8,6 +8,7 @@ export function rosterPaymentDetails(input: {
   importedAccessType?: string | null;
 }) {
   const currentPlan = input.currentPlanName || 'No active plan';
+  if (input.bookingSource === 'OWNER_COMPLIMENTARY') return { paymentMethod: 'Complimentary', currentPlan };
   if (input.bookingSource.startsWith('SOMBLE')) {
     return {
       paymentMethod: input.importedAccessType

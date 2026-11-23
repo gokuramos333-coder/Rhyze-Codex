@@ -1,4 +1,6 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import 'server-only';
+import { bookingAvailability } from '@/lib/catalog/booking-availability';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { prisma } from '@/lib/db/prisma';
@@ -76,6 +78,7 @@ export async function loadPublicScheduleSlots(
     orderBy: { startAt: 'asc' },
   });
 
+  const paidCounts = await paidEventDisplayCounts(occurrences.map((occurrence) => occurrence.id));
   return occurrences.flatMap((occurrence) => {
     const timezone = occurrence.timezone || 'America/New_York';
     const templateName = occurrence.template.name;
@@ -99,6 +102,8 @@ export async function loadPublicScheduleSlots(
         ? 'Ignite with Vanessa'
         : occurrenceTitle(occurrence);
 
+    const nativeBooked = occurrence._count.bookings + occurrence.historicalSignupCount;
+    const availability = bookingAvailability(nativeBooked + (occurrence.pendingTicketSeats ?? 0), occurrence.capacity, occurrence._count.waitlistEntries);
     return {
       id: occurrence.id,
       startsAt: occurrence.startAt.toISOString(),
@@ -124,8 +129,8 @@ export async function loadPublicScheduleSlots(
       room: occurrence.room?.name || 'Rhyze Floor',
       duration: `${occurrenceDurationMinutes(occurrence)} min`,
       capacity: occurrence.capacity,
-      booked:
-        occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
+      booked: paidCounts.get(occurrence.id) ?? nativeBooked,
+      availability,
       waitlist: occurrence._count.waitlistEntries,
       price: `$${((occurrence.priceCents || 2500) / 100).toFixed(0)}`,
       bookingHref: publicScheduleDetailHref({

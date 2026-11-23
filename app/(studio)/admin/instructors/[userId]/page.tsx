@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
@@ -107,13 +108,14 @@ export default async function InstructorReviewPage(
     .filter((item) => item.status === 'PAID')
     .reduce((sum, item) => sum + item.amountCents, 0);
   const commissionTotal = availableCommissionTotal + paidCommissionTotal;
+  const paidCounts = await paidEventDisplayCounts(instructor.classOccurrences.map((occurrence) => occurrence.id));
   const classStats = instructorClassStats({
     now: new Date(),
     instructorName: instructor.name || '',
     occurrences: instructor.classOccurrences.map((occurrence) => ({
       ...occurrence,
       attendeeCount:
-        occurrence.bookings.length + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
+        paidCounts.get(occurrence.id) ?? (occurrence.bookings.length + occurrence.historicalSignupCount),
     })),
   });
   const referralCode = instructor.referralCodes[0];
@@ -213,7 +215,7 @@ export default async function InstructorReviewPage(
                   <span>
                     <strong className="block">{item.template.name}</strong>
                     <small className="text-rhyze-black/45">
-                      {item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0)}/{item.capacity} booked
+                      {paidCounts.get(item.id) ?? (item._count.bookings + item.historicalSignupCount)}/{item.capacity} booked
                     </small>
                   </span>
                   <span className="text-left md:text-right">

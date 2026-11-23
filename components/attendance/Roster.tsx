@@ -63,7 +63,7 @@ export function Roster({
             <CancellationTimestamp value={booking.cancelledAt} />
             {(lateCancelled || cancelled) && <p className="mt-1 text-xs font-bold text-rhyze-black/60">Cancellation history · Not counted as an occupied seat</p>}
             <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wider">
-              <span className="bg-orange-50 px-2 py-1 text-rhyze-coral">Paid with: {booking.paymentMethod}</span>
+              <span className="bg-orange-50 px-2 py-1 text-rhyze-coral">{booking.paymentMethod === 'Complimentary' ? booking.paymentMethod : `Paid with: ${booking.paymentMethod}`}</span>
               <span className="bg-rhyze-orange/10 px-2 py-1">Plan: {booking.currentPlan}</span>
               {party.seatCount > 1 && (
                 <span className="bg-rhyze-gold/20 px-2 py-1 text-rhyze-black">
@@ -85,24 +85,7 @@ export function Roster({
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {!cancelled && (['CHECKED_IN', 'NO_SHOW', 'LATE_CANCELLED'] as const).map((status) => {
-              const selected = booking.attendance?.status === status;
-              const label = status === 'CHECKED_IN'
-                ? 'Check in'
-                : status === 'NO_SHOW'
-                  ? 'No show'
-                  : 'Late canceled';
-              return (
-              <form key={status} action={markAttendanceAction}>
-                <input type="hidden" name="occurrenceId" value={occurrenceId} />
-                <input type="hidden" name="bookingId" value={booking.id} />
-                <input type="hidden" name="status" value={status} />
-                <button className={`border px-3 py-2 text-[10px] font-black uppercase tracking-wider ${selected ? (status === 'CHECKED_IN' ? 'border-emerald-700 bg-emerald-100 text-emerald-900' : 'border-red-700 bg-red-100 text-red-900') : 'border-rhyze-black/20 hover:border-rhyze-coral hover:text-rhyze-coral'}`}>
-                  {selected ? `Undo ${label.toLowerCase()}` : label}
-                </button>
-              </form>
-              );
-            })}
+            {!cancelled && <BookingAttendanceControls occurrenceId={occurrenceId} bookingId={booking.id} attendanceStatus={booking.attendance?.status} />}
             {canRestore && !cancelled && (
               <form action={restoreCreditAction}>
                 <input type="hidden" name="occurrenceId" value={occurrenceId} />
@@ -116,6 +99,33 @@ export function Roster({
         );
       })}
       {bookings.length === 0 && <p className="bg-white p-8 text-rhyze-black/55">No members are booked yet.</p>}
+    </div>
+  );
+}
+
+export function BookingAttendanceControls({ occurrenceId, bookingId, attendanceStatus, canCheckIn = true }: {
+  occurrenceId: string;
+  bookingId: string;
+  attendanceStatus?: string | null;
+  canCheckIn?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {(['CHECKED_IN', 'NO_SHOW', 'LATE_CANCELLED'] as const).map((status) => {
+        const selected = attendanceStatus === status;
+        if (status === 'CHECKED_IN' && !canCheckIn && !selected) return null;
+        const label = status === 'CHECKED_IN' ? 'Check in' : status === 'NO_SHOW' ? 'No show' : 'Late canceled';
+        return (
+          <form key={status} action={markAttendanceAction}>
+            <input type="hidden" name="occurrenceId" value={occurrenceId} />
+            <input type="hidden" name="bookingId" value={bookingId} />
+            <input type="hidden" name="status" value={status} />
+            <button className={`border px-3 py-2 text-[10px] font-black uppercase tracking-wider ${selected ? (status === 'CHECKED_IN' ? 'border-emerald-700 bg-emerald-100 text-emerald-900' : 'border-red-700 bg-red-100 text-red-900') : 'border-rhyze-black/20 hover:border-rhyze-coral hover:text-rhyze-coral'}`}>
+              {selected ? `Undo ${label.toLowerCase()}` : label}
+            </button>
+          </form>
+        );
+      })}
     </div>
   );
 }

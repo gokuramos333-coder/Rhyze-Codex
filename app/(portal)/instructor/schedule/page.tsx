@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import Link from 'next/link';
 import { instructorRosterHref } from '@/lib/admin/assigned-roster-navigation';
@@ -69,6 +70,7 @@ export default async function InstructorSchedulePage() {
     orderBy: { startAt: 'asc' },
     take: 60,
   });
+  const paidCounts = await paidEventDisplayCounts(classes.map((occurrence) => occurrence.id));
   const bookingIds = classes.flatMap((item) => item.bookings.map((booking) => booking.id));
   const reservedCredits = bookingIds.length
     ? await prisma.creditLedgerEntry.findMany({
@@ -148,7 +150,7 @@ export default async function InstructorSchedulePage() {
               )}
             </span>
             <span className="text-left md:text-right">
-              <span className="block text-xs font-black uppercase tracking-widest">{item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0)}/{item.capacity} booked</span>
+              <span className="block text-xs font-black uppercase tracking-widest">{paidCounts.get(item.id) ?? (item._count.bookings + item.historicalSignupCount)}/{item.capacity} booked</span>
               <span className="mt-2 block text-[10px] font-black uppercase tracking-widest text-rhyze-coral">View attendees →</span>
             </span>
           </Link>

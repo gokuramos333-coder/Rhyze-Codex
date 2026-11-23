@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import { specialEventIdentity, specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
 import { blackFridaySalesEnabled } from '@/lib/payments/black-friday-release-gate';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
@@ -8,7 +9,7 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft, Calendar, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Calendar } from 'lucide-react';
 import { getOwnedEvent, ownedEvents } from '@/lib/rhyze-platform';
 import { EventCheckoutButton } from '@/components/checkout/EventCheckoutButton';
 import { NewProgramBadge } from '@/components/catalog/NewProgramBadge';
@@ -72,16 +73,19 @@ export default async function EventBookingPage(
   });
   if (searchParams?.occurrence && !occurrence) notFound();
   const specialTicketSalesEnabled = Boolean(blackFridaySalesEnabled() && occurrence && specialEventOfferMatches({...occurrence,template:event}));
-  const booked = occurrence
+  const paidCounts = await paidEventDisplayCounts(occurrence ? [occurrence.id] : []);
+  const occupied = occurrence
     ? occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0)
     : 0;
   const durationMinutes = occurrence ? occurrenceDurationMinutes(occurrence) : event.durationMinutes;
   const artwork = resolveClassArtwork({ ...occurrence, template: event });
   const capacity = occurrence?.capacity ?? event.defaultCapacity;
   const waiting = occurrence?._count.waitlistEntries ?? 0;
-  const soldOut = booked >= capacity;
+  const soldOut = occupied >= capacity;
   const waitlistFull = waiting >= WAITLIST_CAPACITY;
-  const bookingLabel = publicBookingCountLabel(booked, capacity);
+  const bookingLabel = occurrence ? publicBookingCountLabel(
+    paidCounts.get(occurrence.id) ?? (occurrence._count.bookings + occurrence.historicalSignupCount), capacity,
+  ) : null;
   const eventPrice = `$${((occurrence?.priceCents ?? event.dropInPriceCents ?? 0) / 100).toFixed(0)}`;
   const eventDate = occurrence
     ? occurrence.startAt.toLocaleDateString('en-US', {
@@ -125,10 +129,6 @@ export default async function EventBookingPage(
           <h1 className="font-display text-6xl tracking-wider md:text-8xl">
             CLAIM YOUR SPOT
           </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-rhyze-cream/70">
-            Reserve the event and choose specialty pricing or eligible VIP
-            access without leaving the Rhyze website.
-          </p>
 
           <div className="mt-10 rounded-3xl border border-white/10 bg-rhyze-charcoal p-6">
             <div className="mb-5 inline-flex rounded-2xl border border-rhyze-coral/40 bg-rhyze-coral/10 p-4">
@@ -165,7 +165,7 @@ export default async function EventBookingPage(
                 <h3 className="font-display text-3xl tracking-wider">
                   Specialty Event
                 </h3>
-                {soldOut && <p className="mt-3 text-sm font-black text-rhyze-gold">{bookingAvailability(booked, capacity, waiting).label}</p>}
+                {soldOut && <p className="mt-3 text-sm font-black text-rhyze-gold">{bookingAvailability(occupied, capacity, waiting).label}</p>}
                 {bookingLabel && (
                   <p className="text-sm text-rhyze-cream/60">
                     {bookingLabel}
@@ -173,29 +173,17 @@ export default async function EventBookingPage(
                   </p>
                 )}
               </div>
-              <span className="font-display text-4xl text-rhyze-gold">
-                {specialTicketSalesEnabled ? 'Choose below' : eventPrice}
-              </span>
+              {!specialTicketSalesEnabled && <span className="font-display text-4xl text-rhyze-gold">{eventPrice}</span>}
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-rhyze-gold/30 bg-rhyze-gold/10 p-4">
-            <div className="flex items-start gap-3">
-              <ShieldCheck
-                className="mt-1 h-5 w-5 text-rhyze-gold"
-                aria-hidden
-              />
-              <div>
-                <h3 className="font-semibold uppercase tracking-wide">
-                  Specialty access
-                </h3>
-                <p className="mt-1 text-sm text-rhyze-cream/70">
-                  {specialTicketSalesEnabled ? 'Pay $25 for one person or $40 for you and a NEW friend. VIPs can use one available event credit for themselves, or one event credit plus $15 for the two-person ticket. Regular class credits and VIP unlimited class access do not cover this paid event.' : vipEventAccessCopy(occurrence?.startAt)}
-                </p>
-              </div>
-            </div>
-          </div>
-
+          {!soldOut && (
+            <p className="mt-4 text-sm text-rhyze-cream/75">
+              {specialTicketSalesEnabled
+                ? 'An eligible VIP event credit covers one ticket. Regular class credits don’t apply.'
+                : vipEventAccessCopy(occurrence?.startAt)}
+            </p>
+          )}
           <EventCheckoutButton
             specialTicketSalesEnabled={specialTicketSalesEnabled}
             slug={event.slug}

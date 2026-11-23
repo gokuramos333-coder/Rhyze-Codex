@@ -1,3 +1,7 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
+import { specialEventRoster } from '@/lib/payments/special-event-roster';
+import { checkInAction, linkAccountAction, recordPaperWaiverAction, searchAccountsAction } from '@/app/(portal)/instructor/classes/[occurrenceId]/roster/guest-actions';
 import { instructorOccurrenceTitle } from '@/lib/domain/schedule/occurrence-management';
 import { notFound } from 'next/navigation';
 import { requireArea } from '@/lib/auth/session';
@@ -5,7 +9,7 @@ import { prisma } from '@/lib/db/prisma';
 import { rosterHistoryBookingWhere, rosterConfirmedBookings } from '@/lib/domain/bookings/roster-history';
 import { memberBookingDateTimeLabel } from '@/lib/domain/schedule/occurrence-display';
 import { BlackFridayPendingRoster } from '@/components/attendance/BlackFridayPendingRoster';
-import { Roster } from '@/components/attendance/Roster';
+import { BookingAttendanceControls, Roster } from '@/components/attendance/Roster';
 import Link from 'next/link';
 import { rosterPaymentDetails } from '@/lib/domain/bookings/roster-payment';
 import { importedBookingParty } from '@/lib/domain/bookings/imported-booking-party';
@@ -47,12 +51,18 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
     },
   });
   if (!occurrence) notFound();
+  const [specialRoster, paidCounts] = await Promise.all([
+    specialEventIdentity(occurrence.id) ? specialEventRoster(occurrence.id, { id: user.id }) : null,
+    paidEventDisplayCounts([occurrence.id]),
+  ]);
+  const excludedBookings = new Set(specialRoster?.linkedBookingIds);
+  const ordinaryBookings = occurrence.bookings.filter((booking) => !excludedBookings.has(booking.id));
   const ledgerEntries = await prisma.creditLedgerEntry.findMany({
-    where: { bookingId: { in: occurrence.bookings.map((booking) => booking.id) }, type: 'RESERVE' },
+    where: { bookingId: { in: ordinaryBookings.map((booking) => booking.id) }, type: 'RESERVE' },
     include: { creditAccount: true },
   });
   const ledgerByBooking = new Map(ledgerEntries.map((entry) => [entry.bookingId, entry]));
-  const rosterBookings = occurrence.bookings.map((booking) => {
+  const rosterBookings = ordinaryBookings.map((booking) => {
     const membership = booking.user.memberships[0];
     const imported = importedBookingParty(booking.policySnapshot);
     const payment = rosterPaymentDetails({
@@ -64,7 +74,8 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
     });
     return { ...booking, bookedAt: booking.bookedAt, ...payment };
   });
-  const confirmedBookings = rosterConfirmedBookings(occurrence.bookings);
+  const confirmedBookings = rosterConfirmedBookings(ordinaryBookings);
+  const booked = paidCounts.get(occurrence.id) ?? (confirmedBookings.length + occurrence.historicalSignupCount);
   const namedImportedGuests = confirmedBookings.reduce(
     (total, booking) =>
       total + importedBookingParty(booking.policySnapshot).guestNames.length,
@@ -83,7 +94,7 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
       <p className="text-xs font-black uppercase tracking-[0.3em] text-rhyze-coral">Class roster</p>
       <h1 className="mt-3 font-display text-6xl tracking-wider">{instructorOccurrenceTitle(occurrence)}</h1>
       {occurrence.instructorId === user.id && <Link href={`/instructor/classes/${occurrence.id}/artwork`} className="mt-4 inline-block border border-rhyze-orange px-4 py-3 text-xs font-black uppercase tracking-widest text-rhyze-coral">Manage class / event photo</Link>}
-      <p className="mt-3 text-rhyze-black/55">{memberBookingDateTimeLabel(occurrence)} · {occurrence.room?.name || 'Room TBA'} · {confirmedBookings.length + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0)}/{occurrence.capacity} booked</p>
+      <p className="mt-3 text-rhyze-black/55">{memberBookingDateTimeLabel(occurrence)} · {occurrence.room?.name || 'Room TBA'} · {booked}/{occurrence.capacity} booked</p>
       {occurrence.status === 'CANCELLED' && (
         <p className="mt-5 border-l-4 border-red-700 bg-red-100 p-4 text-sm font-black uppercase tracking-widest text-red-900">
           CLASS CANCELED · This class is canceled and no longer accepting bookings.
@@ -92,8 +103,23 @@ export default async function InstructorRosterPage(props: { params: Promise<{ oc
       {unnamedHistoricalSignups > 0 && <p className="mt-2 bg-rhyze-orange/10 p-3 text-sm font-bold">{unnamedHistoricalSignups} additional signup{unnamedHistoricalSignups === 1 ? '' : 's'} came from a Somble schedule snapshot without roster names.</p>}
       <Link href={`/instructor/classes/${occurrence.id}/message`} className="mt-5 inline-block bg-rhyze-black px-4 py-3 text-xs font-black uppercase tracking-widest text-white">Message or cancel this class</Link>
       {!transfersAvailable && <p className="mt-4 border-l-4 border-red-700 bg-red-100 p-3 text-sm font-bold text-red-900">Transfers close 2 hours before class. Late cancellations and no-shows keep the used credit.</p>}
-      <BlackFridayPendingRoster occurrenceId={occurrence.id} />
-      <Roster occurrenceId={occurrence.id} bookings={rosterBookings} canTransfer={transfersAvailable} />
+      {specialRoster && (
+        <BlackFridayPendingRoster
+          roster={specialRoster}
+          actions={{ checkInAction, linkAccountAction, recordPaperWaiverAction, searchAccountsAction }}
+          renderNativeAttendance={(attendee) => attendee.bookingId && (
+            <BookingAttendanceControls
+              occurrenceId={occurrence.id}
+              bookingId={attendee.bookingId}
+              attendanceStatus={attendee.attendanceStatus}
+              canCheckIn={attendee.role === 'BUYER' || attendee.waiver !== 'NEEDED'}
+            />
+          )}
+        />
+      )}
+      {(!specialRoster?.groups.length || rosterBookings.length > 0) && (
+        <Roster occurrenceId={occurrence.id} bookings={rosterBookings} canTransfer={transfersAvailable} />
+      )}
     </>
   );
 }

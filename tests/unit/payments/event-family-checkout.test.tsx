@@ -27,7 +27,7 @@ describe('Mommy & Me checkout', () => {
     fireEvent.change(screen.getByLabelText('Number of children'), {
       target: { value: '3' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Event Booking' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
 
     await waitFor(() => expect(fetchRequest).toHaveBeenCalledOnce());
     expect(JSON.parse(fetchRequest.mock.calls[0][1].body)).toEqual({
@@ -41,7 +41,7 @@ describe('Mommy & Me checkout', () => {
 
  it('allows a newly opened event place to be purchased even when all five waitlist positions are filled', () => {
    render(<EventCheckoutButton slug="event" occurrenceId="date-two" soldOut={false} waitlistFull />);
-   expect((screen.getByRole('button', { name: 'Confirm Event Booking' }) as HTMLButtonElement).disabled).toBe(false);
+   expect((screen.getByRole('button', { name: 'Continue to payment' }) as HTMLButtonElement).disabled).toBe(false);
  });
  it('stops new waitlist joins when both the roster and the five-person waitlist are full', () => {
    render(<EventCheckoutButton slug="event" occurrenceId="date-two" soldOut waitlistFull />);

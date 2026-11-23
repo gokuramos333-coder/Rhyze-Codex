@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 import { FinancialReportView } from '@/components/admin/FinancialReportView';
 import { loadFinancialReport, financialReportQuery, formatReportMoney } from '@/lib/admin/financial-report';
 import Link from 'next/link';
@@ -162,6 +163,7 @@ export default async function AdminHomePage(
       orderBy: { occurredAt: 'desc' },
     }),
   ]);
+  const paidCounts = await paidEventDisplayCounts(upcoming.map((occurrence) => occurrence.id));
   const metrics = calculateSombleMetrics(transactions);
   const visiblePaymentRecords = excludeSombleBackedStripePaymentRecords(activityPaymentRecords, transactions);
   const report = await loadFinancialReport(searchParams, now);
@@ -477,7 +479,7 @@ export default async function AdminHomePage(
                     </small>
                   </span>
                   <strong>
-                    {item._count.bookings + item.historicalSignupCount + (item.pendingTicketSeats ?? 0)}/{item.capacity} booked
+                    {paidCounts.get(item.id) ?? (item._count.bookings + item.historicalSignupCount)}/{item.capacity} booked
                   </strong>
                 </Link>
               ))}

@@ -1,3 +1,4 @@
+import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
 export const dynamic = 'force-dynamic';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { bookingAvailability } from '@/lib/catalog/booking-availability';
@@ -49,6 +50,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
   });
   if (!event) notFound();
   const occurrence = event.occurrences[0];
+  const paidCounts = await paidEventDisplayCounts(occurrence ? [occurrence.id] : []);
   const memberClassEvent = isMemberClassEvent(event);
   if (searchParams?.occurrence && !occurrence) notFound();
   const durationMinutes = occurrence ? occurrenceDurationMinutes(occurrence) : event.durationMinutes;
@@ -56,7 +58,7 @@ export default async function EventDetailPage(props: { params: Promise<{ slug: s
   const fallback = getOwnedEvent(event.slug);
   const bookingLabel = occurrence
     ? publicBookingCountLabel(
-        occurrence._count.bookings + occurrence.historicalSignupCount + (occurrence.pendingTicketSeats ?? 0),
+        paidCounts.get(occurrence.id) ?? (occurrence._count.bookings + occurrence.historicalSignupCount),
         occurrence.capacity,
       )
     : null;
