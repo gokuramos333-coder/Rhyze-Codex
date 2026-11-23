@@ -1,3 +1,5 @@
+import { bindEventPayment, type EventCaptureProof, retainedEventAdjustment } from './event-capture-evidence';
+import { financialLock } from './refund-review';
 import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease } from '@/lib/payments/financial-release';
 import { assertStripeObjectMode } from './stripe-mode';
 import { blackFridaySalesEnabled } from './black-friday-release-gate';
@@ -20,10 +22,12 @@ export type Ticket = { orderId: string; occurrenceId: string; userId: string; st
 const run = <T>(db: PrismaClient, fn: (tx: Tx)=>Promise<T>) => retrySerializableTransaction(()=>db.$transaction(fn,{isolationLevel:'Serializable'}));
 async function lock(tx: Tx, occurrenceId: string) { await tx.$executeRaw`SELECT id FROM "ClassOccurrence" WHERE id=${occurrenceId} FOR UPDATE`; }
 async function ticket(tx: Db, orderId: string) { return (await tx.$queryRaw<Ticket[]>`SELECT * FROM "BlackFridayTicket" WHERE "orderId"=${orderId}`)[0]; }
+export class EventWaiverRequired extends Error {}
 async function account(tx: Tx, userId: string) {
  const user = await tx.user.findUnique({where:{id:userId},include:{memberProfile:true}});
  const waiver = await tx.waiverVersion.findFirst({where:{isActive:true,requiresSign:true},orderBy:{effectiveAt:'desc'}});
- if (!user || user.status!=='ACTIVE' || !waiver || !await tx.waiverAcceptance.findUnique({where:{waiverVersionId_userId:{waiverVersionId:waiver.id,userId}}})) throw new Error('An active account and current waiver are required.');
+ if (!user || user.status!=='ACTIVE' || !waiver) throw new Error('Active account and waiver required.');
+ if (!await tx.waiverAcceptance.findUnique({where:{waiverVersionId_userId:{waiverVersionId:waiver.id,userId}}})) throw new EventWaiverRequired();
  return user;
 }
 async function releaseCredit(tx:Tx,t:Ticket) {
@@ -246,9 +250,11 @@ export function chargeRequiresReview(charge: Stripe.Charge) {
  return charge.disputed !== false || charge.refunded === true || charge.amount_refunded !== 0;
 }
 
-export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Session,now=new Date(),actorId?:string,reason?:string) {
+export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Session,now=new Date(),actorId?:string,reason?:string,proof?:EventCaptureProof) {
  const orderId=session.metadata?.commerceOrderId;
  if(!orderId||session.metadata?.blackFridayTicket!=='1')return false;
+ const paidIntent=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
+ if(session.payment_status==='paid' && paidIntent) await financialLock(tx,null,paidIntent);
  const observed=await ticket(tx,orderId); if(!observed)throw new Error('Missing event reservation');
  await lock(tx,observed.occurrenceId); const t=(await ticket(tx,orderId))!;
  const order=await tx.commerceOrder.findUniqueOrThrow({where:{id:orderId}});
@@ -287,9 +293,11 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
  if(!pi||session.amount_total!==order.amountCents||session.currency!==order.currency)throw new Error('Ticket payment terms mismatch');
  if(['REFUNDED','DISPUTE_LOST','REVIEW','PAID','REVERSING'].includes(t.state) || (t.state==='EXPIRED' && order.paidAt))return true;
  const o=await tx.classOccurrence.findUniqueOrThrow({where:{id:t.occurrenceId},include:{template:true}});
- const reversals=await tx.stripeEvent.findMany({where:{type:{in:['charge.refunded','charge.dispute.created']},payload:{path:['data','object','payment_intent'],equals:pi}}});
+ await lockCheckoutEvidence(tx,orderId,session);
+ const existing=await bindEventPayment(tx,order,session,proof);
+ const reversal=await retainedEventAdjustment(tx,pi);
  const offer=specialEventIdentity(t.occurrenceId);
- let review=!offer || specialEventCashPrice(offer,t.seats===2,Boolean(t.creditAccountId))!==order.amountCents || !specialEventOfferMatches(o)||t.state!=='HELD'||o.status!=='SCHEDULED'||o.startAt<=now||reversals.length>0||order.refundedAmountCents>0||['REFUNDED','PARTIALLY_REFUNDED','DISPUTED'].includes(order.status);
+ let review=!offer || specialEventCashPrice(offer,t.seats===2,Boolean(t.creditAccountId))!==order.amountCents || !specialEventOfferMatches(o)||t.state!=='HELD'||o.status!=='SCHEDULED'||o.startAt<=now||reversal||order.refundedAmountCents>0||['REFUNDED','PARTIALLY_REFUNDED','DISPUTED'].includes(order.status);
  try {await account(tx,t.userId);} catch {review=true;}
  if(t.seats===2 && offer?.requiresFirstVisit && (await inspectNewFriendHistory(tx,{fullName:t.guestName!,phone:t.guestPhone!},t.userId,now,true)).status!=='ELIGIBLE')review=true;
  if(t.seats===2 && await guestHasBookingConflict(tx,t.occurrenceId,t.guestName!,t.guestPhone!,t.orderId))review=true;
@@ -300,8 +308,6 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
  await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state=${state},"buyerBookingId"=${bookingId} WHERE "orderId"=${orderId}`;
  if(bookingId)await tx.booking.create({data:{id:bookingId,userId:t.userId,occurrenceId:t.occurrenceId,source:'STRIPE_EVENT',policySnapshot:ticketBookingPolicy(orderId,'BUYER',o,order.amountCents)}});
  await tx.commerceOrder.update({where:{id:orderId},data:{status:review?'FULFILLMENT_REVIEW':'PAID',paidAt:now,stripeCheckoutSessionId:session.id,stripePaymentIntentId:pi}});
- const existing=await tx.paymentRecord.findFirst({where:{OR:[{stripePaymentIntentId:pi},{stripeCheckoutSessionId:session.id}]}});
- if(existing && existing.commerceOrderId!==orderId)throw new Error('Payment ownership mismatch');
  if(!existing)await tx.paymentRecord.create({data:{userId:t.userId,commerceOrderId:orderId,kind:'EVENT',status:'SUCCEEDED',stripeEventId:`black-friday-session:${session.id}`,amountCents:order.amountCents,currency:order.currency,stripeCheckoutSessionId:session.id,stripePaymentIntentId:pi,occurredAt:now,customerName:order.customerName,customerEmail:order.customerEmail}});
  await tx.auditLog.create({data:{action:review?'black-friday.payment-review':'black-friday.paid',entityType:'CommerceOrder',entityId:orderId}});
  return true;

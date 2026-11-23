@@ -310,3 +310,18 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+it.each([['wrong','wrong',false],['right','wrong',true]] as const)('final F4 rejects managed target %s then %s and cleans up any issued approval',async(first,second,issued)=>{
+ const targets=[first,second],calls:string[]=[];
+ const {submitBoundHostedBuild}=await import('../../../scripts/release/closed-cutover');
+ const {runHostedWorkflow}=require('../../../scripts/release/hosted-workflow.cjs');
+ let approval=false;
+ const result=await runHostedWorkflow({
+  prepare:()=>submitBoundHostedBuild('right',async()=>targets.shift()!,async()=>{approval=true;calls.push('createEnvVars');},
+   async()=>{calls.push('recheck');},async()=>{calls.push('createSiteBuild');}),
+  removeApproval:async()=>{if(approval){approval=false;calls.push('deleteEnvVar');}},
+  ensureLocked:async()=>{},patOff:async()=>{},
+ });
+ expect(result.status).toBe('BLOCKED');expect(result.failures).toEqual(['prepare']);expect(approval).toBe(false);
+ expect(calls).toEqual(issued?['createEnvVars','recheck','deleteEnvVar']:[]);
+});

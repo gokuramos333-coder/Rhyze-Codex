@@ -1,13 +1,14 @@
+import type { EventCaptureProof } from './event-capture-evidence';
 import { specialEventIdentity } from './black-friday-new-friend';
 import type { Prisma } from '@prisma/client';
 import type Stripe from 'stripe';
 import { applyBlackFridayRefunds, applyBlackFridaySession, reverseBlackFridayTicket } from './black-friday-checkout';
 /** Called inside the retained Stripe receipt transaction, before legacy event fulfillment. */
-export async function processBlackFridayEvent(tx:Prisma.TransactionClient,event:Stripe.Event){
+export async function processBlackFridayEvent(tx:Prisma.TransactionClient,event:Stripe.Event, proof?:EventCaptureProof){
  if(event.type.startsWith('checkout.session.')){
   const session=event.data.object as Stripe.Checkout.Session;
   if(session.metadata?.blackFridayTicket!=='1')return false;
-  await applyBlackFridaySession(tx,session);return true;
+  await applyBlackFridaySession(tx,session,undefined,undefined,undefined,proof);return true;
  }
  if(!['charge.refunded','charge.dispute.created','charge.dispute.closed'].includes(event.type))return false;
  const object=event.data.object as Stripe.Charge|Stripe.Dispute;

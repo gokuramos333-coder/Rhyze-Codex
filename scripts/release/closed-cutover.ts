@@ -183,7 +183,7 @@ export function verifyBridgeReconciliation(
   const approval = e.approval;
   if (!/^[a-f0-9]{40}$/.test(expected.candidateSha) ||
       approval?.candidateSha !== expected.candidateSha ||
-      !approval.auditId || !Number.isSafeInteger(approval.closedGeneration) ||
+      !/^[a-f0-9]{64}$/.test(approval.databaseIdentity) || !approval.auditId || !Number.isSafeInteger(approval.closedGeneration) ||
       !/^[a-f0-9]{64}$/.test(approval.evidenceHash)) {
     throw Error('Audited CLOSE for the exact candidate required');
   }
@@ -343,4 +343,23 @@ export function verifyBridgeReconciliation(
   )
     throw Error('Event sessions unresolved');
   return { record: e, evidenceHash: sha(JSON.stringify(e)), reports };
+}
+
+
+export async function submitBoundHostedBuild<T>(
+  expectedDatabase: string,
+  readManagedTarget: () => Promise<string>,
+  createApproval: () => Promise<void>,
+  revalidateEvidence: () => Promise<void>,
+  submitBuild: () => Promise<T>,
+): Promise<T> {
+  const checkTarget = async () => {
+    if (await readManagedTarget() !== expectedDatabase)
+      throw Error('Hosted database target differs from the approved database.');
+  };
+  await checkTarget();
+  await createApproval();
+  await revalidateEvidence();
+  await checkTarget();
+  return submitBuild();
 }

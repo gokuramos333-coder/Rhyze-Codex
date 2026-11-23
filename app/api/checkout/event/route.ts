@@ -1,6 +1,6 @@
 import { specialEventIdentity, specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
 import { blackFridaySalesEnabled } from '@/lib/payments/black-friday-release-gate';
-import { startBlackFridayCheckout } from '@/lib/payments/black-friday-checkout';
+import { EventWaiverRequired, startBlackFridayCheckout } from '@/lib/payments/black-friday-checkout';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
 import { NextResponse } from 'next/server';
 import { attributionMetadata } from '@/lib/attribution/first-touch';
@@ -53,7 +53,15 @@ export async function POST(request: Request) {
       if (!blackFridaySalesEnabled()) return NextResponse.json({error:'Special ticket sales are not open yet.'},{status:503});
       if (!specialEventOfferMatches(occurrence)) throw new Error('Wrong event occurrence');
       if (childCount !== undefined) throw new Error('Child pricing does not apply to this event.');
-      return NextResponse.json(await startBlackFridayCheckout(prisma, getStripe(), { ...input, occurrenceId: specialOffer.occurrenceId, ticketType: input.ticketType ?? 'SINGLE', userId: session.user.id, origin: new URL(request.url).origin }));
+      try {
+        return NextResponse.json(await startBlackFridayCheckout(prisma, getStripe(), { ...input, occurrenceId: specialOffer.occurrenceId, ticketType: input.ticketType ?? 'SINGLE', userId: session.user.id, origin: new URL(request.url).origin }));
+      } catch (error) {
+        if (!(error instanceof EventWaiverRequired)) throw error;
+        return NextResponse.json({
+          error: 'Review and accept the studio waiver before purchasing an event ticket.',
+          waiverUrl: eventCheckoutWaiverDestination(occurrence.template.slug, occurrence.id),
+        }, { status: 403 });
+      }
     }
     if (input.ticketType || input.friend || input.firstVisitDeclared !== undefined || input.useEventCredit !== undefined) throw new Error('This ticket option is not available for this event.');
     const priced = priceEventOrder({

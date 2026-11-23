@@ -1,3 +1,5 @@
+import { adjustmentIntent, readEventCaptureProof } from '@/lib/payments/event-capture-evidence';
+import { financialLock } from '@/lib/payments/refund-review';
 import { reconcileVipRenewalStripeEvent } from '@/lib/domain/bookings/vip-renewal-continuity';
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
@@ -22,6 +24,30 @@ function logFailure(event: Stripe.Event, phase: string, error: unknown) {
   const details = error && typeof error === 'object' ? error as { code?: unknown; type?: unknown } : {};
   const code = [details.code, details.type].find(value => typeof value === 'string' && safeCodes.has(value));
   console.error('stripe-webhook failure', { eventId: event.id, eventType: event.type, phase, code: code || 'UNCLASSIFIED' });
+}
+
+async function retainSignedEvent(event: Stripe.Event, rawBody: string, error?: string) {
+  const receipt = {where:{id:event.id}, update:error?{error}:{},
+    create:{id:event.id,type:event.type,payload:JSON.parse(rawBody),...(error?{error}:{})}};
+  const intent = adjustmentIntent(event);
+  if (!intent) return prisma.stripeEvent.upsert(receipt);
+  return retrySerializableTransaction(() => prisma.$transaction(async tx => {
+    await financialLock(tx,null,intent);
+    // Physical versions invalidate a paid transaction that began on an older snapshot.
+    await tx.$executeRaw`SELECT bf_lock_checkout_evidence(NULL,${intent},NULL)`;
+    const retained = await tx.stripeEvent.upsert(receipt);
+    // A checkout that won admission immediately before the adjustment keeps its
+    // financial history; the private review removes its eligibility immediately.
+    const rows = await tx.$queryRaw<{id:string}[]>`UPDATE "CommerceOrder" o SET status='FULFILLMENT_REVIEW'
+      WHERE o."stripePaymentIntentId"=${intent} AND o.kind='EVENT' AND o.status='PAID'
+      AND bf_special_occurrence(o."occurrenceId")
+      AND NOT EXISTS (SELECT 1 FROM "BlackFridayTicket" t WHERE t."orderId"=o.id)
+      RETURNING o.id`;
+    for (const row of rows) await tx.emailMessage.updateMany({where:{
+      dedupeKey:'commerce-confirmation:'+row.id,status:'QUEUED',
+    },data:{status:'CANCELLED'}});
+    return retained;
+  }));
 }
 
 export async function POST(request: Request) {
@@ -51,7 +77,7 @@ export async function POST(request: Request) {
       logFailure(event, 'account-verification', cause);
       // Keep signed adjustment evidence visible to the report during provider outages.
       const error = 'Stripe account verification unavailable; retry required.';
-      await prisma.stripeEvent.upsert({ where: { id: event.id }, update: { error }, create: { id: event.id, type: event.type, payload: JSON.parse(rawBody), error } });
+      await retainSignedEvent(event,rawBody,error);
       await invalidateKnownStripeEventReceipts(prisma, event);
       return NextResponse.json({ error }, { status: 500 });
     }
@@ -64,24 +90,22 @@ export async function POST(request: Request) {
 
   const existing = await prisma.stripeEvent.findUnique({ where: { id: event.id } });
   const duplicate = Boolean(existing?.processedAt);
-  await prisma.stripeEvent.upsert({
-    where: { id: event.id },
-    update: {},
-    create: { id: event.id, type: event.type, payload: JSON.parse(rawBody) },
-  });
+  await retainSignedEvent(event,rawBody);
   let phase = 'event-hydration';
   try {
     const hydratedEvent = await hydrateInvoiceEvent(event, stripe.invoices);
     if (account) assertReceiptEventScope(hydratedEvent, account);
     if ((hydratedEvent.data.object as { id?: string }).id !== (event.data.object as { id?: string }).id) throw new Error('Hydrated Stripe object identity mismatch.');
     phase = 'fulfillment';
+    const proof = !duplicate && (event.type==='checkout.session.completed' || event.type==='checkout.session.async_payment_succeeded')
+      ? await readEventCaptureProof(prisma,stripe,event.data.object,account ?? undefined) : undefined;
     if (!duplicate) await retrySerializableTransaction(() =>
       prisma.$transaction(
         async (tx) => {
           // Recheck inside the serializable transaction so concurrent deliveries cannot replay fulfillment.
           const current = await tx.stripeEvent.findUnique({ where: { id: event.id } });
           if (current?.processedAt) return;
-          await processStripeEvent(tx, hydratedEvent);
+          await processStripeEvent(tx, hydratedEvent, proof);
           await tx.stripeEvent.update({ where: { id: event.id }, data: { processedAt: new Date(), error: null } });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

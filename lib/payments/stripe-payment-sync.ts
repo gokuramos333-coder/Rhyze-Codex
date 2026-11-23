@@ -1,3 +1,5 @@
+import { assertEventCapture } from './event-capture-evidence';
+import { specialEventIdentity } from './black-friday-new-friend';
 import { financialLock, financialLedgerLock } from '@/lib/payments/refund-review';
 import type Stripe from 'stripe';
 import type { PrismaClient } from '@prisma/client';
@@ -110,9 +112,12 @@ export async function paidCheckoutSessionForPaymentIntent(
   if (paymentIntentId.startsWith('charge_')) return null;
   const sessions = await stripe.checkout.sessions.list({
     payment_intent: paymentIntentId,
-    limit: 1,
+    limit: 2,
   } as Stripe.Checkout.SessionListParams);
   const session = sessions.data[0];
+  if (session && specialEventIdentity(session.metadata?.occurrenceId) &&
+      (sessions.data.length !== 1 || sessions.has_more !== false || objectId(session.payment_intent) !== paymentIntentId))
+    throw Error('Event checkout identity requires review.');
   if (!session || session.payment_status !== 'paid') return null;
   if (!session.metadata?.purchaseId && !session.metadata?.commerceOrderId) return null;
   return session;
@@ -185,6 +190,12 @@ export async function syncRecentStripePaymentRecords(
   // Fetch and validate complete provider receipts before any local writes.
   const providerReceipts = new Map<string, Awaited<ReturnType<typeof financialReceipt>>>();
   for (const charge of charges.data) providerReceipts.set(charge.id, await financialReceipt(stripe, account.id, charge));
+  // Keep signed webhook acknowledgement history when refreshing these same receipts.
+  // Limit JSON reads to this batch; compare-and-swap still uses the pre-scan versions.
+  const refreshing = [...providerReceipts.values()].map(receipt=>receipt.id).filter(id=>receiptVersions.has(id));
+  const priorPayloads = new Map((refreshing.length ? await prisma.stripeEvent.findMany({
+    where:{id:{in:refreshing}}, select:{id:true,payload:true},
+  }) : []).map(receipt=>[receipt.id,receipt.payload]));
   const providerTotals = { capturedByCurrency: {} as Record<string, number>, refundedByCurrency: {} as Record<string, number>, feesByCurrency: {} as Record<string, number>, chargesWithUnknownFees: 0 };
   for (const receipt of providerReceipts.values()) {
     const charge = receipt.payload.data.object;
@@ -266,6 +277,8 @@ export async function syncRecentStripePaymentRecords(
       const previous = receiptVersions.get(receipt.id);
       let stored = false;
       if (previous) {
+        const prior = priorPayloads.get(previous.id) as {acknowledgedEventIds?:string[]} | null;
+        if (Array.isArray(prior?.acknowledgedEventIds)) receipt.payload.acknowledgedEventIds=prior.acknowledgedEventIds;
         const result = await prisma.stripeEvent.updateMany({ where: { id: previous.id, type: previous.type, processedAt: previous.processedAt, error: previous.error }, data: { ...receipt, error: null } });
         stored = result.count === 1;
       } else {
@@ -353,10 +366,15 @@ export async function syncRecentStripePaymentRecords(
       ...(checkoutSession ? { stripeCheckoutSessionId: checkoutSession.id } : {}),
       ...(user ? { userId: user.id } : {}),
     };
+    const eventCapture = !financialOnly && status === 'SUCCEEDED' && checkoutSession && specialEventIdentity(checkoutSession.metadata?.occurrenceId);
+    if (eventCapture) assertEventCapture(checkoutSession,charge);
     const applied = await prisma.$transaction(async tx => {
       await financialLock(tx, existingPaymentRecord?.bookingId ?? null, paymentIntentId);
       const current = existingPaymentRecord ? await financialLedgerLock(tx,existingPaymentRecord.id) : await tx.paymentRecord.findUnique({where:{stripePaymentIntentId:paymentIntentId}});
       if(current && (current.refundedAmountCents > charge.amount_refunded || (current.status === 'DISPUTED' && status !== 'DISPUTED'))) return false;
+    // The dispatcher validates the original event row under the checkout fence.
+    // Rewriting its session or charge terms here would erase an ownership conflict.
+    if (eventCapture && current) return true;
     if (existingPaymentRecord) {
       await tx.paymentRecord.update({
         where: { id: existingPaymentRecord.id },
@@ -378,7 +396,10 @@ export async function syncRecentStripePaymentRecords(
     if (!applied) { unchanged += 1; continue; }
     if (checkoutSession && !financialOnly && status === 'SUCCEEDED') {
       await prisma.$transaction(async (tx) => {
-        await processStripeEvent(tx, syntheticCheckoutEvent(checkoutSession, charge));
+        const event=syntheticCheckoutEvent(checkoutSession, charge);
+        if (eventCapture) {
+          await processStripeEvent(tx,{...event,data:{object:checkoutSession}} as Stripe.Event,{accountId:account.id,charge});
+        } else await processStripeEvent(tx,event);
       });
       fulfilledCheckoutSessions += 1;
     }

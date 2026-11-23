@@ -1,3 +1,4 @@
+import { readEventCaptureProof } from './event-capture-evidence';
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { prisma } from '@/lib/db/prisma';
@@ -277,6 +278,7 @@ export async function readSpecialEventCheckout(
           : review;
       }
     }
+    const proof = await readEventCaptureProof(db,stripe,session);
     return await retrySerializableTransaction(() =>
       db.$transaction(
         async (tx): Promise<Evidence> => {
@@ -286,6 +288,7 @@ export async function readSpecialEventCheckout(
             now,
             staff?.actorId ?? input.actorUserId,
             staff?.reason,
+            proof,
           );
           const [updated] = await tx.$queryRaw<
             { state: string; status: string }[]

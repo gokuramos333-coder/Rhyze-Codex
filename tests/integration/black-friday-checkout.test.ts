@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import Stripe from 'stripe';
 import { manageBlackFridayTicket } from '@/lib/payments/black-friday-management';
 import { vipMonthlyBenefitWindowForDate } from '@/lib/domain/credits/vip-monthly-benefits';
 import { beforeAll, afterAll, expect, it, vi } from 'vitest';
@@ -57,7 +58,7 @@ vi.mock('next/navigation',()=>({redirect:(s:string)=>{throw Error('REDIRECT:'+s)
 vi.mock('@/lib/payments/attendance-fee',()=>({chargeAttendanceFee:vi.fn(async()=>({status:'FAILED'})),refundAttendanceFee:vi.fn()}));
 vi.mock('@/auth',()=>({auth:async()=>({user:{id:buyer}})}));
 vi.mock('@/lib/db/prisma',()=>({get prisma(){return db;}}));
-vi.mock('@/lib/payments/stripe',()=>({getStripe:()=>stripe,stripeIsConfigured:()=>true}));
+vi.mock('@/lib/payments/stripe',()=>({getStripe:()=>stripe,stripeIsConfigured:()=>true,stripeAccountMode:()=>'test'}));
 it.each(['PENDING', 'PAID', 'PAYMENT_FAILED'] as const)('does not start a second payment while an older %s single-ticket order needs review', async status => {
  const userId = await user(`Legacy ${status}`);
  const legacy = await db.commerceOrder.create({data:{userId,occurrenceId,kind:'EVENT',status,amountCents:2500,stripeCheckoutSessionId:`cs_legacy_${randomUUID()}`}});
@@ -1371,4 +1372,185 @@ it.each(['released','replaced','refunded','full','closed','reassigned'] as const
   if(reason==='full')await db.classOccurrence.update({where:{id:f.e.id},data:{historicalSignupCount:0}});
   if(reason==='closed')await db.$executeRaw`UPDATE "FinancialRelease" SET "enabledDeployId"=${release.enabledDeployId},"sourceSha"=${release.sourceSha},"evidenceHash"=${release.evidenceHash},"activatedAt"=${release.activatedAt} WHERE id='rhyze'`;
  }
+});
+
+function capturedFixture(session:any) {
+ const id='ch_'+randomUUID(),pi='pi_'+randomUUID();
+ Object.assign(session,{status:'complete',payment_status:'paid',livemode:false,payment_intent:pi});
+ return {id,object:'charge',payment_intent:pi,livemode:false,status:'succeeded',paid:true,captured:true,
+  disputed:false,refunded:false,amount:session.amount_total,amount_captured:session.amount_total,amount_refunded:0,
+  currency:'usd',created:Math.floor(now.getTime()/1000),metadata:{...session.metadata},receipt_url:'https://example.test/receipt/'+id};
+}
+
+async function signedDelivery(id:string,type:string,object:any) {
+ const secret='whsec_fixture_only';
+ vi.stubEnv('STRIPE_WEBHOOK_SECRET',secret);vi.stubEnv('STRIPE_SECRET_KEY','sk_test_fixture_only');
+ stripe.webhooks=Stripe.webhooks;
+ const payload=JSON.stringify({id,type,livemode:false,created:Math.floor(+now/1000),data:{object}});
+ const signature=Stripe.webhooks.generateTestHeaderString({payload,secret});
+ const {POST}=await import('@/app/api/stripe/webhook/route');
+ return POST(new Request('http://localhost/api/stripe/webhook',{method:'POST',body:payload,headers:{'stripe-signature':signature}}));
+}
+
+it.each(['pair','legacy','capacity'] as const)('final F1 adopts the real clean sync writer for %s, preserving charge and receipt across replay',async path=>{
+ const e=decemberEvents[0];await decemberDate(e);const userId=await user('F1 '+path);
+ const {paidEventDisplayCount,specialEventRoster}=await import('@/lib/payments/special-event-roster');
+ const before=await paidEventDisplayCount(e.id);
+ await db.classOccurrence.update({where:{id:e.id},data:{capacity:100}});
+ const session=path==='pair'?sessions.get('black-friday:'+(await startBlackFridayCheckout(db,stripe,{userId,occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'PAIR',friend:{fullName:'Final Named Guest',phone:'2015550114'}},now)).orderId):await legacyDecember(e.id,userId);
+ if(path==='capacity'){
+  const [capacity]=await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${e.id}`;
+  await db.classOccurrence.update({where:{id:e.id},data:{capacity:capacity.used+2}});
+  await startBlackFridayCheckout(db,stripe,{userId:await user('Capacity holder'),occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'PAIR',friend:{fullName:'Reserved Pair Guest',phone:'3125550144'}},now);
+ }
+ const charge=capturedFixture(session),orderId=session.client_reference_id;
+ const {syncRecentStripePaymentRecords}=await import('@/lib/payments/stripe-payment-sync');
+ const {processStripeEvent}=await import('@/lib/payments/webhook-processor');
+ await withSyncCharge(charge,session,[],async()=>{
+  let originalId:string|undefined;
+  const capture=db.$extends({query:{paymentRecord:{create:async({args,query})=>{
+   const row=await query(args);expect(row).toMatchObject({commerceOrderId:null,kind:'PRODUCT_PURCHASE',stripeEventId:'stripe-sync-charge-'+charge.id});originalId=row.id;return row;
+  }}}});
+  const first=await syncRecentStripePaymentRecords(capture as unknown as PrismaClient);
+  expect(first).toMatchObject({fulfilledCheckoutSessions:1});expect(originalId).toBeTruthy();
+  const receiptId='rhyze-payment-reconciled-acct_round_two-'+charge.id;
+  const receipt=await db.stripeEvent.findUniqueOrThrow({where:{id:receiptId}});
+  await db.$transaction(tx=>processStripeEvent(tx,{id:'evt_'+randomUUID(),type:'checkout.session.completed',livemode:false,created:charge.created,data:{object:session}} as any));
+  expect(await db.stripeEvent.findUniqueOrThrow({where:{id:receiptId}})).toEqual(receipt);
+  const signedId='evt_'+randomUUID();
+  stripe.charges.retrieve=async()=>charge;
+  stripe.paymentIntents={retrieve:async()=>({id:charge.payment_intent,livemode:false,latest_charge:charge.id})};
+  expect((await signedDelivery(signedId,'checkout.session.completed',session)).status).toBe(200);
+  delete stripe.paymentIntents;
+  await syncRecentStripePaymentRecords(db);
+  expect((await db.stripeEvent.findUniqueOrThrow({where:{id:receiptId}})).payload).toMatchObject({acknowledgedEventIds:[signedId]});
+  expect(await db.paymentRecord.findMany({where:{stripePaymentIntentId:charge.payment_intent}})).toMatchObject([{id:originalId,commerceOrderId:orderId,kind:'EVENT',userId,
+   stripeEventId:'stripe-sync-charge-'+charge.id,occurredAt:now,receiptUrl:charge.receipt_url,status:'SUCCEEDED',amountCents:charge.amount}]);
+  expect(receipt.payload).toMatchObject({account:'acct_round_two',livemode:false,data:{object:{id:charge.id,amount_captured:charge.amount}}});
+  expect(await paidEventDisplayCount(e.id)).toBe(before+(path==='capacity'?0:path==='pair'?2:1));
+  expect(await db.booking.count({where:{userId,occurrenceId:e.id,status:'CONFIRMED'}})).toBe(path==='capacity'?0:1);
+  const roster=await specialEventRoster(e.id,{id:buyer});
+  if(path==='pair')expect(roster.groups.find(g=>g.orderId===orderId)?.attendees.map(a=>a.fullName)).toEqual(['F1 pair','Final Named Guest']);
+  if(path==='capacity')expect(roster.reviewItems).toContainEqual(expect.objectContaining({orderId,state:'FULFILLMENT_REVIEW',collectedCents:3000}));
+ });
+});
+
+it.each(['refund','dispute','concurrent'] as const)('final F2 retains signed %s before legacy payment and suppresses admission through replay',async kind=>{
+ const e=decemberEvents[1];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:100}});
+ const userId=await user('F2 '+kind),session=await legacyDecember(e.id,userId),charge=capturedFixture(session);
+ const {specialEventRoster,paidEventDisplayCount}=await import('@/lib/payments/special-event-roster');const count=await paidEventDisplayCount(e.id);
+ const disputed=kind==='dispute';Object.assign(charge,{disputed,refunded:!disputed,amount_refunded:disputed?0:charge.amount});
+ const adjustment={id:(disputed?'dp_':'re_')+randomUUID(),charge:charge.id,payment_intent:charge.payment_intent,currency:'usd',amount:charge.amount,status:disputed?'needs_response':'succeeded',balance_transactions:[],livemode:false};
+ const retained='evt_'+randomUUID(),sale='evt_'+randomUUID(),receiptId='rhyze-payment-reconciled-acct_round_two-'+charge.id;
+ await withSyncCharge(charge,session,disputed?[]:[adjustment],async()=>{
+  stripe.disputes={list:async()=>({data:[adjustment],has_more:false})};
+  stripe.paymentIntents={retrieve:async()=>({id:charge.payment_intent,livemode:false,latest_charge:charge.id})};
+  let release!:()=>void,entered!:()=>void;const wait=new Promise<void>(r=>release=r),started=new Promise<void>(r=>entered=r);
+  stripe.charges.retrieve=vi.fn(async()=>{entered();if(kind==='concurrent')await wait;return charge;});
+  const reversing=signedDelivery(retained,disputed?'charge.dispute.created':'charge.refunded',disputed?adjustment:charge);
+  try{
+   if(kind==='concurrent')await Promise.race([started,reversing.then(()=>{throw Error('Expected overlapping receipt refresh');})]);
+   else expect((await reversing).status).toBe(200);
+   const paying=signedDelivery(sale,'checkout.session.completed',session);
+   if(kind==='concurrent'){
+    for(let i=0;i<100 && !await db.stripeEvent.findUnique({where:{id:sale}});i++)await new Promise(r=>setTimeout(r,5));
+    expect(await db.stripeEvent.findUnique({where:{id:sale}})).toBeTruthy();release();
+   }
+   expect((await paying).status).toBe(200);expect((await reversing).status).toBe(200);
+   expect((await signedDelivery(sale,'checkout.session.completed',session)).status).toBe(200);
+   await payLegacy(session);
+   expect(await db.commerceOrder.findUniqueOrThrow({where:{id:session.client_reference_id}})).toMatchObject({status:'FULFILLMENT_REVIEW',stripePaymentIntentId:charge.payment_intent});
+   expect(await db.paymentRecord.findMany({where:{commerceOrderId:session.client_reference_id}})).toMatchObject([{amountCents:3000,stripePaymentIntentId:charge.payment_intent}]);
+   expect(await db.stripeEvent.findUnique({where:{id:retained}})).toMatchObject({processedAt:expect.any(Date),payload:{data:{object:{payment_intent:charge.payment_intent}}}});
+   expect((await db.stripeEvent.findUniqueOrThrow({where:{id:receiptId}})).payload).toMatchObject({data:{object:{id:charge.id,amount_captured:3000,disputed,amount_refunded:charge.amount_refunded}}});
+   expect(await db.booking.count({where:{userId,occurrenceId:e.id}})).toBe(0);
+   expect(await db.attendanceRecord.count({where:{userId,occurrenceId:e.id}})).toBe(0);
+   expect(await db.emailMessage.count({where:{dedupeKey:'commerce-confirmation:'+session.client_reference_id}})).toBe(0);
+   expect(await paidEventDisplayCount(e.id)).toBe(count);
+   const roster=await specialEventRoster(e.id,{id:buyer});
+   expect(roster.reviewItems).toContainEqual(expect.objectContaining({orderId:session.client_reference_id,state:'FULFILLMENT_REVIEW',collectedCents:3000}));
+  }finally{release();await reversing;delete stripe.disputes;delete stripe.paymentIntents;}
+ });
+});
+
+it('final F3 unsigned active buyer recovers the exact special occurrence from the checkout POST',async()=>{
+ const e=decemberEvents[0];await decemberDate(e);const owner=buyer;buyer=await user('F3 Waiver Buyer');
+ await db.waiverAcceptance.deleteMany({where:{userId:buyer}});
+ const calls=stripe.checkout.sessions.create.mock.calls.length;
+ try{
+  const {POST}=await import('@/app/api/checkout/event/route');
+  const response=await POST(new Request('http://localhost/api/checkout/event',{method:'POST',body:JSON.stringify({slug:e.slug,occurrenceId:e.id,ticketType:'SINGLE'})}));
+  expect(response.status).toBe(403);
+  const body=await response.json();expect(body.error).toMatch(/waiver/i);
+  const link=new URL(body.waiverUrl,'http://localhost');expect(link.origin+link.pathname).toBe('http://localhost/member/waiver');
+  expect(link.searchParams.get('returnTo')).toBe('/book/event/'+e.slug+'?occurrence='+e.id);
+  expect(await db.commerceOrder.count({where:{userId:buyer}})).toBe(0);
+  expect(await db.$queryRaw`SELECT 1 FROM "BlackFridayTicket" WHERE "userId"=${buyer}`).toEqual([]);
+  expect(stripe.checkout.sessions.create.mock.calls.length).toBe(calls);
+ }finally{buyer=owner;}
+});
+
+it.each(['signed adjustment','paid callback'])('final F2 serializes a competing signed refund when %s wins the intent fence',async winner=>{
+ const e=decemberEvents[1];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:100}});
+ const userId=await user('F2 fence '+winner),session=await legacyDecember(e.id,userId),charge=capturedFixture(session);
+ const {paidEventDisplayCount,specialEventRoster}=await import('@/lib/payments/special-event-roster');
+ const before=await paidEventDisplayCount(e.id);Object.assign(charge,{refunded:true,amount_refunded:charge.amount});
+ const refund={id:'re_'+randomUUID(),charge:charge.id,payment_intent:charge.payment_intent,currency:'usd',amount:charge.amount,status:'succeeded'};
+ await withSyncCharge(charge,session,[refund],async()=>{
+  stripe.charges.retrieve=async()=>charge;
+  stripe.paymentIntents={retrieve:async()=>({id:charge.payment_intent,livemode:false,latest_charge:charge.id})};
+  const reversing=()=>signedDelivery('evt_'+randomUUID(),'charge.refunded',charge);
+  const paying=()=>signedDelivery('evt_'+randomUUID(),'checkout.session.completed',session);
+  const first=await gatedAction(winner==='signed adjustment'?reversing:paying,'bf_lock_checkout_evidence');
+  const second=winner==='signed adjustment'?paying():reversing();
+  try{await waitForLock();}finally{first.release();}
+  for(const result of await Promise.all([first.result,second]))expect((result as Response).status).toBe(200);
+  await payLegacy(session);
+  expect(await paidEventDisplayCount(e.id)).toBe(before);
+  expect((await specialEventRoster(e.id,{id:buyer})).reviewItems).toContainEqual(expect.objectContaining({orderId:session.client_reference_id,state:'FULFILLMENT_REVIEW',collectedCents:3000}));
+  const bookings=await db.booking.findMany({where:{userId,occurrenceId:e.id}});
+  expect(bookings).toHaveLength(winner==='paid callback'?1:0);
+  if(bookings.length){
+   await expect(db.attendanceRecord.create({data:{bookingId:bookings[0].id,userId,occurrenceId:e.id,status:'CHECKED_IN',markedById:buyer}})).rejects.toThrow('settled payment');
+   expect((await specialEventRoster(e.id,{id:buyer})).linkedBookingIds).toContain(bookings[0].id);
+  }
+  expect(await db.emailMessage.count({where:{dedupeKey:'commerce-confirmation:'+session.client_reference_id,status:{not:'CANCELLED'}}})).toBe(0);
+  expect(await db.paymentRecord.count({where:{stripePaymentIntentId:charge.payment_intent}})).toBe(1);
+  delete stripe.paymentIntents;
+ });
+});
+
+it('final F1 delayed reconciliation rejects conflicting sync provenance and adopts only a restored clean proof',async()=>{
+ const e=decemberEvents[0];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:100}});
+ const userId=await user('F1 proof buyer');
+ const {orderId}=await startBlackFridayCheckout(db,stripe,{userId,occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'SINGLE'},now);
+ const session=sessions.get('black-friday:'+orderId),charge=capturedFixture(session);
+ const intent={id:charge.payment_intent,metadata:session.metadata,status:'succeeded',livemode:false,amount:charge.amount,amount_received:charge.amount,currency:'usd',latest_charge:charge};
+ const {syncRecentStripePaymentRecords}=await import('@/lib/payments/stripe-payment-sync');
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ const check=()=>reconcileSpecialEventCheckout({orderId,actorUserId:userId},{db,stripe,now});
+ await withSyncCharge(charge,session,[],async()=>{
+  await syncRecentStripePaymentRecords(db,{financialOnly:true});session.payment_intent=intent;
+  const row=await db.paymentRecord.findUniqueOrThrow({where:{stripePaymentIntentId:intent.id}});
+  const receiptId='rhyze-payment-reconciled-acct_round_two-'+charge.id;
+  const receipt=await db.stripeEvent.findUniqueOrThrow({where:{id:receiptId}});
+  const retained=async()=>{expect(await check()).toBe('review');expect(await db.paymentRecord.findUnique({where:{id:row.id}})).toMatchObject({commerceOrderId:null});expect(await db.booking.count({where:{userId}})).toBe(0);};
+  const account=stripe.accounts.retrieve;stripe.accounts.retrieve=async()=>({id:'acct_other'});await retained();stripe.accounts.retrieve=account;
+  charge.metadata={...charge.metadata,commerceOrderId:'unrelated-order'};await retained();charge.metadata={...session.metadata};
+  const second=await db.stripeEvent.create({data:{id:'another-'+charge.id,type:receipt.type,payload:receipt.payload as any,processedAt:now}});
+  await retained();await db.stripeEvent.delete({where:{id:second.id}});
+  for(const patch of [{amount_captured:1},{currency:'eur'},{id:'ch_other'},{refunded:true},{disputes:{data:[{id:'dp_unknown'}]}}]){
+   const payload=structuredClone(receipt.payload as any);Object.assign(payload.data.object,patch);
+   await db.stripeEvent.update({where:{id:receiptId},data:{payload}});await retained();
+  }
+  const payload=structuredClone(receipt.payload as any);payload.livemode=true;await db.stripeEvent.update({where:{id:receiptId},data:{payload}});await retained();
+  await db.stripeEvent.update({where:{id:receiptId},data:{payload:receipt.payload as any}});
+  await db.paymentRecord.update({where:{id:row.id},data:{stripeCheckoutSessionId:'cs_mixed'}});
+  await retained();await db.paymentRecord.update({where:{id:row.id},data:{stripeCheckoutSessionId:session.id}});
+  const mixed=await db.paymentRecord.create({data:{kind:'EVENT',status:'SUCCEEDED',userId,commerceOrderId:orderId,amountCents:charge.amount,stripeEventId:'evt_extra_'+orderId}});
+  await retained();await db.paymentRecord.delete({where:{id:mixed.id}});
+  expect(await check()).toBe('paid');expect(await check()).toBe('paid');
+  expect(await db.paymentRecord.findMany({where:{stripePaymentIntentId:intent.id}})).toMatchObject([{id:row.id,commerceOrderId:orderId,stripeEventId:row.stripeEventId}]);
+  expect(await db.stripeEvent.findUnique({where:{id:receiptId}})).toEqual(receipt);
+ });
 });

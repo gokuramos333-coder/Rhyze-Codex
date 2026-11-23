@@ -1,3 +1,5 @@
+import { bindEventPayment, retainedEventAdjustment, type EventCaptureProof } from './event-capture-evidence';
+import { lockCheckoutEvidence } from './black-friday-checkout';
 import { specialEventIdentity } from './black-friday-new-friend';
 import { preserveApprovedRecurringService } from '@/lib/payments/refund-recurring-callback';
 import { financialLock, financialLedgerLock } from '@/lib/payments/refund-review';
@@ -738,6 +740,7 @@ async function fulfillCommerceOrder(
     ReturnType<typeof deriveStripeEventAction>,
     { type: 'CHECKOUT_PAID' }
   >,
+  proof?: EventCaptureProof,
 ) {
   if (!action.commerceOrderId) return;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${action.commerceOrderId}))`;
@@ -751,17 +754,21 @@ async function fulfillCommerceOrder(
   });
   if (!existingOrder) return;
   const legacySpecial=existingOrder.kind==='EVENT' && specialEventIdentity(existingOrder.occurrenceId ?? undefined);
+  let fulfillmentReview=false;
+  let legacyPayment=null;
   if(legacySpecial){
     const session=event.data.object as Stripe.Checkout.Session;
     assertStripeObjectMode(session);
-    if(session.mode!=='payment' || session.payment_status!=='paid' || !action.paymentIntentId ||
+    if(session.mode!=='payment' || session.status!=='complete' || session.payment_status!=='paid' || session.metadata?.blackFridayTicket || session.metadata?.purchaseId || session.metadata?.membershipId || !action.paymentIntentId ||
       session.client_reference_id!==existingOrder.id || session.metadata?.userId!==existingOrder.userId ||
       session.metadata?.purchaseType!=='EVENT' || session.metadata?.occurrenceId!==existingOrder.occurrenceId ||
       action.amountCents!==existingOrder.amountCents || action.currency!==existingOrder.currency ||
       (existingOrder.stripeCheckoutSessionId && existingOrder.stripeCheckoutSessionId!==action.sessionId) ||
       (existingOrder.stripePaymentIntentId && existingOrder.stripePaymentIntentId!==action.paymentIntentId)) throw Error('Legacy event receipt ownership requires review.');
+    await financialLock(tx,null,action.paymentIntentId);
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${legacySpecial.occurrenceId}))`;
     await tx.$queryRaw`SELECT id FROM "ClassOccurrence" WHERE id=${legacySpecial.occurrenceId} FOR UPDATE`;
+    await lockCheckoutEvidence(tx,existingOrder.id,session);
     if(existingOrder.paidAt && ['PAID','FULFILLMENT_REVIEW'].includes(existingOrder.status)) return;
   }
   if (
@@ -778,6 +785,10 @@ async function fulfillCommerceOrder(
     select: { id: true },
   });
   if (inFlightRefund) return;
+  if (legacySpecial && action.paymentIntentId) {
+    legacyPayment=await bindEventPayment(tx,existingOrder,event.data.object as Stripe.Checkout.Session,proof);
+    fulfillmentReview=await retainedEventAdjustment(tx,action.paymentIntentId);
+  }
   const financials = checkoutFinancialData(action);
   if (
     existingOrder.kind === 'EVENT' &&
@@ -820,7 +831,6 @@ async function fulfillCommerceOrder(
       data: { stripeCustomerId: action.customerId },
     });
   }
-  let fulfillmentReview=false;
   if (
     order.kind === 'EVENT' &&
     order.userId &&
@@ -834,7 +844,7 @@ async function fulfillCommerceOrder(
       SELECT id FROM "Booking" WHERE "occurrenceId"=${order.occurrenceId} AND "userId"=${order.userId} AND status IN ('CONFIRMED','ATTENDED')
       UNION ALL SELECT ${order.id} WHERE bf_active_ticket_person(${order.occurrenceId},${order.userId}) LIMIT 1`).length>0;
     if (
-      collision || (legacySpecial && order.occurrence.status!=='SCHEDULED') || order.occurrence.archivedAt ||
+      fulfillmentReview || collision || (legacySpecial && order.occurrence.status!=='SCHEDULED') || order.occurrence.archivedAt ||
       booked + order.occurrence.historicalSignupCount + (order.occurrence.pendingTicketSeats ?? 0) >=
       order.occurrence.capacity
     ) {
@@ -880,7 +890,7 @@ async function fulfillCommerceOrder(
     stripePaymentIntentId: action.paymentIntentId,
     occurredAt: action.occurredAt,
   };
-  const existingPaymentRecord = await tx.paymentRecord.findFirst({
+  const existingPaymentRecord = legacySpecial ? legacyPayment : await tx.paymentRecord.findFirst({
     where: {
       OR: [
         { stripeEventId: event.id },
@@ -895,11 +905,7 @@ async function fulfillCommerceOrder(
     select: { id: true, commerceOrderId:true, userId:true, stripePaymentIntentId:true, stripeCheckoutSessionId:true, amountCents:true, currency:true, status:true },
   });
   if (existingPaymentRecord) {
-    if(legacySpecial && (existingPaymentRecord.commerceOrderId!==order.id || existingPaymentRecord.userId!==order.userId ||
-      existingPaymentRecord.stripePaymentIntentId!==action.paymentIntentId || existingPaymentRecord.stripeCheckoutSessionId!==action.sessionId ||
-      existingPaymentRecord.amountCents!==order.amountCents || existingPaymentRecord.currency!==order.currency ||
-      existingPaymentRecord.status!=='SUCCEEDED')) throw Error('Legacy payment ledger ownership requires review.');
-    await tx.paymentRecord.update({
+    if (!legacySpecial) await tx.paymentRecord.update({
       where: { id: existingPaymentRecord.id },
       data: paymentRecordData,
     });
@@ -982,9 +988,10 @@ async function fulfillCommerceOrder(
 export async function processStripeEvent(
   tx: Prisma.TransactionClient,
   event: Stripe.Event,
+  proof?: EventCaptureProof,
 ) {
   assertStripeObjectMode(event);
-  if (await processBlackFridayEvent(tx, event)) return;
+  if (await processBlackFridayEvent(tx, event, proof)) return;
   if (['charge.refunded','charge.dispute.created'].includes(event.type)) {
     const financialAction = deriveStripeEventAction(event);
     if ((financialAction.type === 'PAYMENT_REFUNDED' || financialAction.type === 'PAYMENT_DISPUTED') && financialAction.paymentIntentId) {
@@ -1000,7 +1007,7 @@ export async function processStripeEvent(
   if (action.type === 'IGNORE') return;
   if (action.type === 'CHECKOUT_PAID') {
     await fulfillProductPurchase(tx, event, action);
-    await fulfillCommerceOrder(tx, event, action);
+    await fulfillCommerceOrder(tx, event, action, proof);
     return;
   }
   if (action.type === 'CHECKOUT_FAILED') {

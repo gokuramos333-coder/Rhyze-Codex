@@ -3,6 +3,7 @@ import {
   closedCutoverPlan,
   verifyQuarantine,
   verifyBridgeReconciliation,
+  submitBoundHostedBuild,
 } from './closed-cutover';
 import { execFile, execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -191,7 +192,10 @@ async function main() {
     throw Error('An existing hosted approval requires reconciliation first.');
   assertProductionEnvironment(initialVars, current.created_at);
   const configHash = fingerprint(initialVars);
-  const databaseId = await patOff();
+  const managedTarget = await patOff();
+  const databaseId = closed?.phase === 'FINAL'
+    ? cutoverEvidence.record.approval.databaseIdentity : managedTarget;
+  if (managedTarget !== databaseId) throw Error('Hosted database differs from audited CLOSE.');
   console.info(
     'Run complete isolated release checks before authorizing a hosted build.',
   );
@@ -301,29 +305,29 @@ async function main() {
             expiresAt: Date.now() + 60 * 60 * 1000,
           };
           hostedApproval = approval;
-          approvalMayExist = true;
-          await api('createEnvVars', {
-            account_id: ACCOUNT_ID,
-            site_id: SITE_ID,
-            body: [
-              {
-                key: APPROVAL_KEY,
-                scopes: ['builds'],
-                values: [
-                  { context: 'production', value: JSON.stringify(approval) },
-                ],
-              },
-            ],
-          });
-          await unchanged(); // Revalidate evidence and ingress immediately before migration-bearing build.
-          const build = await api<{ id: string; deploy_id: string }>(
+          const build = await submitBoundHostedBuild(databaseId, patOff, async () => {
+            approvalMayExist = true;
+            await api('createEnvVars', {
+              account_id: ACCOUNT_ID,
+              site_id: SITE_ID,
+              body: [
+                {
+                  key: APPROVAL_KEY,
+                  scopes: ['builds'],
+                  values: [
+                    { context: 'production', value: JSON.stringify(approval) },
+                  ],
+                },
+              ],
+            });
+          }, unchanged, () => api<{ id: string; deploy_id: string }>(
             'createSiteBuild',
             {
               site_id: SITE_ID,
               branch: BRANCH,
               title: `Rhyze verified hosted release ${revision}`,
             },
-          );
+          ));
           if (!build.id || !build.deploy_id)
             throw Error(
               'Hosted build identity unavailable; inspect provider before retrying.',
