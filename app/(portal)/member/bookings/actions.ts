@@ -1,6 +1,6 @@
 'use server';
-import { assertFinancialRelease } from '@/lib/payments/financial-release';
-import { specialEventOfferMatches, specialEventCreditAllowed, specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
+import { authorizeNativeEventAdmission, earnedEventCreditCovers } from '@/lib/payments/special-event-credit';
+import { specialEventOfferMatches, specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
 import { confirmAttendanceService } from '@/lib/payments/refund-review';
 import { giftCreditAllows, giftCreditKind } from '@/lib/domain/credits/gift-credit';
 import type { Prisma } from '@prisma/client';
@@ -82,6 +82,9 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       include: { template: true, instructor: { select: { name: true } } },
     });
     if (!occurrence || occurrence.status !== 'SCHEDULED' || occurrence.startAt <= new Date()) return 'unavailable';
+    const specialEvent = specialEventIdentity(occurrence.id);
+    if (specialEvent && (!specialEventOfferMatches(occurrence) || !occurrence.template.isActive ||
+        occurrence.template.archivedAt || occurrence.archivedAt)) return 'unavailable';
     const now = new Date();
     const currentUser = await tx.user.findUnique({
       where: { id: user.id },
@@ -225,11 +228,9 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
       },
       orderBy: { createdAt: 'asc' },
     });
-    const specialEvent = specialEventOfferMatches(occurrence);
-    if (specialEvent) await assertFinancialRelease(tx);
     const account = prioritizeMemberEventCredits(accounts, occurrence.template).find(
       (item) => {
-        if (specialEvent && specialEventIdentity(occurrence.id)?.vipPairCashCents != null && !specialEventCreditAllowed(item)) return false;
+        if (specialEvent && !earnedEventCreditCovers(item, now, occurrence.startAt)) return false;
         const productKind = currentCreditProduct(item)?.kind ?? null;
         const isEventCredit = eventCreditCanBook({
           label: item.label,
@@ -299,6 +300,10 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
           (m.planChangeState as { fundingReversedAt?: number } | null)?.fundingReversedAt ||
           !m.currentPeriodEnd || m.currentPeriodEnd <= occurrence.startAt ||
           m.freezes.some(f => !f.cancelledAt && f.startAt <= occurrence.startAt && f.endAt > occurrence.startAt))))) return 'access';
+    if (specialEvent) {
+      if (!account) return 'access';
+      await authorizeNativeEventAdmission(tx, occurrence.id, user.id, account.id);
+    }
     const bookingData = {
         occurrenceId,
         userId: user.id,

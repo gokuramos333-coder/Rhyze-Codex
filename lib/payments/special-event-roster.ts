@@ -51,7 +51,8 @@ export async function paidEventDisplayCount(
     { count: number }[]
   >`SELECT o."historicalSignupCount" +
     (SELECT count(*)::int FROM "Booking" b WHERE b."occurrenceId"=o.id AND b.status IN ('CONFIRMED','ATTENDED')
-      AND NOT EXISTS (SELECT 1 FROM "BlackFridayTicket" t WHERE t."occurrenceId"=o.id AND b.id IN (t."buyerBookingId",t."guestBookingId"))) +
+      AND NOT EXISTS (SELECT 1 FROM "BlackFridayTicket" t WHERE t."occurrenceId"=o.id AND b.id IN (t."buyerBookingId",t."guestBookingId"))
+      AND NOT EXISTS (SELECT 1 FROM bf_ineligible_legacy_booking invalid WHERE invalid.id=b.id)) +
     (SELECT coalesce(sum(seats),0)::int FROM bf_paid_event_ticket t WHERE t."occurrenceId"=o.id) AS count
     FROM "ClassOccurrence" o WHERE o.id=${occurrenceId}`;
   return row?.count ?? 0;
@@ -98,6 +99,9 @@ export async function specialEventRoster(
           Boolean(id),
         ),
       );
+      const ineligibleLegacy = await tx.$queryRaw<{id:string}[]>`
+        SELECT id FROM bf_ineligible_legacy_booking WHERE "occurrenceId"=${occurrenceId}`;
+      linkedBookingIds.push(...ineligibleLegacy.map(booking=>booking.id));
       const signed = waiver.id
         ? await tx.waiverAcceptance.findMany({
             where: {
@@ -186,22 +190,20 @@ export async function specialEventRoster(
             buyerName: string;
             collected: number;
             remaining: number;
+            state:string;
           }[]
         >`
-        SELECT o.id AS "orderId",coalesce(o."customerName",u.name,'Attendee') AS "buyerName",
-          coalesce(p."amountCents",0) AS collected,greatest(0,coalesce(p."amountCents"-greatest(p."refundedAmountCents",o."refundedAmountCents"),0)) AS remaining
-        FROM "CommerceOrder" o LEFT JOIN "User" u ON u.id=o."userId"
-        LEFT JOIN "PaymentRecord" p ON p."commerceOrderId"=o.id AND p."userId"=o."userId" AND p.kind='EVENT'
-          AND p."stripePaymentIntentId"=o."stripePaymentIntentId" AND p."stripeCheckoutSessionId"=o."stripeCheckoutSessionId"
-          AND p."amountCents"=o."amountCents" AND p.currency=o.currency AND p.status IN ('SUCCEEDED','PARTIALLY_REFUNDED')
-        WHERE o.kind='EVENT' AND o."occurrenceId"=${occurrenceId} AND o.status='FULFILLMENT_REVIEW'
-          AND NOT EXISTS (SELECT 1 FROM "BlackFridayTicket" t WHERE t."orderId"=o.id) ORDER BY o."createdAt",o.id`;
+        SELECT o."orderId",coalesce(o."customerName",u.name,'Attendee') AS "buyerName",
+          o.collected,o.remaining,CASE WHEN o.state='PAID' THEN 'REVIEW' ELSE o.state END AS state
+        FROM bf_legacy_event_order o LEFT JOIN "User" u ON u.id=o."userId"
+        WHERE o."occurrenceId"=${occurrenceId} AND NOT o.settled
+          AND o.state IN ('PAID','DISPUTED','PARTIALLY_REFUNDED','FULFILLMENT_REVIEW') ORDER BY o."createdAt",o."orderId"`;
         for (const order of legacy)
           reviewItems.push({
             orderId: order.orderId,
             management: 'LEGACY_ORDER',
             buyerName: order.buyerName,
-            state: 'FULFILLMENT_REVIEW',
+            state: order.state,
             collectedCents: order.collected,
             remainingCents: order.remaining,
             canRefund: false,

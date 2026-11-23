@@ -108,6 +108,7 @@ try {
     '20261123010000_special_event_checkout_attempt',
     '20261123011000_checkout_payment_evidence_lock',
     '20261123012000_special_event_guests',
+    '20261123013000_special_event_admission_review',
   ]) {
     run('psql', ['-h', socket, '-p', port, '-U', 'refund_test', '-d', 'refund_review_test',
       '-v', 'ON_ERROR_STOP=1', '-f', `prisma/migrations/${migration}/migration.sql`]);

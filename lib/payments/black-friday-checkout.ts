@@ -4,7 +4,8 @@ import { blackFridaySalesEnabled } from './black-friday-release-gate';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type CommerceOrder, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
-import { specialEventOfferMatches, specialEventCashPrice, specialEventCreditAllowed, specialEventIdentity, normalizeFriendPhone, normalizedFriendName } from './black-friday-new-friend';
+import { specialEventOfferMatches, specialEventCashPrice, specialEventIdentity, normalizeFriendPhone, normalizedFriendName } from './black-friday-new-friend';
+import { earnedEventCreditCovers } from './special-event-credit';
 import { inspectNewFriendHistory } from './black-friday-new-friend-history';
 import { retrySerializableTransaction } from './transaction-retry';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
@@ -40,12 +41,14 @@ async function guestSeatCollision(tx:Tx, occurrenceId:string, name:string|null, 
  return Boolean(row);
 }
 
-async function guestHasAnotherSeat(tx:Tx,occurrenceId:string,name:string,phone:string,includeHistory:boolean,excludeOrderId:string|null=null){
+// Booking has a unique occurrence/user key. Preserving an earlier cancellation or attendance
+// record requires resolving that collision before issuing a new paid guest seat.
+async function guestHasBookingConflict(tx:Tx,occurrenceId:string,name:string,phone:string,excludeOrderId:string|null=null){
  const digits=phone.slice(1), domestic=digits.length===11 && digits.startsWith('1') ? digits.slice(1) : digits;
  const [row]=await tx.$queryRaw<{id:string}[]>`SELECT u.id FROM "User" u LEFT JOIN "MemberProfile" p ON p."userId"=u.id
    WHERE (lower(regexp_replace(trim(normalize(COALESCE(u.name,''),NFKC)), '\\s+', ' ', 'g'))=${normalizedFriendName(name)}
     OR regexp_replace(COALESCE(p.phone,''),'[^0-9]','','g') IN (${digits},${domestic}))
-   AND (EXISTS (SELECT 1 FROM "Booking" b WHERE b."occurrenceId"=${occurrenceId} AND b."userId"=u.id AND (b.status IN ('CONFIRMED','ATTENDED') OR ${includeHistory}))
+   AND (EXISTS (SELECT 1 FROM "Booking" b WHERE b."occurrenceId"=${occurrenceId} AND b."userId"=u.id)
     OR EXISTS (SELECT 1 FROM "BlackFridayTicket" t WHERE t."occurrenceId"=${occurrenceId} AND t."userId"=u.id
        AND t."orderId" IS DISTINCT FROM ${excludeOrderId} AND t.state NOT IN ('EXPIRED','REFUNDED','DISPUTE_LOST'))) LIMIT 1`;
  return Boolean(row);
@@ -104,7 +107,7 @@ export async function startBlackFridayCheckout(db: PrismaClient, stripe: Stripe,
     phone===normalizeFriendPhone(user.memberProfile?.phone) || normalizedFriendName(name)===normalizedFriendName(user.name || ''))) throw Error('A distinct friend with a full name and phone is required.');
   await verifyLegacyOrders(tx,user.id,o.id,legacyExpiry);
   if (await guestSeatCollision(tx,o.id,user.name,user.memberProfile?.phone)) throw Error('Existing guest seat requires review.');
-  if(pair && await guestHasAnotherSeat(tx,o.id,name!,phone!,offer.requiresFirstVisit)) throw Error('Friend booking history requires staff review before payment.');
+  if(pair && await guestHasBookingConflict(tx,o.id,name!,phone!)) throw Error('Friend booking history requires staff review before payment.');
   const prior=(await tx.$queryRaw<Ticket[]>`SELECT * FROM "BlackFridayTicket" WHERE "userId"=${user.id} AND "occurrenceId"=${o.id} AND state NOT IN ('EXPIRED','REFUNDED','DISPUTE_LOST')`)[0];
   if(prior){
    if(prior.state!=='HELD' || prior.guestName!==name || prior.guestPhone!==phone || Boolean(prior.creditAccountId)!==Boolean(input.useEventCredit)) throw new Error('An existing ticket requires staff review.');
@@ -117,7 +120,7 @@ export async function startBlackFridayCheckout(db: PrismaClient, stripe: Stripe,
    const memberships=await tx.membership.findMany({where:{userId:user.id},include:vipEntitlementInclude});
    const eligible=memberships.some(m=>{const end=vipMembershipPaidThrough(m,now)||giftedVipThrough(m,now);return Boolean(end && o.startAt<end);});
    const accounts=await tx.creditAccount.findMany({where:{userId:user.id,label:window.eventCreditLabel,isUnlimited:false,sourcePurchaseId:null},include:{entries:true}});
-   const credit=accounts.find(a=>specialEventCreditAllowed(a) && a.validFrom<=now && a.validFrom<=o.startAt && a.validUntil && a.validUntil>now && a.validUntil>o.startAt && a.entries.reduce((s,e)=>s+e.quantity,0)>0);
+   const credit=accounts.find(a=>earnedEventCreditCovers(a,now,o.startAt));
    if(!eligible || !credit) throw new Error('A valid monthly VIP event credit covering this event is required. Credits do not roll over.');
    creditAccountId=credit.id;
    await tx.creditLedgerEntry.create({data:{creditAccountId,type:'RESERVE',quantity:-1,sourceReturnKey:`bf:${id}:reserve`,reason:'One VIP event credit ($25 event admission) reserved for a two-person event ticket'}});
@@ -289,7 +292,7 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
  let review=!offer || specialEventCashPrice(offer,t.seats===2,Boolean(t.creditAccountId))!==order.amountCents || !specialEventOfferMatches(o)||t.state!=='HELD'||o.status!=='SCHEDULED'||o.startAt<=now||reversals.length>0||order.refundedAmountCents>0||['REFUNDED','PARTIALLY_REFUNDED','DISPUTED'].includes(order.status);
  try {await account(tx,t.userId);} catch {review=true;}
  if(t.seats===2 && offer?.requiresFirstVisit && (await inspectNewFriendHistory(tx,{fullName:t.guestName!,phone:t.guestPhone!},t.userId,now,true)).status!=='ELIGIBLE')review=true;
- if(t.seats===2 && await guestHasAnotherSeat(tx,t.occurrenceId,t.guestName!,t.guestPhone!,false,t.orderId))review=true;
+ if(t.seats===2 && await guestHasBookingConflict(tx,t.occurrenceId,t.guestName!,t.guestPhone!,t.orderId))review=true;
  if(await tx.booking.findFirst({where:{occurrenceId:t.occurrenceId,userId:t.userId}}))review=true;
  // A late paid callback after verified expiry must not reacquire released seats.
  const state=review?(t.state==='EXPIRED'?'EXPIRED':'REVIEW'):'PAID';

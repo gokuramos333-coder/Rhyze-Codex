@@ -1117,3 +1117,146 @@ it('December Fishers consumes the current earned credit plus $15; a November buc
  const {orderId}=await startBlackFridayCheckout(db,stripe,input,dec);const s=sessions.get('black-friday:'+orderId);
  expect(s.amount_total).toBe(1500);await paid(s);await refund(s);
 });
+
+const reviewCreditCases = decemberEvents.flatMap(e=>['november','event-gift','both-gift','december','mismatched-terms'].map(mode=>({e,mode})));
+it.each(reviewCreditCases)('review R1 native $e.slug single checks $mode through the member action',async({e,mode})=>{
+ await decemberDate(e);
+ await db.classOccurrence.update({where:{id:e.id},data:{capacity:24,priceCents:e.single+(mode==='mismatched-terms'?100:0)}});
+ const vip=await vipFixture('Native '+e.slug+mode);
+ const december=vipMonthlyBenefitWindowForDate(new Date('2026-12-03T18:00:00Z'));
+ await db.membership.update({where:{id:vip.m.id},data:{currentPeriodEnd:december.validUntil}});
+ await db.creditAccount.updateMany({where:{userId:vip.u,isUnlimited:true},data:{validUntil:december.validUntil}});
+ const date=new Date(mode==='november'?'2026-11-24T18:00:00Z':'2026-12-03T18:00:00Z');
+ const funding=mode==='november'?vip.credit:await db.creditAccount.create({data:{
+   userId:vip.u,
+   ...(mode.endsWith('gift')?{id:'gift-credit:'+(mode==='event-gift'?'EVENT':'BOTH')+':'+randomUUID()}:{}),
+   label:mode.endsWith('gift')?'Event credit — Gift ('+(mode==='event-gift'?'Event only':'Class or event')+')':december.eventCreditLabel,
+   validFrom:december.validFrom,validUntil:december.validUntil,isUnlimited:false,entries:{create:{type:'GRANT',quantity:1}},
+ }});
+ const {bookOccurrenceAction}=await import('@/app/(portal)/member/bookings/actions');
+ const form=new FormData();form.set('occurrenceId',e.id);
+ const valid=mode==='december';
+ vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(date);attendanceActor=vip.u;
+ try {
+  await expect(bookOccurrenceAction(form)).rejects.toThrow(valid?'result=confirmed':mode==='mismatched-terms'?'result=unavailable':'result=access');
+  expect(await db.booking.count({where:{userId:vip.u,occurrenceId:e.id}})).toBe(valid?1:0);
+  expect(await db.creditLedgerEntry.count({where:{creditAccountId:funding.id,type:'RESERVE',quantity:-1}})).toBe(valid?1:0);
+ }finally{
+  attendanceActor=null;vi.useRealTimers();
+  await db.classOccurrence.update({where:{id:e.id},data:{priceCents:e.single}});
+ }
+});
+it('review R2 suppresses a disputed legacy single across roster, CSV and display while preserving independent attendees',async()=>{
+ const e=decemberEvents[1];await decemberDate(e);
+ await db.classOccurrence.update({where:{id:e.id},data:{capacity:30}});
+ const userId=await user('R2 legacy customer');const session=await legacyDecember(e.id,userId);await payLegacy(session);
+ const native=await db.booking.findUniqueOrThrow({where:{occurrenceId_userId:{occurrenceId:e.id,userId}}});
+ const independent=await vipFixture('R2 Independent VIP');const dec=new Date('2026-12-03T16:00Z');const w=vipMonthlyBenefitWindowForDate(dec);
+ await db.membership.update({where:{id:independent.m.id},data:{currentPeriodEnd:w.validUntil}});
+ await db.creditAccount.updateMany({where:{userId:independent.u,isUnlimited:true},data:{validUntil:w.validUntil}});
+ await db.creditAccount.create({data:{userId:independent.u,label:w.eventCreditLabel,validFrom:w.validFrom,validUntil:w.validUntil,entries:{create:{type:'GRANT',quantity:1}}}});
+ const {bookOccurrenceAction}=await import('@/app/(portal)/member/bookings/actions');const form=new FormData();form.set('occurrenceId',e.id);
+ attendanceActor=independent.u;vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(dec);
+ try{await expect(bookOccurrenceAction(form)).rejects.toThrow('result=confirmed');}finally{attendanceActor=null;vi.useRealTimers();}
+ const vip=await db.booking.findUniqueOrThrow({where:{occurrenceId_userId:{occurrenceId:e.id,userId:independent.u}}});
+ const historical=await db.booking.create({data:{userId:await user('R2 historic'),occurrenceId:e.id,source:'STRIPE_EVENT',status:'ATTENDED'}});
+ await db.attendanceRecord.create({data:{bookingId:native.id,userId,occurrenceId:e.id,status:'CHECKED_IN',markedById:buyer,checkedInAt:now}});
+ const {specialEventRoster,paidEventDisplayCount}=await import('@/lib/payments/special-event-roster');
+ const {GET}=await import('@/app/api/reports/[report]/route');
+ const csv=async()=>(await GET(new Request('http://localhost'),{params:Promise.resolve({report:'attendance'})})).text();
+ const {addOwnerComplimentaryBookingAction}=await import('@/app/(studio)/admin/schedule/[occurrenceId]/roster/actions');
+ const compForm=new FormData();compForm.set('occurrenceId',e.id);compForm.set('email','vanessa@rhyzefit.com');
+ const countBeforeComp=await paidEventDisplayCount(e.id);
+ const [before]=await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${e.id}`;
+ await addOwnerComplimentaryBookingAction(compForm);
+ const comp=await db.booking.findUniqueOrThrow({where:{occurrenceId_userId:{occurrenceId:e.id,userId:buyer}}});
+ expect(comp.source).toBe('OWNER_COMPLIMENTARY');
+ expect(await paidEventDisplayCount(e.id)).toBe(countBeforeComp+1);
+ const [after]=await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${e.id}`;
+ expect(after.used).toBe(before.used+1);
+ const count=await paidEventDisplayCount(e.id);
+ expect((await specialEventRoster(e.id,{id:buyer})).linkedBookingIds).not.toContain(native.id);
+ expect(await csv()).toContain('R2 legacy customer');
+ const {processStripeEvent}=await import('@/lib/payments/webhook-processor');
+ await db.$transaction(tx=>processStripeEvent(tx,{id:'evt_'+randomUUID(),type:'charge.dispute.created',data:{object:{id:'dp_'+randomUUID(),payment_intent:session.payment_intent,amount:e.single,currency:'usd'}}} as any));
+ expect(await db.commerceOrder.findUnique({where:{id:session.client_reference_id}})).toMatchObject({status:'DISPUTED'});
+ expect(await db.booking.findUnique({where:{id:native.id}})).toMatchObject({status:'CONFIRMED'});
+ expect(await paidEventDisplayCount(e.id)).toBe(count-1);
+ const roster=await specialEventRoster(e.id,{id:buyer});
+ expect(roster.linkedBookingIds).not.toContain(comp.id);expect(roster.groups.flatMap(g=>g.attendees).map(a=>a.bookingId)).not.toContain(comp.id);
+ expect(roster.linkedBookingIds).toContain(native.id);
+ expect(roster.linkedBookingIds).not.toContain(vip.id);expect(roster.linkedBookingIds).not.toContain(historical.id);
+ expect(roster.reviewItems).toContainEqual(expect.objectContaining({orderId:session.client_reference_id,management:'LEGACY_ORDER',state:'DISPUTED',canRefund:false}));
+ expect(await csv()).not.toContain('R2 legacy customer');
+});
+it('review R3 transfers original arrival after real waiver rotation and rejects fresh native attendance until re-signed',async()=>{
+ const e=decemberEvents[0];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:30}});
+ const guest=await user('R3 Paid Guest','2015550133');await db.waiverAcceptance.deleteMany({where:{userId:guest}});
+ const input={userId:await user('R3 Buyer'),slug:e.slug,occurrenceId:e.id,origin:'http://localhost',ticketType:'PAIR' as const,friend:{fullName:'R3 Paid Guest',phone:'2015550133'}};
+ const {orderId}=await startBlackFridayCheckout(db,stripe,input,now);await paid(sessions.get('black-friday:'+orderId));
+ const actor={id:buyer};
+ const {recordGuestPaperWaiver,checkInGuest,linkGuestAccount}=await import('@/lib/payments/special-event-guests');
+ await recordGuestPaperWaiver({orderId,displayedWaiverVersionId:'bf-waiver'},actor);await checkInGuest({orderId},actor);
+ const rotated=await db.waiverVersion.create({data:{version:99995,title:'R3 current',body:'Fixture',isActive:true,requiresSign:true,effectiveAt:new Date('2026-12-01T00:00Z')}});
+ try {
+  await expect(recordGuestPaperWaiver({orderId,displayedWaiverVersionId:'bf-waiver'},actor)).rejects.toThrow('waiver');
+  await linkGuestAccount({orderId,selectedUserId:guest,identityConfirmed:true},actor);
+  const original=await db.attendanceRecord.findFirstOrThrow({where:{occurrenceId:e.id,userId:guest}});
+  expect(original.status).toBe('CHECKED_IN');expect(original.markedById).toBe(buyer);
+  await expect(db.attendanceRecord.update({where:{id:original.id},data:{status:'ATTENDED',checkedInAt:null,markedById:buyer}})).rejects.toThrow('waiver');
+  const {markAttendanceAction}=await import('@/app/(portal)/instructor/classes/[occurrenceId]/roster/actions');
+  const form=new FormData();form.set('occurrenceId',e.id);form.set('bookingId',original.bookingId!);form.set('status','CHECKED_IN');
+  await expect(markAttendanceAction(form)).rejects.toThrow('attendance-cleared');
+  await expect(markAttendanceAction(form)).rejects.toThrow('waiver');
+  await expect(db.attendanceRecord.create({data:{occurrenceId:e.id,bookingId:original.bookingId,userId:guest,status:'CHECKED_IN',markedById:buyer,checkedInAt:original.checkedInAt}})).rejects.toThrow('waiver');
+  await recordGuestPaperWaiver({orderId,displayedWaiverVersionId:rotated.id},actor);
+  await expect(markAttendanceAction(form)).rejects.toThrow('attendance-checked_in');
+ }finally{await db.waiverVersion.update({where:{id:rotated.id},data:{isActive:false}});}
+});
+it('review R4 preserves cancelled same-occurrence guest history before payment, and checks again on capture',async()=>{
+ const e=decemberEvents[0];await decemberDate(e);
+ const guest=await user('R4 Returning Guest','2015550134');
+ const input={userId:await user('R4 Buyer'),slug:e.slug,occurrenceId:e.id,origin:'http://localhost',ticketType:'PAIR' as const,friend:{fullName:'R4 Returning Guest',phone:'2015550134'}};
+ const cancel=()=>db.booking.create({data:{occurrenceId:e.id,userId:guest,status:'CANCELLED',cancelledAt:now,source:'MEMBER',policySnapshot:{prior:'audit'}}});
+ const historical=await cancel();
+ const creates=stripe.checkout.sessions.create.mock.calls.length;
+ await expect(startBlackFridayCheckout(db,stripe,input,now)).rejects.toThrow('history');
+ expect(stripe.checkout.sessions.create.mock.calls.length).toBe(creates);
+ expect(await db.booking.findUniqueOrThrow({where:{id:historical.id}})).toMatchObject({status:'CANCELLED',policySnapshot:{prior:'audit'},cancelledAt:now});
+ const other=await user('R4 Later Guest','2015550135');
+ const {orderId}=await startBlackFridayCheckout(db,stripe,{...input,friend:{fullName:'R4 Later Guest',phone:'2015550135'}},now);
+ await db.booking.create({data:{occurrenceId:e.id,userId:other,status:'CANCELLED',cancelledAt:now}});
+ await paid(sessions.get('black-friday:'+orderId));
+ expect((await db.commerceOrder.findUniqueOrThrow({where:{id:orderId}})).status).toBe('FULFILLMENT_REVIEW');
+ expect(await db.booking.count({where:{occurrenceId:e.id,userId:input.userId,status:'CONFIRMED'}})).toBe(0);
+});
+
+
+it('review R1 gate rejects old native writers after migration and new writers during financial closure',async()=>{
+ const e=decemberEvents[0];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:30}});
+ const vip=await vipFixture('R1 fenced native');const dec=new Date('2026-12-01T18:00Z');const w=vipMonthlyBenefitWindowForDate(dec);
+ await db.membership.update({where:{id:vip.m.id},data:{currentPeriodEnd:w.validUntil}});
+ await db.creditAccount.updateMany({where:{userId:vip.u,isUnlimited:true},data:{validUntil:w.validUntil}});
+ const credit=await db.creditAccount.create({data:{userId:vip.u,label:w.eventCreditLabel,validFrom:w.validFrom,validUntil:w.validUntil,entries:{create:{type:'GRANT',quantity:2}}}});
+ for (const source of ['MEMBER','ADMIN_ADDED']) {
+  await expect(db.booking.create({data:{userId:vip.u,occurrenceId:e.id,source,policySnapshot:{creditAccountId:credit.id}}})).rejects.toThrow('native event admission');
+ }
+ const {bookOccurrenceAction}=await import('@/app/(portal)/member/bookings/actions');const form=new FormData();form.set('occurrenceId',e.id);
+ vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(dec);attendanceActor=vip.u;
+ const [release]=await db.$queryRaw<{enabledDeployId:string;sourceSha:string;evidenceHash:string;activatedAt:Date}[]>`SELECT * FROM "FinancialRelease" WHERE id='rhyze'`;
+ try{
+  await db.$executeRaw`UPDATE "FinancialRelease" SET "enabledDeployId"=NULL,"sourceSha"=NULL,"evidenceHash"=NULL,"activatedAt"=NULL WHERE id='rhyze'`;
+  await expect(bookOccurrenceAction(form)).rejects.toThrow('temporarily paused');
+  await expect(legacyDecember(e.id,vip.u)).rejects.toThrow('cash checkout');
+  expect(await db.creditLedgerEntry.count({where:{creditAccountId:credit.id,type:'RESERVE'}})).toBe(0);
+ }finally{
+  await db.$executeRaw`UPDATE "FinancialRelease" SET "enabledDeployId"=${release.enabledDeployId},"sourceSha"=${release.sourceSha},"evidenceHash"=${release.evidenceHash},"activatedAt"=${release.activatedAt} WHERE id='rhyze'`;
+  attendanceActor=null;vi.useRealTimers();
+ }
+ const {addMemberToClassAction}=await import('@/app/(studio)/admin/schedule/[occurrenceId]/roster/actions');
+ form.set('memberQuery',vip.u+'@example.test');vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(dec);
+ try {
+  await expect(addMemberToClassAction(form)).rejects.toThrow('result=member-added');
+  expect(await db.creditLedgerEntry.count({where:{creditAccountId:credit.id,type:'RESERVE'}})).toBe(1);
+ }finally{vi.useRealTimers();}
+});

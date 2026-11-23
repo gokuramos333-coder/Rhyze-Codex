@@ -29,6 +29,8 @@ export async function GET(
       JOIN "ClassTemplate" c ON c.id=o."templateId"
       WHERE NOT EXISTS (SELECT 1 FROM "BlackFridayTicket" t WHERE a."bookingId" IN (t."buyerBookingId",t."guestBookingId")
         AND NOT EXISTS (SELECT 1 FROM bf_paid_event_ticket paid WHERE paid."orderId"=t."orderId"))
+      AND NOT EXISTS (SELECT 1 FROM bf_ineligible_legacy_booking invalid WHERE invalid.id=a."bookingId" OR
+        (a."bookingId" IS NULL AND invalid."occurrenceId"=a."occurrenceId" AND invalid."userId"=a."userId"))
       UNION ALL SELECT t."guestName",'',c.name,o."startAt",'CHECKED_IN',t."guestCheckedInAt"
       FROM bf_paid_event_ticket t JOIN "ClassOccurrence" o ON o.id=t."occurrenceId" JOIN "ClassTemplate" c ON c.id=o."templateId"
       WHERE t."guestBookingId" IS NULL AND t."guestCheckedInAt" IS NOT NULL ORDER BY recorded DESC`;

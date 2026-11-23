@@ -275,8 +275,11 @@ export async function linkGuestAccount(
           ),
         },
       });
-      if (t.guestCheckedInAt)
+      if (t.guestCheckedInAt) {
+        // Scope the historical-waiver exception to this exact linking insert.
+        await tx.$queryRaw`SELECT set_config('rhyze.transferring_guest_order',${t.orderId},true)`;
         await transferAttendance(tx, t, user.id, bookingId);
+      }
       await tx.auditLog.create({
         data: {
           actorId: actor.id,

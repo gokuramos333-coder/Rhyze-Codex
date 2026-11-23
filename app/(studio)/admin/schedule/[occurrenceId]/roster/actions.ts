@@ -1,4 +1,6 @@
 'use server';
+import { authorizeNativeEventAdmission, earnedEventCreditCovers } from '@/lib/payments/special-event-credit';
+import { specialEventIdentity, specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
 import { giftCreditAllows } from '@/lib/domain/credits/gift-credit';
 import { vipRenewalReservation, vipRenewalEntitlementInclude } from '@/lib/domain/bookings/vip-renewal-reservation';
 import { isOwnerUnlimitedAccess } from '@/lib/domain/credits/owner-unlimited-access';
@@ -52,6 +54,11 @@ export async function addMemberToClassAction(formData: FormData) {
       include: { template: true, instructor: true },
     });
     if (!occurrence || occurrence.status !== 'SCHEDULED') return 'unavailable';
+
+    // Preserve the earlier November staff-add workflow, including restored credits.
+    const decemberOffer = specialEventIdentity(occurrence.id)?.startAt.startsWith('2026-12-');
+    if (decemberOffer && (!specialEventOfferMatches(occurrence) || !occurrence.template.isActive ||
+        occurrence.template.archivedAt || occurrence.archivedAt)) return 'unavailable';
 
     const matches = await tx.user.findMany({
       where: {
@@ -133,6 +140,7 @@ export async function addMemberToClassAction(formData: FormData) {
       orderBy: { createdAt: 'asc' },
     });
     const creditAccount = prioritizeMemberEventCredits(accounts, occurrence.template).find((account) => {
+      if (decemberOffer && !earnedEventCreditCovers(account, now, occurrence.startAt)) return false;
       const productKind = currentCreditProduct(account)?.kind ?? null;
       const isEventCredit = eventCreditCanBook({
         label: account.label,
@@ -187,6 +195,10 @@ export async function addMemberToClassAction(formData: FormData) {
       accessProductKind,
     });
 
+    if (decemberOffer) {
+      if (!creditAccount) return 'member-no-credit';
+      await authorizeNativeEventAdmission(tx, occurrence.id, member.id, creditAccount.id);
+    }
     const booking = await tx.booking.upsert({
       where: { occurrenceId_userId: { occurrenceId, userId: member.id } },
       update: { status: 'CONFIRMED', source: 'ADMIN_ADDED', cancelledAt: null, bookedAt: new Date(), policySnapshot },
