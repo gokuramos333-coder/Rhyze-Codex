@@ -1,4 +1,4 @@
-import { specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
+import { specialEventIdentity, specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
 import { blackFridaySalesEnabled } from '@/lib/payments/black-friday-release-gate';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
 import { vipEventAccessCopy } from '@/lib/domain/credits/november-vip-policy';
@@ -7,7 +7,7 @@ import React from 'react';
 import Image from 'next/image';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft, Calendar, ShieldCheck } from 'lucide-react';
 import { getOwnedEvent, ownedEvents } from '@/lib/rhyze-platform';
 import { EventCheckoutButton } from '@/components/checkout/EventCheckoutButton';
@@ -39,6 +39,19 @@ export default async function EventBookingPage(
 ) {
   const params = await props.params;
   const searchParams = await props.searchParams;
+  // Older Stripe sessions returned to this public event URL. Resolve only
+  // the signed-in purchaser's matching legacy hold, including after start.
+  const selected = searchParams?.occurrence;
+  if (selected && specialEventIdentity(selected, params.slug)) {
+    const { auth } = await import('@/auth');
+    const actor = (await auth())?.user?.id;
+    if (actor) {
+      const [held] = await prisma.$queryRaw<{orderId:string}[]>`
+        SELECT "orderId" FROM "BlackFridayTicket" WHERE state='HELD' AND "userId"=${actor}
+          AND "occurrenceId"=${selected} AND parameters->>'cancel_url' LIKE '%/book/event/%' LIMIT 1`;
+      if (held) redirect('/checkout/event-return?order=' + encodeURIComponent(held.orderId));
+    }
+  }
   const fallback = getOwnedEvent(params.slug);
   const event = await prisma.classTemplate.findFirst({
     where: {

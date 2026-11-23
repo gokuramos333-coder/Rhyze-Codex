@@ -2,7 +2,8 @@ import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease
 import { assertFinancialApprover } from '@/lib/auth/financial-owner-access';
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
-import { applyBlackFridayRefunds, applyBlackFridaySession, reverseBlackFridayTicket, type Ticket } from './black-friday-checkout';
+import { readSpecialEventCheckout } from './special-event-reconciliation';
+import { applyBlackFridayRefunds, reverseBlackFridayTicket, type Ticket } from './black-friday-checkout';
 /** Staff-only, explicit cancellation. An uncertain provider result never frees seats. */
 export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,input:{actorId:string;orderId:string;reason:string;operation:'CANCEL'|'RECONCILE';sessionId?:string;expectedRefundCents?:number},now=new Date()){
  if(input.reason.trim().length<5)throw new Error('A staff reason is required');
@@ -11,16 +12,21 @@ export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,inpu
  if(input.operation==='CANCEL'){await assertFinancialRelease(db);await assertFinancialApprover(db,input.actorId);}
  const t=(await db.$queryRaw<Ticket[]>`SELECT * FROM "BlackFridayTicket" WHERE "orderId"=${input.orderId}`)[0];
  if(!t)throw new Error('Ticket not found');
- let order=await db.commerceOrder.findUniqueOrThrow({where:{id:t.orderId}});
  if(['REFUNDED','DISPUTE_LOST'].includes(t.state))return;
- const sessionId=order.stripeCheckoutSessionId||input.sessionId;
- if(!sessionId)throw new Error('Unknown provider session: manual provider reconciliation required; seats remain held');
- let session=await stripe.checkout.sessions.retrieve(sessionId);
- if(session.metadata?.blackFridayTicket!=='1'||session.metadata.commerceOrderId!==order.id||session.metadata.userId!==t.userId||session.metadata.occurrenceId!==t.occurrenceId||session.amount_total!==order.amountCents||session.currency!==order.currency)throw new Error('Recovered checkout identity mismatch');
- if(input.operation==='CANCEL'&&session.status==='open')session=await stripe.checkout.sessions.expire(session.id);
- await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
- order=await db.commerceOrder.findUniqueOrThrow({where:{id:t.orderId}});
- if(session.status==='expired'&&session.payment_status!=='paid')return;
+ const deps={db,stripe,now};
+ let evidence=await readSpecialEventCheckout({orderId:t.orderId},deps,input.sessionId);
+ if(evidence.outcome==='pending' && input.operation==='CANCEL' && evidence.session){
+  const id=evidence.session.id;
+  await withFinancialRelease(db,async(tx,deadline)=>{
+   await assertFinancialApprover(tx,input.actorId);
+   await assertFinancialSubmission(tx,deadline);
+   await stripe.checkout.sessions.expire(id,{}, {timeout:2000,maxNetworkRetries:0});
+  });
+  evidence=await readSpecialEventCheckout({orderId:t.orderId},deps,id);
+ }
+ if(evidence.outcome==='expired')return;
+ if(evidence.session?.status!=='complete'||evidence.session.payment_status!=='paid')throw new Error('Checkout identity or payment status requires review; seats remain held');
+ const order=await db.commerceOrder.findUniqueOrThrow({where:{id:t.orderId}});
  if(!order.stripePaymentIntentId)throw new Error('Payment is not settled');
  const load=async()=>{
   const pi=await stripe.paymentIntents.retrieve(order.stripePaymentIntentId!,{expand:['latest_charge']});

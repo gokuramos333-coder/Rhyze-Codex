@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { reconcileDueSpecialEventCheckouts } from '@/lib/payments/special-event-reconciliation';
 import { syncRecentStripePaymentRecords } from '@/lib/payments/stripe-payment-sync';
 import { syncAccountContacts } from '@/lib/domain/accounts/account-contact-sync';
 import { getStripe } from '@/lib/payments/stripe';
@@ -16,7 +17,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result = await syncRecentStripePaymentRecords(prisma, { lookbackDays: 14, limit: 100 });
+  const [payments, eventCheckouts] = await Promise.all([
+    syncRecentStripePaymentRecords(prisma, { lookbackDays: 14, limit: 100 })
+      .catch(() => ({ attempted: false as const, synced: 0, reason: 'payment-sync-deferred' })),
+    reconcileDueSpecialEventCheckouts().catch(() => ({ deferred: true as const })),
+  ]);
+  const result = { ...payments, eventCheckouts };
   if (!result.attempted) return NextResponse.json(result, { status: 503 });
   // Bounded contact-only retries piggyback on the existing job, without a new
   // schedule or making payment synchronization depend on contact delivery.

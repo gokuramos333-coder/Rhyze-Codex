@@ -16,9 +16,9 @@ const now = new Date('2026-11-01T12:00:00Z');
 const sessions = new Map<string, any>();
 const stripe: any = { checkout: { sessions: { create: vi.fn(async (p: any, options: any) => {
   if (sessions.has(options.idempotencyKey)) return sessions.get(options.idempotencyKey);
-  const s = { id: `cs_${randomUUID()}`, url: 'https://checkout.stripe.test/session', metadata: p.metadata, currency: 'usd', amount_total: p.line_items[0].price_data.unit_amount, status: 'open', payment_status: 'unpaid', payment_intent: `pi_${randomUUID()}` };
+  const s = { id: `cs_${randomUUID()}`, url: 'https://checkout.stripe.test/session', mode: p.mode, client_reference_id: p.client_reference_id, metadata: p.metadata, currency: 'usd', amount_total: p.line_items[0].price_data.unit_amount, status: 'open', payment_status: 'unpaid', payment_intent: null };
   sessions.set(options.idempotencyKey, s); return s;
-}), retrieve: vi.fn(async (id: string) => [...sessions.values()].find(s => s.id === id)) } } };
+}), list: async () => ({data:[...sessions.values()],has_more:false}), retrieve: vi.fn(async (id: string) => [...sessions.values()].find(s => s.id === id)) } } };
 async function user(name: string, phone?: string) {
  const id = randomUUID(); await db.user.create({ data: { id, name, email: `${id}@example.test`, status: 'ACTIVE', ...(phone ? { memberProfile: { create: { phone } } } : {}) } });
  await db.waiverAcceptance.create({ data: { userId: id, waiverVersionId: 'bf-waiver', signedDate: now } }); return id;
@@ -47,7 +47,7 @@ async function single(name:string) {
  const session=[...sessions.values()].find(s=>s.metadata.commerceOrderId===result.orderId)!;
  return {input,...result,session};
 }
-async function paid(s:any){s.status='complete';s.payment_status='paid';await db.$transaction(tx=>applyBlackFridaySession(tx,s,now));}
+async function paid(s:any){s.payment_intent ??= `pi_${randomUUID()}`;s.status='complete';s.payment_status='paid';await db.$transaction(tx=>applyBlackFridaySession(tx,s,now));}
 async function refund(s:any,disputeWon=false){await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId:s.metadata.commerceOrderId,paymentIntentId:s.payment_intent,refundedAmountCents:s.amount_total,disputed:false,disputeWon},now));}
 async function used(){return (await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${occurrenceId}`)[0].used;}
 
@@ -56,7 +56,7 @@ vi.mock('next/cache',()=>({revalidatePath:vi.fn()}));
 vi.mock('next/navigation',()=>({redirect:(s:string)=>{throw Error('REDIRECT:'+s);}}));
 vi.mock('@/lib/payments/attendance-fee',()=>({chargeAttendanceFee:vi.fn(async()=>({status:'FAILED'})),refundAttendanceFee:vi.fn()}));
 vi.mock('@/auth',()=>({auth:async()=>({user:{id:buyer}})}));
-vi.mock('@/lib/db/prisma',()=>({prisma:db}));
+vi.mock('@/lib/db/prisma',()=>({get prisma(){return db;}}));
 vi.mock('@/lib/payments/stripe',()=>({getStripe:()=>stripe,stripeIsConfigured:()=>true}));
 it.each(['PENDING', 'PAID', 'PAYMENT_FAILED'] as const)('does not start a second payment while an older %s single-ticket order needs review', async status => {
  const userId = await user(`Legacy ${status}`);
@@ -76,7 +76,7 @@ it('charges server $40 once, holds exactly two, projects a named pending guest, 
  const outsider = await user('Single Outsider');
  await expect(db.booking.create({ data: { occurrenceId, userId: outsider } })).rejects.toThrow();
  expect((await db.$queryRaw<{pendingTicketSeats:number}[]>`SELECT "pendingTicketSeats" FROM "ClassOccurrence" WHERE id=${occurrenceId}`)[0].pendingTicketSeats).toBe(2);
- const session = [...sessions.values()][0]; session.status='complete'; session.payment_status='paid';
+ const session = [...sessions.values()][0]; session.payment_intent = `pi_${randomUUID()}`; session.status='complete'; session.payment_status='paid';
  await db.$transaction(tx => applyBlackFridaySession(tx,session,now));
  await db.$transaction(tx => applyBlackFridaySession(tx,session,now));
  const roster = await blackFridayRoster(db,occurrenceId);
@@ -178,6 +178,14 @@ it('reserves one valid November VIP credit plus $15 once and restores original e
  await paid(s);await refund(s);await refund(s);await paid(s);
  const final=await db.creditAccount.findUniqueOrThrow({where:{id:account.id},include:{entries:true}});
  expect(final.validUntil).toEqual(w.validUntil);expect(final.entries.reduce((n,e)=>n+e.quantity,0)).toBe(1);expect(final.entries.filter(e=>e.type==='RELEASE')).toHaveLength(1);
+ const {u:freshBuyer,credit:freshAccount}=await vipFixture('Expired VIP purchaser');
+ const fresh=await startBlackFridayCheckout(db,stripe,{...input,userId:freshBuyer},now);
+ const expired=[...sessions.values()].find(s=>s.metadata.commerceOrderId===fresh.orderId);
+ expired.status='expired';
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ for(let i=0;i<2;i++)expect(await reconcileSpecialEventCheckout({orderId:fresh.orderId},{db,stripe,now})).toBe('expired');
+ expect(await used()).toBe(0);
+ expect(await db.creditLedgerEntry.count({where:{creditAccountId:freshAccount.id,type:'RELEASE'}})).toBe(1);
 });
 it('retains seats for pending refunds and archives provider success before releasing',async()=>{
  await emptySeats();const a=await single('Refund Buyer');await paid(a.session);
@@ -223,7 +231,7 @@ it('rejects a recovered session belonging to another order before provider expir
  await emptySeats();const a=await single('Wrong Session');await db.commerceOrder.update({where:{id:a.orderId},data:{stripeCheckoutSessionId:null}});
  const expire=vi.fn(async()=>a.session);const provider:any={checkout:{sessions:{retrieve:async()=>({...a.session,metadata:{...a.session.metadata,commerceOrderId:'other'}}),expire}}};
  await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',expectedRefundCents:2500,reason:'Fixture mismatch',sessionId:a.session.id},now)).rejects.toThrow('identity');
- expect(expire).not.toHaveBeenCalled();a.session.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,a.session,now));
+ expect(expire).not.toHaveBeenCalled();a.session.status='expired';await manageBlackFridayTicket(db,stripe,{actorId:buyer,orderId:a.orderId,operation:'RECONCILE',reason:'Verified correct session'},now);
 });
 it('counts real ON CONFLICT upserts once and serializes cancelled-row reactivation',async()=>{
  await emptySeats(); const u=await user('Upsert Person');
@@ -550,4 +558,90 @@ it('rejects other owners before an event refund reaches Stripe',async()=>{
  const provider:any={checkout:{sessions:{retrieve:vi.fn()}}};
  await expect(manageBlackFridayTicket(db,provider,{actorId:outsider,orderId:'unknown',operation:'CANCEL',expectedRefundCents:2500,reason:'Denied owner request'},now)).rejects.toThrow('Vanessa or Melissa');
  expect(provider.checkout.sessions.retrieve).not.toHaveBeenCalled();
+});
+
+it('keeps a hold for an expired callback with an unresolved intent and audits confirmed unpaid expiry once', async () => {
+ await emptySeats();
+ const {session,orderId}=await single('Terminal evidence');
+ const expired={...session,status:'expired',payment_intent:'pi_unresolved'};
+ await db.$transaction(tx=>applyBlackFridaySession(tx,expired,now));
+ expect(await used()).toBe(1);
+ for(const change of [{mode:'setup'},{amount_total:1},{currency:'cad'},{id:'cs_wrong'},{client_reference_id:'wrong'},{metadata:{...session.metadata,userId:'other'}}]){
+  await expect(db.$transaction(tx=>applyBlackFridaySession(tx,{...expired,payment_intent:null,...change},now))).rejects.toThrow();
+  expect(await used()).toBe(1);
+ }
+ for(let i=0;i<2;i++)await db.$transaction(tx=>applyBlackFridaySession(tx,{...expired,payment_intent:null},now));
+ expect(await used()).toBe(0);
+ expect(await db.auditLog.count({where:{action:'black-friday.expired',entityId:orderId}})).toBe(1);
+});
+it('keeps open buyer returns and other buyers’ explicit cancellations from closing checkout', async () => {
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();
+ const {session,orderId,input}=await single('Return purchaser');
+ const expire=vi.fn(async()=>{session.status='expired';return session;});
+ const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,expire}}};
+ const deps={db,stripe:provider,now};
+ expect(await reconcileSpecialEventCheckout({orderId,actorUserId:input.userId},deps)).toBe('pending');
+ expect(await reconcileSpecialEventCheckout({orderId,actorUserId:buyer,explicitBuyerCancel:true},deps)).toBe('review');
+ expect(await reconcileSpecialEventCheckout({orderId,explicitBuyerCancel:true},deps)).toBe('review');
+ expect(expire).not.toHaveBeenCalled();
+ expect(await reconcileSpecialEventCheckout({orderId,actorUserId:input.userId,explicitBuyerCancel:true},deps)).toBe('expired');
+ expect(await used()).toBe(0);
+});
+it('keeps captured or processing intents held and releases only a verified canceled unpaid intent',async()=>{
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();const {session,orderId}=await single('Intent purchaser');
+ session.status='expired';
+ const pi={id:'pi_test',metadata:session.metadata,amount:2500,currency:'usd',amount_received:0,amount_capturable:0,latest_charge:null,status:'processing'};
+ session.payment_intent=pi;
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('review');
+ Object.assign(pi,{status:'succeeded',amount_received:2500});
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('review');
+ expect(await used()).toBe(1);
+ Object.assign(pi,{status:'canceled',amount_received:0});
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('expired');
+ expect(await used()).toBe(0);
+ Object.assign(pi,{status:'succeeded',amount_received:2500});
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('review');
+});
+it('backs off unavailable old sessions so subsequent batches reach a newer unpaid expiry',async()=>{
+ const {reconcileDueSpecialEventCheckouts}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();const old=await single('Unavailable checkout');const next=await single('Available checkout');
+ await db.$executeRaw`UPDATE "BlackFridayTicket" SET "expiresAt"=${now.toISOString()}::timestamp WHERE "orderId"=${old.orderId}`;
+ next.session.status='expired';
+ const provider={checkout:{sessions:{retrieve:async(id:string)=>{if(id===old.session.id)throw Error('unavailable');return next.session;}}}} as any;
+ const due=new Date(now.getTime()+32*60000);
+ await reconcileDueSpecialEventCheckouts({limit:1,now:due},{db,stripe:provider});
+ expect(await used()).toBe(2);
+ await reconcileDueSpecialEventCheckouts({limit:1,now:due},{db,stripe:provider});
+ expect(await used()).toBe(1);
+ expect(await db.commerceOrder.findUniqueOrThrow({where:{id:next.orderId}})).toMatchObject({status:'PAYMENT_FAILED'});
+ old.session.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,old.session,now));
+});
+
+it('keeps the hold when the provider expire response disagrees with fresh retrieval',async()=>{
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();const {session,orderId,input}=await single('Racing return');
+ const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,expire:async()=>({...session,status:'expired'})}}};
+ expect(await reconcileSpecialEventCheckout({orderId,actorUserId:input.userId,explicitBuyerCancel:true},{db,stripe:provider,now})).toBe('pending');
+ expect(await used()).toBe(1);
+ const [ticket]=await db.$queryRaw<{parameters:{success_url:string;cancel_url:string}}[]>`SELECT parameters FROM "BlackFridayTicket" WHERE "orderId"=${orderId}`;
+ expect(ticket.parameters.success_url).toBe('http://localhost/checkout/event-return?order='+orderId);
+ expect(ticket.parameters.cancel_url).toBe(ticket.parameters.success_url);
+ session.status='expired';
+ await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+});
+
+it('requires clean captured provider evidence before background fulfillment of a paid session',async()=>{
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();const {session,orderId}=await single('Captured evidence');
+ const charge={id:'ch_clean',payment_intent:'pi_clean',currency:'usd',livemode:false,amount_captured:2500,amount_refunded:100,paid:true,captured:true,disputed:false};
+ const intent={id:'pi_clean',amount:2500,currency:'usd',livemode:false,metadata:session.metadata,amount_received:2500,status:'succeeded',latest_charge:charge};
+ Object.assign(session,{status:'complete',payment_status:'paid',livemode:false,payment_intent:intent});
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('review');
+ expect(await db.booking.count({where:{userId:session.metadata.userId,occurrenceId}})).toBe(0);
+ Object.assign(charge,{amount_refunded:0});
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('paid');
+ expect(await db.booking.count({where:{userId:session.metadata.userId,occurrenceId}})).toBe(1);
+ await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId,paymentIntentId:intent.id,refundedAmountCents:2500,disputed:false},now));
 });

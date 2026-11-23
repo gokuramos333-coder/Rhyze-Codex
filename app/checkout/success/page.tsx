@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ClearCart } from '@/components/checkout/ClearCart';
@@ -20,6 +22,11 @@ export default async function CheckoutSuccessPage(
         where: { stripeCheckoutSessionId: searchParams.session_id },
       })
     : null;
+  // Sessions created before the dedicated buyer return still point here.
+  if (order?.kind === 'EVENT' && specialEventIdentity(order.occurrenceId ?? undefined)) {
+    const ticket = await prisma.$queryRaw<{orderId:string}[]>`SELECT "orderId" FROM "BlackFridayTicket" WHERE "orderId"=${order.id}`;
+    if (ticket.length) redirect('/checkout/event-return?order=' + encodeURIComponent(order.id));
+  }
   const paid = order?.status === 'PAID';
   const content = checkoutSuccessContent(order?.kind, paid);
   return (

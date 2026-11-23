@@ -156,7 +156,9 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ url: checkout.url });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Event checkout could not be started.';
+    const message = error instanceof z.ZodError
+      ? 'Please check your ticket details and try again.'
+      : 'We couldn’t start checkout. Please check your bookings or contact the studio for help.';
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

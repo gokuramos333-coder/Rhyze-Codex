@@ -1,7 +1,7 @@
 import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease } from '@/lib/payments/financial-release';
 import { blackFridaySalesEnabled } from './black-friday-release-gate';
 import { randomUUID } from 'node:crypto';
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { Prisma, type CommerceOrder, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { blackFridayOffer, specialEventCreditAllowed, specialEventIdentity, normalizeFriendPhone, normalizedFriendName } from './black-friday-new-friend';
 import { inspectNewFriendHistory } from './black-friday-new-friend-history';
@@ -74,32 +74,103 @@ export async function startBlackFridayCheckout(db: PrismaClient, stripe: Stripe,
   }
   const amountCents=(pair?4000:2500)-(creditAccountId?2500:0);
   const expiresAt=new Date(now.getTime()+31*60*1000);
-  const parameters:Stripe.Checkout.SessionCreateParams={mode:'payment',payment_method_types:['card'],expires_at:Math.floor(expiresAt.getTime()/1000),customer_email:user.email,line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:amountCents,product_data:{name:o.titleOverride||o.template.name,description:pair?'Buyer + NEW friend: two spots; friend needs own account and waiver.':'One attendee'}}}],metadata:{purchaseType:'EVENT',blackFridayTicket:'1',commerceOrderId:id,userId:user.id,occurrenceId:o.id},payment_intent_data:{metadata:{purchaseType:'EVENT',blackFridayTicket:'1',commerceOrderId:id,userId:user.id,occurrenceId:o.id}},client_reference_id:id,success_url:`${input.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${input.origin}/book/event/${o.template.slug}?occurrence=${o.id}`};
+  const parameters:Stripe.Checkout.SessionCreateParams={mode:'payment',payment_method_types:['card'],expires_at:Math.floor(expiresAt.getTime()/1000),customer_email:user.email,line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:amountCents,product_data:{name:o.titleOverride||o.template.name,description:pair?'Buyer + NEW friend: two spots; friend needs own account and waiver.':'One attendee'}}}],metadata:{purchaseType:'EVENT',blackFridayTicket:'1',commerceOrderId:id,userId:user.id,occurrenceId:o.id},payment_intent_data:{metadata:{purchaseType:'EVENT',blackFridayTicket:'1',commerceOrderId:id,userId:user.id,occurrenceId:o.id}},client_reference_id:id,success_url:`${input.origin}/checkout/event-return?order=${id}`,cancel_url:`${input.origin}/checkout/event-return?order=${id}`};
   const order=await tx.commerceOrder.create({data:{id,userId:user.id,occurrenceId:o.id,kind:'EVENT',amountCents,customerName:user.name,customerEmail:user.email,items:{create:{productReference:o.id,name:o.template.name,description:pair?'Two named attendees':'One attendee',quantity:1,unitAmountCents:amountCents}}}});
   await tx.$executeRaw`INSERT INTO "BlackFridayTicket" ("orderId","occurrenceId","userId",state,seats,"buyerName","guestName","guestPhone","declaredAt","creditAccountId","expiresAt",parameters) VALUES (${id},${o.id},${user.id},'HELD',${pair?2:1},${user.name||'Attendee'},${name},${phone},${pair?now.toISOString():null}::timestamp,${creditAccountId},${expiresAt.toISOString()}::timestamp,${JSON.stringify(parameters)}::jsonb)`;
   await tx.auditLog.create({data:{actorId:user.id,action:'black-friday.reserved',entityType:'CommerceOrder',entityId:id,after:{seats:pair?2:1,firstVisitDeclaration:pair?'This is my friend’s first visit':null,policy:'owner-approved-declaration-v1'}}});
   return {t:(await ticket(tx,id))!,order};
  });
  if(!held.order.stripeCheckoutSessionId && now>=held.t.expiresAt) throw new Error('Checkout outcome is uncertain. Contact staff; seats remain reserved.');
- const session=held.order.stripeCheckoutSessionId?await stripe.checkout.sessions.retrieve(held.order.stripeCheckoutSessionId):await withFinancialRelease(db,async(tx,deadline)=>{await assertFinancialSubmission(tx,deadline);return stripe.checkout.sessions.create(held.t.parameters,{idempotencyKey:`black-friday:${held.order.id}`,maxNetworkRetries:0,timeout:20000});});
- await run(db,async tx=>{await lock(tx,held.t.occurrenceId);const order=await tx.commerceOrder.findUniqueOrThrow({where:{id:held.order.id}});if(order.stripeCheckoutSessionId && order.stripeCheckoutSessionId!==session.id) throw new Error('Checkout identity mismatch');await tx.commerceOrder.update({where:{id:order.id},data:{stripeCheckoutSessionId:session.id}});if(session.status==='expired')await applyBlackFridaySession(tx,session,now);});
+ const session=held.order.stripeCheckoutSessionId?await stripe.checkout.sessions.retrieve(held.order.stripeCheckoutSessionId,{expand:['payment_intent']},{timeout:2500,maxNetworkRetries:0}):await withFinancialRelease(db,async(tx,deadline)=>{await assertFinancialSubmission(tx,deadline);return stripe.checkout.sessions.create(held.t.parameters,{idempotencyKey:`black-friday:${held.order.id}`,maxNetworkRetries:0,timeout:20000});});
+ await run(db,async tx=>{await lock(tx,held.t.occurrenceId);const order=await tx.commerceOrder.findUniqueOrThrow({where:{id:held.order.id}});if(!matchesSpecialEventSession(session,order,held.t)) throw new Error('Checkout identity mismatch');await tx.commerceOrder.update({where:{id:order.id},data:{stripeCheckoutSessionId:session.id}});if(session.status==='expired')await applyBlackFridaySession(tx,session,now);});
  if(session.status!=='open'||!session.url)throw new Error('Checkout is closed. Refresh to start again or contact staff.');
  return {url:session.url,orderId:held.order.id};
 }
-export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Session,now=new Date()) {
+export function matchesSpecialEventSession(
+  session: Stripe.Checkout.Session,
+  order: CommerceOrder,
+  t: Ticket,
+) {
+  const meta = session.metadata;
+  const intent =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id;
+  return Boolean(
+    session.id &&
+    session.mode === 'payment' &&
+    order.kind === 'EVENT' &&
+    order.id === t.orderId &&
+    order.userId === t.userId &&
+    order.occurrenceId === t.occurrenceId &&
+    (!order.stripeCheckoutSessionId ||
+      order.stripeCheckoutSessionId === session.id) &&
+    (!order.stripePaymentIntentId || order.stripePaymentIntentId === intent) &&
+    session.amount_total === order.amountCents &&
+    session.currency === order.currency &&
+    order.currency === 'usd' &&
+    session.client_reference_id === order.id &&
+    meta?.purchaseType === 'EVENT' &&
+    meta.blackFridayTicket === '1' &&
+    meta.commerceOrderId === order.id &&
+    meta.userId === t.userId &&
+    meta.occurrenceId === t.occurrenceId,
+  );
+}
+
+export function verifiedUnpaidExpiry(session: Stripe.Checkout.Session) {
+  if (session.status !== 'expired' || session.payment_status !== 'unpaid')
+    return false;
+  const intent = session.payment_intent;
+  if (intent === null) return true;
+  return Boolean(
+    intent &&
+    typeof intent !== 'string' &&
+    intent.id &&
+    intent.status === 'canceled' &&
+    intent.livemode === session.livemode &&
+    intent.amount === session.amount_total &&
+    intent.currency === session.currency &&
+    intent.amount_received === 0 &&
+    intent.amount_capturable === 0 &&
+    intent.latest_charge === null &&
+    [
+      'commerceOrderId',
+      'userId',
+      'occurrenceId',
+      'purchaseType',
+      'blackFridayTicket',
+    ].every((key) => intent.metadata?.[key] === session.metadata?.[key]),
+  );
+}
+
+export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Session,now=new Date(),actorId?:string) {
  const orderId=session.metadata?.commerceOrderId;
  if(!orderId||session.metadata?.blackFridayTicket!=='1')return false;
  const observed=await ticket(tx,orderId); if(!observed)throw new Error('Missing event reservation');
  await lock(tx,observed.occurrenceId); const t=(await ticket(tx,orderId))!;
  const order=await tx.commerceOrder.findUniqueOrThrow({where:{id:orderId}});
  const pi=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
- if((order.stripeCheckoutSessionId && order.stripeCheckoutSessionId!==session.id)||session.metadata?.userId!==t.userId||session.metadata?.occurrenceId!==t.occurrenceId||(order.stripePaymentIntentId && order.stripePaymentIntentId!==pi))throw new Error('Ticket payment identity mismatch');
- if(session.status==='expired' && session.payment_status!=='paid'){
-  if(t.state==='HELD'){await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state='EXPIRED' WHERE "orderId"=${orderId}`;await releaseCredit(tx,t);await tx.commerceOrder.update({where:{id:orderId},data:{status:'PAYMENT_FAILED',stripeCheckoutSessionId:session.id}});} return true;
+ if(!matchesSpecialEventSession(session,order,t))throw new Error('Ticket payment identity or terms mismatch');
+ // A signed callback can arrive before session creation was recorded. The batch
+ // recovers a unique provider session before either terminal transition.
+ if(!order.stripeCheckoutSessionId)return true;
+ if(session.status==='expired'){
+  if(t.state!=='HELD' || !verifiedUnpaidExpiry(session) || order.paidAt || order.refundedAmountCents ||
+     !['PENDING','PAYMENT_FAILED'].includes(order.status))return true;
+  const collected=await tx.paymentRecord.findFirst({where:{status:{not:'FAILED'},OR:[
+   {commerceOrderId:orderId},{stripeCheckoutSessionId:session.id},...(pi?[{stripePaymentIntentId:pi}]:[])
+  ]},select:{id:true}});
+  if(collected)return true;
+  await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state='EXPIRED' WHERE "orderId"=${orderId}`;
+  await releaseCredit(tx,t);
+  await tx.commerceOrder.update({where:{id:orderId},data:{status:'PAYMENT_FAILED',failedAt:now,stripePaymentIntentId:pi}});
+  await tx.auditLog.create({data:{actorId,action:'black-friday.expired',entityType:'CommerceOrder',entityId:orderId,after:{stripeCheckoutSessionId:session.id,paymentIntentId:pi ?? null}}});
+  return true;
  }
  if(session.status!=='complete'||session.payment_status!=='paid')return true;
  if(!pi||session.amount_total!==order.amountCents||session.currency!==order.currency)throw new Error('Ticket payment terms mismatch');
- if(['REFUNDED','DISPUTE_LOST','REVIEW','PAID','REVERSING'].includes(t.state))return true;
+ if(['REFUNDED','DISPUTE_LOST','REVIEW','PAID','REVERSING'].includes(t.state) || (t.state==='EXPIRED' && order.paidAt))return true;
  const o=await tx.classOccurrence.findUniqueOrThrow({where:{id:t.occurrenceId}});
  const reversals=await tx.stripeEvent.findMany({where:{type:{in:['charge.refunded','charge.dispute.created']},payload:{path:['data','object','payment_intent'],equals:pi}}});
  let review=t.state!=='HELD'||o.status!=='SCHEDULED'||o.startAt<=now||reversals.length>0||order.refundedAmountCents>0||['REFUNDED','PARTIALLY_REFUNDED','DISPUTED'].includes(order.status);

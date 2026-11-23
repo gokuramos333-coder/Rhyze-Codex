@@ -41,3 +41,10 @@ it('pins checkout to the selected date instead of silently buying the earliest e
  expect(response.status).toBe(200);
  expect(mocks.findOccurrence).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: 'later-event', template: expect.objectContaining({ slug: 'hip-hop' }), status: 'SCHEDULED' }) }));
 });
+
+it('keeps provider diagnostics out of the buyer checkout error',async()=>{
+  mocks.create.mockRejectedValueOnce(new Error('private provider diagnostic: pi_synthetic_secret'));
+  const response=await POST(new Request('http://localhost/api/checkout/event',{method:'POST',body:JSON.stringify({slug:'hip-hop'})}));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({error:'We couldn’t start checkout. Please check your bookings or contact the studio for help.'});
+});
