@@ -1554,3 +1554,89 @@ it('final F1 delayed reconciliation rejects conflicting sync provenance and adop
   expect(await db.stripeEvent.findUnique({where:{id:receiptId}})).toEqual(receipt);
  });
 });
+
+it.each([
+ ['legacy','clean-gap','refund'],['special','clean-gap','refund'],
+ ['legacy','stale','dispute'],['special','stale','dispute'],
+ ['legacy','already-reversed','refund'],['special','already-reversed','refund'],
+ ['legacy','already-reversed','dispute'],['special','already-reversed','dispute'],
+ ['special','already-reversed','partial'],['legacy','no-adjustment-event','refund'],['special','no-adjustment-event','refund'],
+] as const)('residual F2 %s %s %s keeps the original sync payment in private review',async(path,sequence,kind)=>{
+ const e=decemberEvents[1];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:200}});
+ const userId=await user('Combined '+path+' '+sequence+' '+kind);
+ const {paidEventDisplayCount,specialEventRoster}=await import('@/lib/payments/special-event-roster');
+ const before=await paidEventDisplayCount(e.id);
+ const capacity=async()=>(await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${e.id}`)[0].used;
+ const prior=await capacity();
+ const session=path==='legacy'?await legacyDecember(e.id,userId):sessions.get('black-friday:'+(await startBlackFridayCheckout(db,stripe,{
+  userId,occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'SINGLE'},now)).orderId);
+ const orderId=session.client_reference_id,clean=capturedFixture(session),pi=clean.payment_intent;
+ const isRefund=kind!=='dispute',adjustedAmount=kind==='partial'?500:clean.amount;
+ const reversed={...clean,refunded:kind==='refund',disputed:!isRefund,amount_refunded:isRefund?adjustedAmount:0};
+ const detail={id:(isRefund?'re_':'dp_')+randomUUID(),currency:'usd',amount:adjustedAmount,charge:clean.id,payment_intent:pi,
+  livemode:false,status:isRefund?'succeeded':'needs_response',created:clean.created+20,balance_transactions:[]};
+ const {syncRecentStripePaymentRecords}=await import('@/lib/payments/stripe-payment-sync');
+ const receiptId='rhyze-payment-reconciled-acct_round_two-'+clean.id,adjustmentId='evt_'+randomUUID(),saleId='evt_'+randomUUID();
+ await withSyncCharge(sequence==='already-reversed'||sequence==='no-adjustment-event'?reversed:clean,session,isRefund?[detail]:[],async()=>{
+  stripe.disputes={list:async()=>({data:[detail],has_more:false})};
+  stripe.charges.retrieve=async()=>reversed;
+  stripe.paymentIntents={retrieve:async(_id:string,params?:{expand?:string[]})=>({id:pi,livemode:false,metadata:session.metadata,
+    amount:clean.amount,amount_received:clean.amount,currency:'usd',status:'succeeded',latest_charge:params?.expand?(sequence==='stale'?clean:reversed):clean.id})};
+  const adjust=()=>signedDelivery(adjustmentId,isRefund?'charge.refunded':'charge.dispute.created',
+    isRefund?(path==='special' && sequence==='clean-gap'?reversed:{...reversed,refunds:{has_more:false,data:[detail]}}):detail);
+  let originalId:string|undefined;
+  const inspectOriginal=async()=>{
+   const original=await db.paymentRecord.findUniqueOrThrow({where:{stripePaymentIntentId:pi}});
+   expect(original).toMatchObject({commerceOrderId:null,kind:'PRODUCT_PURCHASE',stripeCheckoutSessionId:session.id,stripeEventId:'stripe-sync-charge-'+clean.id});
+   originalId=original.id;
+  };
+  try{
+   if(sequence==='clean-gap'){
+    let transactions=0;
+    const writer=new Proxy(db,{get(target,key){
+     if(key==='$transaction')return async(fn:any,options:any)=>{
+      if(++transactions===2){await inspectOriginal();expect((await adjust()).status).toBe(200);}
+      return target.$transaction(fn,options);
+     };
+     return Reflect.get(target,key);
+    }});
+    expect(await syncRecentStripePaymentRecords(writer)).toMatchObject({fulfilledCheckoutSessions:1});
+   }else{
+    await syncRecentStripePaymentRecords(db,{financialOnly:sequence==='stale'});await inspectOriginal();
+    if(sequence!=='no-adjustment-event')expect((await adjust()).status).toBe(200);
+   }
+   if(path==='legacy' && sequence==='stale' && kind==='dispute'){
+    const event=await db.stripeEvent.findUniqueOrThrow({where:{id:adjustmentId}});
+    const corrupted=structuredClone(event.payload as any);corrupted.data.object.charge='ch_conflicting';
+    await db.stripeEvent.update({where:{id:event.id},data:{payload:corrupted}});
+    expect((await signedDelivery(saleId,'checkout.session.completed',session)).status).toBe(500);
+    expect(await db.paymentRecord.findUniqueOrThrow({where:{id:originalId}})).toMatchObject({commerceOrderId:null});
+    await db.stripeEvent.update({where:{id:event.id},data:{payload:event.payload as any}});
+   }
+   expect((await signedDelivery(saleId,'checkout.session.completed',session)).status).toBe(200);
+   expect((await signedDelivery(saleId,'checkout.session.completed',session)).status).toBe(200);
+   if(sequence!=='no-adjustment-event')expect((await adjust()).status).toBe(200);
+   expect(await db.stripeEvent.findUniqueOrThrow({where:{id:saleId}})).toMatchObject({processedAt:expect.any(Date),error:null});
+   expect((await db.stripeEvent.findUniqueOrThrow({where:{id:receiptId}})).payload).toMatchObject({account:'acct_round_two',data:{object:{id:clean.id,amount_captured:clean.amount,amount_refunded:reversed.amount_refunded,
+     [isRefund?'refunds':'disputes']:{data:[{id:detail.id,charge:clean.id,payment_intent:pi}]}}},acknowledgedEventIds:expect.arrayContaining(sequence==='no-adjustment-event'?[saleId]:[saleId,adjustmentId])});
+   expect(await db.paymentRecord.findMany({where:{stripePaymentIntentId:pi}})).toMatchObject([{id:originalId,kind:'EVENT',commerceOrderId:orderId,stripeEventId:'stripe-sync-charge-'+clean.id,
+    amountCents:clean.amount,occurredAt:now,receiptUrl:clean.receipt_url,status:kind==='partial'?'PARTIALLY_REFUNDED':isRefund?'REFUNDED':'DISPUTED',refundedAmountCents:reversed.amount_refunded}]);
+   expect(await db.booking.count({where:{userId,occurrenceId:e.id}})).toBe(0);
+   expect(await db.attendanceRecord.count({where:{userId,occurrenceId:e.id}})).toBe(0);
+   expect(await db.emailMessage.count({where:{dedupeKey:'commerce-confirmation:'+orderId}})).toBe(0);
+   expect(await paidEventDisplayCount(e.id)).toBe(before);
+   expect(await capacity()).toBe(prior+(path==='special' && kind!=='refund'?1:0));
+   expect((await specialEventRoster(e.id,{id:buyer})).reviewItems).toContainEqual(expect.objectContaining({orderId,collectedCents:clean.amount,
+    remainingCents:clean.amount-reversed.amount_refunded,canRefund:false}));
+   if(path==='special' && kind==='partial'){
+    stripe.refunds.list=()=>Object.assign(Promise.resolve({data:[detail],has_more:false}),{async *[Symbol.asyncIterator](){yield detail;}});
+    stripe.refunds.create=vi.fn(()=>{throw Error('Unexpected submission');});
+    await expect(manageBlackFridayTicket(db,stripe,{actorId:buyer,orderId,operation:'CANCEL',
+      expectedRefundCents:clean.amount-adjustedAmount,reason:'Verify stale private review controls'},now)).rejects.toThrow('adjusted capture');
+    expect(stripe.refunds.create).not.toHaveBeenCalled();
+   }
+   expect(await db.$queryRaw`SELECT 1 FROM "EventRefundApproval" WHERE "orderId"=${orderId}`).toEqual([]);
+   if(path==='special' && kind==='refund')expect(await db.commerceRefund.findMany({where:{commerceOrderId:orderId}})).toMatchObject([{stripeRefundId:detail.id,status:'SUCCEEDED'}]);
+  }finally{delete stripe.disputes;delete stripe.paymentIntents;}
+ });
+});

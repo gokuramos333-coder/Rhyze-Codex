@@ -15,6 +15,8 @@ const reviewLabels: Record<string, string> = {
   EXPIRED: 'Checkout expired',
   DISPUTED: 'Payment disputed',
   PARTIALLY_REFUNDED: 'Partially refunded',
+  REFUNDED: 'Refunded',
+  DISPUTE_LOST: 'Dispute lost',
   FULFILLMENT_REVIEW: 'Payment needs review',
 };
 

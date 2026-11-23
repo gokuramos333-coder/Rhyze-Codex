@@ -60,6 +60,8 @@ export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,inpu
    await tx.$executeRaw`SELECT id FROM "ClassOccurrence" WHERE id=${t.occurrenceId} FOR UPDATE`;
    const previous=await tx.$queryRaw<{orderId:string}[]>`SELECT "orderId" FROM "EventRefundApproval" WHERE "orderId"=${order.id}`;
    if(previous.length)return false;
+   const adjusted=await tx.auditLog.findFirst({where:{entityType:'CommerceOrder',entityId:order.id,action:'black-friday.sync-adjustment-review'},select:{id:true}});
+   if(adjusted)throw Error('This adjusted capture requires financial review before any refund approval.');
    const fresh=await tx.commerceOrder.findUniqueOrThrow({where:{id:order.id}});
    if(fresh.stripePaymentIntentId!==proof.pi.id||fresh.amountCents!==order.amountCents||fresh.refundedAmountCents!==refundedBefore||fresh.currency!=='usd')throw Error('Payment changed; reload before approval');
    const captured=await tx.paymentRecord.findUnique({where:{stripePaymentIntentId:proof.pi.id}});

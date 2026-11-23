@@ -1,4 +1,4 @@
-import { readEventCaptureProof } from './event-capture-evidence';
+import { readEventCaptureProof, type EventCaptureProof } from './event-capture-evidence';
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
 import { prisma } from '@/lib/db/prisma';
@@ -250,6 +250,7 @@ export async function readSpecialEventCheckout(
     }
     if (session.status === 'expired' && !verifiedUnpaidExpiry(session))
       return review;
+    let proof:EventCaptureProof|undefined;
     if (session.status === 'complete' && session.payment_status === 'paid') {
       const charge = capturedCharge(session);
       if (!charge || chargeRequiresReview(charge)) {
@@ -273,12 +274,14 @@ export async function readSpecialEventCheckout(
             },
           };
         }
-        return order.paidAt && order.stripePaymentIntentId
+        // A verified original sync capture can be bound for private review without admitting anyone.
+        if(charge && (!order.paidAt || (charge.refunded && ticket.state==='REVIEW'))) proof=await readEventCaptureProof(db,stripe,session);
+        if(!proof) return order.paidAt && order.stripePaymentIntentId
           ? { outcome: 'review', session }
           : review;
       }
     }
-    const proof = await readEventCaptureProof(db,stripe,session);
+    proof ??= await readEventCaptureProof(db,stripe,session);
     return await retrySerializableTransaction(() =>
       db.$transaction(
         async (tx): Promise<Evidence> => {

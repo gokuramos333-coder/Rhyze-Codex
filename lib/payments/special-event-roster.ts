@@ -83,9 +83,11 @@ export async function specialEventRoster(
           collected: number;
           remaining: number;
           pendingRefund: boolean;
+          syncAdjustment: boolean;
         })[]
       >`
-      SELECT t.*,paid."orderId" IS NOT NULL AS settled,coalesce(p."amountCents",0) AS collected,
+      SELECT t.*,EXISTS(SELECT 1 FROM "AuditLog" a WHERE a."entityType"='CommerceOrder' AND a."entityId"=o.id
+        AND a.action='black-friday.sync-adjustment-review') AS "syncAdjustment",paid."orderId" IS NOT NULL AS settled,coalesce(p."amountCents",0) AS collected,
        greatest(0,coalesce(p."amountCents"-greatest(p."refundedAmountCents",o."refundedAmountCents"),0)) AS remaining,
        EXISTS(SELECT 1 FROM "CommerceRefund" r WHERE r."commerceOrderId"=o.id AND r.status='PENDING') AS "pendingRefund"
       FROM "BlackFridayTicket" t JOIN "CommerceOrder" o ON o.id=t."orderId"
@@ -169,7 +171,7 @@ export async function specialEventRoster(
             attendees,
           });
         }
-        if (accounts && !['REFUNDED', 'DISPUTE_LOST'].includes(t.state)) {
+        if (accounts && (t.syncAdjustment || !['REFUNDED', 'DISPUTE_LOST'].includes(t.state))) {
           reviewItems.push({
             orderId: t.orderId,
             management: 'SPECIAL_TICKET',
@@ -178,8 +180,8 @@ export async function specialEventRoster(
             collectedCents: t.collected,
             remainingCents: t.remaining,
             canRefund:
-              isFinancialApprover(staff) && t.remaining > 0 && !t.pendingRefund,
-            canReconcile: t.state !== 'EXPIRED' || t.collected > 0,
+              isFinancialApprover(staff) && t.remaining > 0 && !t.pendingRefund && !t.syncAdjustment,
+            canReconcile: !['REFUNDED','DISPUTE_LOST'].includes(t.state) && (t.state !== 'EXPIRED' || t.collected > 0),
           });
         }
       }

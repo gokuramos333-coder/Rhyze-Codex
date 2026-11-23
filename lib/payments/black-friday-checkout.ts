@@ -289,15 +289,22 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
  if(session.status!=='complete'||session.payment_status!=='paid')return true;
  const expandedIntent=typeof session.payment_intent==='object'?session.payment_intent:null;
  const representedCharge=expandedIntent?.latest_charge;
- if(representedCharge && typeof representedCharge!=='string' && chargeRequiresReview(representedCharge))return true;
+ if(representedCharge && typeof representedCharge!=='string' && chargeRequiresReview(representedCharge) && !proof)return true;
  if(!pi||session.amount_total!==order.amountCents||session.currency!==order.currency)throw new Error('Ticket payment terms mismatch');
+ // A thinner earlier adjustment may have proved ownership before complete refund IDs arrived.
+ if(t.state==='REVIEW' && !t.buyerBookingId && !t.guestBookingId && order.paidAt && proof?.fullRefunds?.length){
+  await lockCheckoutEvidence(tx,orderId,session);
+  const reviewed=await bindEventPayment(tx,order,session,proof,true);
+  if(reviewed.adjustment?.fullRefunds) await applyBlackFridayRefunds(tx,orderId,pi,reviewed.adjustment.fullRefunds,now);
+  return true;
+ }
  if(['REFUNDED','DISPUTE_LOST','REVIEW','PAID','REVERSING'].includes(t.state) || (t.state==='EXPIRED' && order.paidAt))return true;
  const o=await tx.classOccurrence.findUniqueOrThrow({where:{id:t.occurrenceId},include:{template:true}});
  await lockCheckoutEvidence(tx,orderId,session);
- const existing=await bindEventPayment(tx,order,session,proof);
+ const {payment:existing,adjustment}=await bindEventPayment(tx,order,session,proof);
  const reversal=await retainedEventAdjustment(tx,pi);
  const offer=specialEventIdentity(t.occurrenceId);
- let review=!offer || specialEventCashPrice(offer,t.seats===2,Boolean(t.creditAccountId))!==order.amountCents || !specialEventOfferMatches(o)||t.state!=='HELD'||o.status!=='SCHEDULED'||o.startAt<=now||reversal||order.refundedAmountCents>0||['REFUNDED','PARTIALLY_REFUNDED','DISPUTED'].includes(order.status);
+ let review=!offer || specialEventCashPrice(offer,t.seats===2,Boolean(t.creditAccountId))!==order.amountCents || !specialEventOfferMatches(o)||t.state!=='HELD'||o.status!=='SCHEDULED'||o.startAt<=now||reversal||Boolean(adjustment)||order.refundedAmountCents>0||['REFUNDED','PARTIALLY_REFUNDED','DISPUTED'].includes(order.status);
  try {await account(tx,t.userId);} catch {review=true;}
  if(t.seats===2 && offer?.requiresFirstVisit && (await inspectNewFriendHistory(tx,{fullName:t.guestName!,phone:t.guestPhone!},t.userId,now,true)).status!=='ELIGIBLE')review=true;
  if(t.seats===2 && await guestHasBookingConflict(tx,t.occurrenceId,t.guestName!,t.guestPhone!,t.orderId))review=true;
@@ -307,8 +314,13 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
  const bookingId=review?null:randomUUID();
  await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state=${state},"buyerBookingId"=${bookingId} WHERE "orderId"=${orderId}`;
  if(bookingId)await tx.booking.create({data:{id:bookingId,userId:t.userId,occurrenceId:t.occurrenceId,source:'STRIPE_EVENT',policySnapshot:ticketBookingPolicy(orderId,'BUYER',o,order.amountCents)}});
- await tx.commerceOrder.update({where:{id:orderId},data:{status:review?'FULFILLMENT_REVIEW':'PAID',paidAt:now,stripeCheckoutSessionId:session.id,stripePaymentIntentId:pi}});
+ await tx.commerceOrder.update({where:{id:orderId},data:{status:review?'FULFILLMENT_REVIEW':'PAID',paidAt:existing?.occurredAt ?? now,stripeCheckoutSessionId:session.id,stripePaymentIntentId:pi,...(adjustment && existing?{refundedAmountCents:existing.refundedAmountCents}:{})}});
  if(!existing)await tx.paymentRecord.create({data:{userId:t.userId,commerceOrderId:orderId,kind:'EVENT',status:'SUCCEEDED',stripeEventId:`black-friday-session:${session.id}`,amountCents:order.amountCents,currency:order.currency,stripeCheckoutSessionId:session.id,stripePaymentIntentId:pi,occurredAt:now,customerName:order.customerName,customerEmail:order.customerEmail}});
+ if(adjustment) {
+  await tx.auditLog.create({data:{action:'black-friday.sync-adjustment-review',entityType:'CommerceOrder',entityId:orderId,
+    after:{paymentRecordId:existing!.id,paymentIntentId:pi}}});
+  if(adjustment.fullRefunds) await applyBlackFridayRefunds(tx,orderId,pi,adjustment.fullRefunds,now);
+ }
  await tx.auditLog.create({data:{action:review?'black-friday.payment-review':'black-friday.paid',entityType:'CommerceOrder',entityId:orderId}});
  return true;
 }
@@ -323,7 +335,7 @@ export async function claimBlackFridayGuest(db:PrismaClient,input:{orderId:strin
  return linkGuestAccount({orderId:input.orderId,selectedUserId:input.userId,identityConfirmed:true},{id:input.actorId},db,now);
 }
 /** Retain refund identities and statuses; aggregates alone do not prove settlement. */
-export async function applyBlackFridayRefunds(tx:Tx,orderId:string,paymentIntentId:string,refunds:Stripe.Refund[],now=new Date()){
+export async function applyBlackFridayRefunds(tx:Tx,orderId:string,paymentIntentId:string,refunds:Pick<Stripe.Refund,'id'|'payment_intent'|'currency'|'amount'|'status'>[],now=new Date()){
  const observed=await ticket(tx,orderId);if(!observed)throw Error('Ticket not found');await lock(tx,observed.occurrenceId);const order=await tx.commerceOrder.findUniqueOrThrow({where:{id:orderId}});
  if(order.stripePaymentIntentId!==paymentIntentId)throw new Error('Refund payment ownership mismatch');
  for(const r of refunds){

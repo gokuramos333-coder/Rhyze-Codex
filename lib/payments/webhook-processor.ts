@@ -786,8 +786,9 @@ async function fulfillCommerceOrder(
   });
   if (inFlightRefund) return;
   if (legacySpecial && action.paymentIntentId) {
-    legacyPayment=await bindEventPayment(tx,existingOrder,event.data.object as Stripe.Checkout.Session,proof);
-    fulfillmentReview=await retainedEventAdjustment(tx,action.paymentIntentId);
+    const binding=await bindEventPayment(tx,existingOrder,event.data.object as Stripe.Checkout.Session,proof);
+    legacyPayment=binding.payment;
+    fulfillmentReview=Boolean(binding.adjustment) || await retainedEventAdjustment(tx,action.paymentIntentId);
   }
   const financials = checkoutFinancialData(action);
   if (
@@ -813,7 +814,8 @@ async function fulfillCommerceOrder(
     data: {
       status: 'PAID',
       ...financials,
-      paidAt: action.occurredAt,
+      paidAt: legacyPayment?.occurredAt ?? action.occurredAt,
+      ...(legacyPayment ? {refundedAmountCents:legacyPayment.refundedAmountCents} : {}),
       stripeCheckoutSessionId: action.sessionId,
       stripePaymentIntentId: action.paymentIntentId,
       customerName: action.customerName || undefined,
