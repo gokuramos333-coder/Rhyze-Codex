@@ -54,6 +54,26 @@ describe('digital agreement acceptance', () => {
     );
   });
 
+  it('returns to the selected occurrence after signing the waiver', () => {
+    const destination = new URL(
+      eventCheckoutWaiverDestination('rhyze-workshop', 'later_occurrence-2'),
+      'https://example.test',
+    );
+    expect(waiverCompletionDestination(destination.searchParams.get('returnTo'))).toBe(
+      '/book/event/rhyze-workshop?occurrence=later_occurrence-2',
+    );
+  });
+
+  it.each([
+    '/book/event/rhyze-workshop?occurrence=',
+    '/book/event/rhyze-workshop?occurrence=later&occurrence=earlier',
+    '/book/event/rhyze-workshop?occurrence=later&returnTo=https://example.com',
+    '/book/event/rhyze-workshop?occurrence=later#extra',
+    '/book/event/rhyze-workshop?occurrence=..%2Flater',
+  ])('rejects the malformed event waiver return %s', (returnTo) => {
+    expect(waiverCompletionDestination(returnTo)).toBe('/member/waiver?saved=1');
+  });
+
   it('does not allow an external waiver return destination', () => {
     expect(waiverCompletionDestination('https://example.com/phishing')).toBe(
       '/member/waiver?saved=1',

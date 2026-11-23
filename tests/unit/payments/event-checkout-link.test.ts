@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ findOccurrence: vi.fn(), create: vi.fn(), order: vi.fn(), update: vi.fn() }));
+const mocks = vi.hoisted(() => ({ findOccurrence: vi.fn(), create: vi.fn(), order: vi.fn(), update: vi.fn(), waiverAcceptance: vi.fn() }));
 vi.mock('@/auth', () => ({ auth: async () => ({ user: { id: 'member' } }) }));
 vi.mock('@/lib/payments/stripe', () => ({ stripeIsConfigured: () => true, getStripe: () => ({ checkout: { sessions: { create: mocks.create } } }) }));
 vi.mock('@/lib/db/prisma', () => ({ prisma: {
   classOccurrence: { findFirst: async (args: unknown) => { mocks.findOccurrence(args); return ({ id: (args as {where:{id?:string}}).where.id ?? 'event', startAt: new Date('2099-01-01'), status: 'SCHEDULED', capacity: 20, priceCents: 3000, historicalSignupCount: 0, template: { name: 'Hip Hop', slug: 'hip-hop', isEvent: true }, _count: { bookings: 0 } }); } },
   user: { findUniqueOrThrow: async () => ({ id: 'member', name: 'Member', email: 'member@example.test', stripeCustomerId: 'cus_existing' }) },
-  waiverVersion: { findFirst: async () => ({ id: 'waiver' }) }, waiverAcceptance: { findUnique: async () => ({ id: 'accepted' }) },
+  waiverVersion: { findFirst: async () => ({ id: 'waiver' }) }, waiverAcceptance: { findUnique: mocks.waiverAcceptance },
   booking: { findUnique: async () => null }, commerceOrder: { create: mocks.order, update: mocks.update },
 } }));
 import { POST } from '@/app/api/checkout/event/route';
-beforeEach(() => { vi.clearAllMocks(); mocks.order.mockResolvedValue({ id: 'order' }); mocks.create.mockResolvedValue({ id: 'cs_session', url: 'https://checkout.stripe.com/example' }); mocks.update.mockResolvedValue({}); });
+beforeEach(() => { vi.clearAllMocks(); mocks.order.mockResolvedValue({ id: 'order' }); mocks.create.mockResolvedValue({ id: 'cs_session', url: 'https://checkout.stripe.com/example' }); mocks.update.mockResolvedValue({}); mocks.waiverAcceptance.mockResolvedValue({ id: 'accepted' }); });
 afterEach(()=>vi.unstubAllEnvs());
 it.each([{}, {ticketType:'PAIR',friend:{fullName:'New Friend',phone:'2015550189'},firstVisitDeclared:true}])('keeps canonical sales closed without falling back to a legacy single when disabled: %j',async extra=>{
  vi.stubEnv('RHYZE_BLACK_FRIDAY_SALES_ENABLED','false');
@@ -47,4 +47,18 @@ it('keeps provider diagnostics out of the buyer checkout error',async()=>{
   const response=await POST(new Request('http://localhost/api/checkout/event',{method:'POST',body:JSON.stringify({slug:'hip-hop'})}));
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({error:'We couldn’t start checkout. Please check your bookings or contact the studio for help.'});
+});
+
+
+it('returns a waiver destination for the selected event date before creating any order', async () => {
+  mocks.waiverAcceptance.mockResolvedValueOnce(null);
+  const response = await POST(new Request('http://localhost/api/checkout/event', {
+    method: 'POST', body: JSON.stringify({ slug: 'hip-hop', occurrenceId: 'later-event' }),
+  }));
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({
+    waiverUrl: '/member/waiver?returnTo=%2Fbook%2Fevent%2Fhip-hop%3Foccurrence%3Dlater-event',
+  });
+  expect(mocks.order).not.toHaveBeenCalled();
+  expect(mocks.create).not.toHaveBeenCalled();
 });

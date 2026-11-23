@@ -172,7 +172,7 @@ export function EventCheckoutButton({
       {error && (
         <p role="alert" className="mt-3 border-l-4 border-rhyze-coral bg-rhyze-coral/10 p-3 text-sm">
           {error}
-          {needsWaiver && <Link href={eventCheckoutWaiverDestination(slug)} className="ml-2 underline">Review waiver</Link>}
+          {needsWaiver && <Link href={eventCheckoutWaiverDestination(slug, occurrenceId)} className="ml-2 underline">Review waiver</Link>}
         </p>
       )}
     </div>

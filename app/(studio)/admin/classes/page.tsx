@@ -1,4 +1,7 @@
-import { paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
+import { paidEventCalendarAttendance, paidEventDisplayCounts } from '@/lib/domain/bookings/paid-event-display';
+import { requireArea } from '@/lib/auth/session';
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
+import { specialEventRoster } from '@/lib/payments/special-event-roster';
 import { isPublicEvent } from '@/lib/catalog/member-class-event';
 import { prisma } from '@/lib/db/prisma';
 import { occurrenceDurationMinutes } from '@/lib/domain/schedule/occurrence-management';
@@ -120,6 +123,7 @@ export default async function AdminClassesPage(
         bookings: {
           where: { status: { not: 'CANCELLED' } },
           select: {
+            id: true,
             status: true,
             attendance: { select: { status: true } },
           },
@@ -154,14 +158,36 @@ export default async function AdminClassesPage(
   const revenueRecords = recordsInRange(allRevenueRecords, range.start, range.end);
   const summary = summarizeRevenue(revenueRecords);
   const series = buildDailyRevenueSeries(revenueRecords, range.start, range.end);
-  const paidCounts = await paidEventDisplayCounts([
-    ...scheduledOccurrences.map((occurrence) => occurrence.id),
-    ...templates.flatMap((template) => template.occurrences.map((occurrence) => occurrence.id)),
+  const pastSpecialIds = scheduledOccurrences
+    .filter((occurrence) => occurrence.endAt <= now && specialEventIdentity(occurrence.id))
+    .map((occurrence) => occurrence.id);
+  const rosterActor = pastSpecialIds.length ? await requireArea('admin') : null;
+  const [paidCounts, pastSpecialRosters] = await Promise.all([
+    paidEventDisplayCounts([
+      ...scheduledOccurrences.map((occurrence) => occurrence.id),
+      ...templates.flatMap((template) => template.occurrences.map((occurrence) => occurrence.id)),
+    ]),
+    rosterActor ? Promise.all(pastSpecialIds.map(async (id) => [
+      id, await specialEventRoster(id, { id: rosterActor.id }),
+    ] as const)) : [],
   ]);
+  const rostersById = new Map(pastSpecialRosters);
   const adminCalendarOccurrences: AdminCalendarOccurrence[] =
     scheduledOccurrences.map((occurrence) => {
       const timezone = occurrence.timezone || 'America/New_York';
       const instructor = occurrenceInstructorName(occurrence);
+      const roster = rostersById.get(occurrence.id);
+      const attendance = roster ? paidEventCalendarAttendance(occurrence, roster) : {
+        attended: occurrence.bookings.filter(
+          (booking) =>
+            booking.status === 'ATTENDED' ||
+            booking.attendance?.status === 'CHECKED_IN' ||
+            booking.attendance?.status === 'ATTENDED',
+        ).length,
+        attendanceUnmarked: occurrence.historicalSignupCount + occurrence.bookings.filter(
+          (booking) => booking.status === 'CONFIRMED' && !booking.attendance,
+        ).length,
+      };
       return {
         id: occurrence.id,
         isEvent: isPublicEvent(occurrence.template),
@@ -194,17 +220,7 @@ export default async function AdminClassesPage(
         photo: resolveClassArtwork(occurrence),
         capacity: occurrence.capacity,
         booked: paidCounts.get(occurrence.id) ?? (occurrence.bookings.length + occurrence.historicalSignupCount),
-        attended: occurrence.bookings.filter(
-          (booking) =>
-            booking.status === 'ATTENDED' ||
-            booking.attendance?.status === 'CHECKED_IN' ||
-            booking.attendance?.status === 'ATTENDED',
-        ).length,
-        attendanceUnmarked:
-          occurrence.bookings.filter(
-            (booking) =>
-              booking.status === 'CONFIRMED' && !booking.attendance,
-          ).length + occurrence.historicalSignupCount,
+        ...attendance,
         isPast: occurrence.endAt <= now,
         waitlist: occurrence._count.waitlistEntries,
         status: occurrence.status,

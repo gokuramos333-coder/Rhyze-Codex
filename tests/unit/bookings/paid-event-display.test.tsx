@@ -1,12 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SpecialEventRoster } from '@/lib/payments/special-event-roster';
 
 const { db, paidEventDisplayCount, specialEventRoster, requireArea } = vi.hoisted(() => ({
   db: {
-    classTemplate: { findFirst: vi.fn() },
+    classTemplate: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     classOccurrence: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
     creditLedgerEntry: { findMany: vi.fn() }, user: { findMany: vi.fn() },
+    classCategory: { findMany: vi.fn().mockResolvedValue([]) },
+    sombleTransaction: { findMany: vi.fn().mockResolvedValue([]) },
+    purchase: { findMany: vi.fn().mockResolvedValue([]) },
+    booking: { findMany: vi.fn().mockResolvedValue([]) },
   },
   paidEventDisplayCount: vi.fn(),
   specialEventRoster: vi.fn(),
@@ -28,6 +32,9 @@ vi.mock('@/app/(portal)/instructor/classes/[occurrenceId]/roster/guest-actions',
 vi.mock('@/components/live/LiveDataRefresh', () => ({ LiveDataRefresh: () => null }));
 vi.mock('server-only', () => ({}));
 
+vi.mock('@/app/(studio)/admin/classes/actions', () => ({ createClassTemplateAction: vi.fn() }));
+
+import AdminClassesPage from '@/app/(studio)/admin/classes/page';
 import AdminRosterPage from '@/app/(studio)/admin/schedule/[occurrenceId]/roster/page';
 import InstructorRosterPage from '@/app/(portal)/instructor/classes/[occurrenceId]/roster/page';
 import EventDetailPage from '@/app/events/[slug]/page';
@@ -55,9 +62,12 @@ const roster: SpecialEventRoster = {
   canLinkAccounts: true,
   currentWaiverVersionId: 'waiver',
 };
-function ordinaryBooking(id: string, name: string, source = 'STRIPE_EVENT') {
+function ordinaryBooking(
+  id: string, name: string, source = 'STRIPE_EVENT',
+  status = 'CONFIRMED', attendance: { status: string } | null = null,
+) {
   return {
-    id, status: 'CONFIRMED', source, bookedAt: new Date(), policySnapshot: {},
+    id, status, attendance, source, bookedAt: new Date(), policySnapshot: {},
     user: { id: name, name, email: 'staff-preview@example.invalid', memberships: [] },
   };
 }
@@ -93,6 +103,8 @@ beforeEach(() => {
   requireArea.mockImplementation(async (area: string) =>
     area === 'admin' ? { id: 'staff', role: 'OWNER' } : { id: 'instructor', role: 'INSTRUCTOR' });
 });
+
+afterEach(() => vi.useRealTimers());
 
 it('counts paid seats once and keeps complimentary admissions in the admin roster', async () => {
   const html = renderToStaticMarkup(await AdminRosterPage({ params: Promise.resolve({ occurrenceId }) }));
@@ -149,4 +161,56 @@ it('provides paid booked counts and hold-aware availability on the public calend
   expect(slot.booked).toBe(4);
   expect(slot.availability?.soldOut).toBe(true);
   expect(slot).not.toHaveProperty('pendingTicketSeats');
+});
+
+
+it('shows the same past-event attendance before and after a checked-in guest links their account', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-12-28T16:00:00Z'));
+  const eventRoster = structuredClone(roster);
+  const [buyer, guest] = eventRoster.groups[0].attendees;
+  buyer.attendanceStatus = 'NO_SHOW';
+  specialEventRoster.mockResolvedValue(eventRoster);
+  occurrence.bookings = [
+    ordinaryBooking('buyer-booking', 'Sample Buyer', 'STRIPE_EVENT', 'NO_SHOW', { status: 'NO_SHOW' }),
+    ordinaryBooking('comp', 'Comp Guest', 'OWNER_COMPLIMENTARY'),
+  ];
+  async function calendar() {
+    return renderToStaticMarkup(await AdminClassesPage({
+      searchParams: Promise.resolve({ range: 'day', date: '2026-12-27' }),
+    }));
+  }
+  const beforeCheckIn = await calendar();
+  expect(beforeCheckIn).toContain('4/25 signups');
+  expect(beforeCheckIn).toContain('0 attended');
+  expect(beforeCheckIn).toContain('3 attendance unmarked');
+
+  // An identifiable unpaid legacy booking must never change either counter.
+  occurrence.bookings.push(ordinaryBooking('ineligible-booking', 'Expired Unpaid Buyer'));
+  expect(await calendar()).toContain('3 attendance unmarked');
+
+  guest.attendanceStatus = 'CHECKED_IN';
+  guest.checkedInAt = new Date('2026-12-27T16:00:00Z');
+  const checkedIn = await calendar();
+  expect(checkedIn).toContain('1 attended');
+  expect(checkedIn).toContain('2 attendance unmarked');
+
+  guest.userId = 'guest';
+  guest.bookingId = 'linked-guest';
+  eventRoster.linkedBookingIds.push('linked-guest');
+  occurrence.bookings.push(ordinaryBooking('linked-guest', 'Sample Guest', 'STRIPE_EVENT', 'ATTENDED', {
+    status: 'CHECKED_IN',
+  }));
+  const linked = await calendar();
+  expect(linked).toContain('4/25 signups');
+  expect(linked).toContain('1 attended');
+  expect(linked).toContain('2 attendance unmarked');
+
+  guest.attendanceStatus = null;
+  occurrence.bookings[occurrence.bookings.length - 1] = ordinaryBooking(
+    'linked-guest', 'Sample Guest', 'STRIPE_EVENT', 'LATE_CANCELLED',
+  );
+  const lateCanceled = await calendar();
+  expect(lateCanceled).toContain('0 attended');
+  expect(lateCanceled).toContain('2 attendance unmarked');
 });

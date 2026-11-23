@@ -33,8 +33,10 @@ export function membershipWaiverDestination(): string {
   return `/member/waiver?returnTo=${encodeURIComponent('/member/membership')}`;
 }
 
-export function eventCheckoutWaiverDestination(slug: string): string {
-  return `/member/waiver?returnTo=${encodeURIComponent(`/book/event/${encodeURIComponent(slug)}`)}`;
+export function eventCheckoutWaiverDestination(slug: string, occurrenceId?: string): string {
+  const occurrence = occurrenceId ? `?occurrence=${encodeURIComponent(occurrenceId)}` : '';
+  const returnTo = `/book/event/${encodeURIComponent(slug)}${occurrence}`;
+  return `/member/waiver?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export function waiverCompletionDestination(value: unknown): string {
@@ -49,7 +51,7 @@ export function waiverCompletionDestination(value: unknown): string {
     return returnTo;
   }
   if (/^\/member\/class-checkout\?occurrence=[A-Za-z0-9_-]+$/.test(returnTo)) return returnTo;
-  if (/^\/book\/event\/[a-z0-9-]+$/.test(returnTo)) {
+  if (/^\/book\/event\/[a-z0-9-]+(?:\?occurrence=[A-Za-z0-9_-]+)?$/.test(returnTo)) {
     return returnTo;
   }
   return '/member/waiver?saved=1';

@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: 'Review and accept the studio waiver before purchasing an event ticket.',
-          waiverUrl: eventCheckoutWaiverDestination(slug),
+          waiverUrl: eventCheckoutWaiverDestination(slug, occurrence.id),
         },
         { status: 403 },
       );

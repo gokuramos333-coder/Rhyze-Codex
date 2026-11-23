@@ -100,3 +100,14 @@ it('keeps the December Tricia date single-ticket only', () => {
   expect(screen.queryByLabelText('Ticket option')).toBeNull();
   expect(screen.getByRole('button', { name: 'Continue to payment' })).toBeTruthy();
 });
+
+
+it('links to the waiver with the same selected event occurrence', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({
+    ok: false, status: 403, json: async () => ({ waiverUrl: 'https://example.invalid/untrusted' }),
+  })));
+  render(<EventCheckoutButton slug="returning-event" occurrenceId="later_date-2" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to payment' }));
+  const link = await screen.findByRole('link', { name: 'Review waiver' });
+  expect(link.getAttribute('href')).toBe('/member/waiver?returnTo=%2Fbook%2Fevent%2Freturning-event%3Foccurrence%3Dlater_date-2');
+});
