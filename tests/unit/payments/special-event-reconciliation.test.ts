@@ -41,6 +41,9 @@ function fixture() {
         userId: 'buyer',
         occurrenceId: 'event',
         kind: 'EVENT',
+        status: 'PENDING',
+        paidAt: null,
+        refundedAmountCents: 0,
         amountCents: 2500,
         currency: 'usd',
         stripeCheckoutSessionId: null,
@@ -113,4 +116,46 @@ it('recovers a unique match from a later bounded provider page', async () => {
     expect.objectContaining({ starting_after: 'cs_unrelated' }),
     expect.anything(),
   );
+});
+
+it('rejects hosted test-mode sessions before binding or returning a payable link', async () => {
+  const f = fixture();
+  vi.stubEnv('NETLIFY', 'true');
+  try {
+    Object.assign(f.session, { livemode: false });
+    expect(
+      await reconcileSpecialEventCheckout({ orderId: 'order' }, f.dependencies),
+    ).toBe('review');
+    expect(f.updateMany).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
+it('waits for and counts all claimed rows when one initial read fails', async () => {
+  const { reconcileDueSpecialEventCheckouts } =
+    await import('@/lib/payments/special-event-reconciliation');
+  const f = fixture();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const calls: string[] = [];
+  f.dependencies.db.$queryRaw = vi.fn(async (_strings, ...args: unknown[]) => {
+    if (args.length > 1) return [{ orderId: 'bad' }, { orderId: 'slow' }];
+    if (args[0] === 'bad') throw Error('individual database read failed');
+    await gate;
+    calls.push('finished');
+    return [];
+  }) as never;
+  const result = reconcileDueSpecialEventCheckouts(
+    { limit: 2 },
+    f.dependencies,
+  ).catch(() => null);
+  const premature = await Promise.race([
+    result.then(() => true),
+    new Promise<false>((r) => setTimeout(() => r(false), 10)),
+  ]);
+  release();
+  expect(premature).toBe(false);
+  expect(await result).toMatchObject({ review: 2 });
+  expect(calls).toEqual(['finished']);
 });

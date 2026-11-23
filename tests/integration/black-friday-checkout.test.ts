@@ -635,13 +635,166 @@ it('keeps the hold when the provider expire response disagrees with fresh retrie
 it('requires clean captured provider evidence before background fulfillment of a paid session',async()=>{
  const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
  await emptySeats();const {session,orderId}=await single('Captured evidence');
- const charge={id:'ch_clean',payment_intent:'pi_clean',currency:'usd',livemode:false,amount_captured:2500,amount_refunded:100,paid:true,captured:true,disputed:false};
+ const charge={amount:2500,id:'ch_clean',payment_intent:'pi_clean',currency:'usd',livemode:false,amount_captured:2500,amount_refunded:100,paid:true,captured:true,disputed:false};
  const intent={id:'pi_clean',amount:2500,currency:'usd',livemode:false,metadata:session.metadata,amount_received:2500,status:'succeeded',latest_charge:charge};
  Object.assign(session,{status:'complete',payment_status:'paid',livemode:false,payment_intent:intent});
  expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('review');
+ expect(await db.booking.count({where:{userId:session.metadata.userId,occurrenceId}})).toBe(0);
+ await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
  expect(await db.booking.count({where:{userId:session.metadata.userId,occurrenceId}})).toBe(0);
  Object.assign(charge,{amount_refunded:0});
  expect(await reconcileSpecialEventCheckout({orderId},{db,stripe,now})).toBe('paid');
  expect(await db.booking.count({where:{userId:session.metadata.userId,occurrenceId}})).toBe(1);
  await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId,paymentIntentId:intent.id,refundedAmountCents:2500,disputed:false},now));
+});
+
+it('staff recovers a missed paid callback only after proving the complete provider refund without attendance',async()=>{
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();const {u,credit}=await vipFixture('Missed refund buyer');
+ const {orderId}=await startBlackFridayCheckout(db,stripe,{userId:u,occurrenceId,slug,origin:'http://localhost',ticketType:'PAIR',firstVisitDeclared:true,friend:{fullName:'Refund Fresh Friend',phone:'2015550169'},useEventCredit:true},now);
+ const session=[...sessions.values()].find(s=>s.metadata.commerceOrderId===orderId);
+ const intentId='pi_missed_refund',chargeId='ch_missed_refund';
+ const charge={id:chargeId,created:Math.floor(now.getTime()/1000),payment_intent:intentId,livemode:false,paid:true,captured:true,disputed:false,currency:'usd',amount:1500,amount_captured:1500,amount_refunded:300};
+ const intent={id:intentId,metadata:session.metadata,livemode:false,status:'succeeded',amount:1500,amount_received:1500,currency:'usd',latest_charge:charge};
+ Object.assign(session,{status:'complete',payment_status:'paid',livemode:false,payment_intent:intent});
+ const receipt={id:'re_missed',charge:chargeId,payment_intent:intentId,currency:'usd',status:'succeeded',amount:1500};
+ const list=vi.fn(async()=>({data:[receipt],has_more:false}));
+ const provider={...stripe,refunds:{list,create:vi.fn(()=>{throw Error('unexpected refund');})}};
+ const staff={actorId:buyer,orderId,operation:'RECONCILE' as const,reason:'Recovered full refund'};
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe:provider,now})).toBe('review');
+ await expect(manageBlackFridayTicket(db,provider,staff,now)).rejects.toThrow();
+ Object.assign(charge,{amount_refunded:1500,refunded:true,disputed:true});
+ await expect(manageBlackFridayTicket(db,provider,staff,now)).rejects.toThrow();
+ Object.assign(charge,{disputed:false});
+ expect(await reconcileSpecialEventCheckout({orderId},{db,stripe:provider,now})).toBe('review');
+ await expect(manageBlackFridayTicket(db,provider,{...staff,actorId:u},now)).rejects.toThrow('authorization');
+ for(const unsafe of [{...receipt,charge:'ch_other'},{...receipt,status:'pending'},{...receipt,amount:1499}]){
+  list.mockResolvedValueOnce({data:[unsafe],has_more:false});
+  await expect(manageBlackFridayTicket(db,provider,staff,now)).rejects.toThrow();
+  expect(await used()).toBe(2);
+ }
+ await manageBlackFridayTicket(db,provider,staff,now);
+ await manageBlackFridayTicket(db,provider,staff,now);
+ expect(await used()).toBe(0);
+ expect(await db.commerceOrder.findUniqueOrThrow({where:{id:orderId}})).toMatchObject({status:'REFUNDED',stripePaymentIntentId:intentId,refundedAmountCents:1500});
+ expect(await db.commerceRefund.findUniqueOrThrow({where:{stripeRefundId:receipt.id}})).toMatchObject({commerceOrderId:orderId,status:'SUCCEEDED',amountCents:1500});
+ expect(await db.paymentRecord.findFirstOrThrow({where:{commerceOrderId:orderId}})).toMatchObject({status:'REFUNDED',stripePaymentIntentId:intentId});
+ expect(await db.booking.count({where:{occurrenceId,userId:u}})).toBe(0);
+ expect(await db.auditLog.count({where:{entityId:orderId,action:'black-friday.paid'}})).toBe(0);
+ expect(await db.creditLedgerEntry.count({where:{creditAccountId:credit.id,type:'RELEASE'}})).toBe(1);
+ expect(provider.refunds.create).not.toHaveBeenCalled();
+});
+it('withholds payment links and expiry for local payment conflicts and audits verified staff cancellation once',async()=>{
+ const {readSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();const {session,orderId,input}=await single('Local payment conflict');
+ const expire=vi.fn(async()=>{session.status='expired';return session;});
+ const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,expire}}};
+ const staff={actorId:buyer,orderId,operation:'CANCEL' as const,reason:'Shopper requested release'};
+ const args={orderId,actorUserId:input.userId};const deps={db,stripe:provider,now};
+ async function rejectsConflict(){
+  expect(await readSpecialEventCheckout(args,deps)).toEqual({outcome:'review'});
+  expect(await readSpecialEventCheckout({...args,explicitBuyerCancel:true},deps)).toEqual({outcome:'review'});
+  await expect(manageBlackFridayTicket(db,provider,staff,now)).rejects.toThrow();
+  expect(expire).not.toHaveBeenCalled();
+ }
+ await db.commerceOrder.update({where:{id:orderId},data:{paidAt:now}});await rejectsConflict();
+ await db.commerceOrder.update({where:{id:orderId},data:{paidAt:null,status:'REFUNDED'}});await rejectsConflict();
+ await db.commerceOrder.update({where:{id:orderId},data:{status:'PENDING'}});
+ const record=await db.paymentRecord.create({data:{kind:'EVENT',status:'SUCCEEDED',amountCents:2500,currency:'usd',occurredAt:now,stripeCheckoutSessionId:session.id,stripeEventId:'evt_conflict'}});
+ await rejectsConflict();await db.paymentRecord.delete({where:{id:record.id}});
+ await manageBlackFridayTicket(db,provider,staff,now);await manageBlackFridayTicket(db,provider,{...staff,reason:'Second request'},now);
+ const audits=await db.auditLog.findMany({where:{entityId:orderId,action:'black-friday.expired'}});
+ expect(audits).toHaveLength(1);expect(audits[0]).toMatchObject({actorId:buyer,after:{reason:staff.reason}});
+ expect(await used()).toBe(0);
+});
+
+it('finishes a protected six-checkout batch under the 25-second caller deadline with an occurrence lock and two contact writes',async()=>{
+ const {POST}=await import('@/app/api/jobs/stripe-sync/route');
+ const scheduled=(await import('@/netlify/functions/stripe-sync')).default;
+ const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+ await emptySeats();await db.classOccurrence.update({where:{id:occurrenceId},data:{capacity:6}});
+ const checkouts:Awaited<ReturnType<typeof single>>[]=[];
+ for(let n=0;n<6;n++)checkouts.push(await single('Timed checkout '+n));
+ const ids=checkouts.map(c=>c.orderId);
+ await db.commerceOrder.updateMany({where:{id:{in:ids}},data:{stripeCheckoutSessionId:null}});
+ for(const c of checkouts)c.session.status='expired';
+ for(const c of checkouts.slice(0,2)){
+  await db.user.update({where:{id:c.input.userId},data:{stripeCustomerId:'cus_'+c.input.userId}});
+  await db.accountContactSync.create({data:{userId:c.input.userId,nextAttemptAt:now}});
+ }
+ const updates=vi.fn(async()=>{await delay(1300);});
+ Object.assign(stripe,{accounts:{retrieve:async()=>({id:'acct_fixture'})},charges:{list:async()=>({data:[],has_more:false})},customers:{update:updates}});
+ const savedList=stripe.checkout.sessions.list;
+ const savedRetrieve=stripe.checkout.sessions.retrieve;
+ let retrieving!:()=>void;const retrievingNow=new Promise<void>(resolve=>retrieving=resolve);
+ let locked!:()=>void;const isLocked=new Promise<void>(resolve=>locked=resolve);
+ let unlock!:()=>void;const gate=new Promise<void>(resolve=>unlock=resolve);
+ const lock=db.$transaction(async tx=>{
+   await tx.$executeRaw`SELECT id FROM "ClassOccurrence" WHERE id=${occurrenceId} FOR UPDATE`;
+   locked();await gate;
+ },{timeout:22000});
+ await isLocked;
+ let pages=0;
+ stripe.checkout.sessions.list=async(p:{starting_after?:string})=>{
+  pages++;await delay(1600);
+  if(p.starting_after==='cs_page2')return {data:checkouts.map(c=>c.session),has_more:false};
+  return {data:[{id:p.starting_after?'cs_page2':'cs_page1',metadata:{},client_reference_id:null}],has_more:true};
+ };
+ stripe.checkout.sessions.retrieve=async(id:string)=>{retrieving();await delay(1600);return savedRetrieve(id);};
+ vi.stubEnv('JOB_SECRET','private-synthetic-job');vi.stubEnv('URL','http://localhost');
+ let signal:AbortSignal|null=null;
+ vi.stubGlobal('fetch',async(url:string,options:RequestInit)=>{signal=options.signal??null;return POST(new Request(url,options));});
+ const started=performance.now();
+ // The externally held occurrence lock remains in place after the provider
+ // reads finish, forcing all six terminal writes to compete on the same row.
+ void retrievingNow.then(async()=>{await delay(2600);unlock();});
+ try {
+  const res=await scheduled();const body=await res.json();
+  const elapsed=Math.round(performance.now()-started);
+  console.log('Isolated protected stripe-sync elapsed milliseconds',elapsed);
+  expect(elapsed).toBeLessThan(25000);
+  expect((signal as AbortSignal|null)?.aborted).toBe(false);
+  expect(pages).toBe(18);
+  expect(body.stripe).toMatchObject({attempted:true,eventCheckouts:{expired:6,review:0},contactSync:{succeeded:2,failed:0}});
+  expect(updates).toHaveBeenCalledTimes(2);
+  expect(await used()).toBe(0);
+ }finally{
+  unlock();await lock;
+  stripe.checkout.sessions.retrieve=savedRetrieve;stripe.checkout.sessions.list=savedList;
+  delete stripe.accounts;delete stripe.charges;delete stripe.customers;
+  vi.unstubAllGlobals();
+ }
+},30000);
+
+it('retains staff cancellation attribution when the first provider read already proves expiry',async()=>{
+ await emptySeats();const {session,orderId}=await single('Staff audit purchaser');
+ session.status='expired';
+ await manageBlackFridayTicket(db,stripe,{actorId:buyer,orderId,operation:'RECONCILE',reason:'Assisted customer by phone'},now);
+ expect(await db.auditLog.findFirstOrThrow({where:{entityId:orderId,action:'black-friday.expired'}})).toMatchObject({actorId:buyer,after:{reason:'Assisted customer by phone'}});
+});
+it('requires hosted live-mode proof again after buyer expiry before releasing a hold',async()=>{
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await emptySeats();const {session,orderId,input}=await single('Hosted return mode');
+ const retrieve=vi.fn().mockResolvedValueOnce({...session,livemode:true}).mockResolvedValueOnce({...session,status:'expired',livemode:false});
+ const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,retrieve,expire:vi.fn(async()=>({...session,status:'expired',livemode:true}))}}};
+ vi.stubEnv('NETLIFY','true');
+ try{
+   expect(await reconcileSpecialEventCheckout({orderId,actorUserId:input.userId,explicitBuyerCancel:true},{db,stripe:provider,now})).toBe('review');
+   expect(provider.checkout.sessions.expire).toHaveBeenCalledTimes(1);
+   expect(await used()).toBe(1);
+ }finally{vi.stubEnv('NETLIFY','false');}
+ session.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+});
+
+it('preserves the approving staff identity when the expiry webhook wins the terminal transition',async()=>{
+ await emptySeats();const {session,orderId}=await single('Webhook race buyer');
+ const retrieve=async()=>{
+  if(session.status==='expired')await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+  return session;
+ };
+ const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,retrieve,expire:async()=>{session.status='expired';return session;}}}};
+ await manageBlackFridayTicket(db,provider,{actorId:buyer,orderId,operation:'CANCEL',reason:'Canceled by front desk'},now);
+ const audits=await db.auditLog.findMany({where:{action:'black-friday.expired',entityId:orderId}});
+ expect(audits).toHaveLength(1);
+ expect(audits[0]).toMatchObject({actorId:buyer,after:{reason:'Canceled by front desk'}});
 });

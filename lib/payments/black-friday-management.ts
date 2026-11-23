@@ -2,8 +2,9 @@ import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease
 import { assertFinancialApprover } from '@/lib/auth/financial-owner-access';
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
+import { assertStripeObjectMode } from './stripe-mode';
 import { readSpecialEventCheckout } from './special-event-reconciliation';
-import { applyBlackFridayRefunds, reverseBlackFridayTicket, type Ticket } from './black-friday-checkout';
+import { applyBlackFridayRefunds, matchesSpecialEventSession, reverseBlackFridayTicket, type Ticket } from './black-friday-checkout';
 /** Staff-only, explicit cancellation. An uncertain provider result never frees seats. */
 export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,input:{actorId:string;orderId:string;reason:string;operation:'CANCEL'|'RECONCILE';sessionId?:string;expectedRefundCents?:number},now=new Date()){
  if(input.reason.trim().length<5)throw new Error('A staff reason is required');
@@ -13,16 +14,11 @@ export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,inpu
  const t=(await db.$queryRaw<Ticket[]>`SELECT * FROM "BlackFridayTicket" WHERE "orderId"=${input.orderId}`)[0];
  if(!t)throw new Error('Ticket not found');
  if(['REFUNDED','DISPUTE_LOST'].includes(t.state))return;
- const deps={db,stripe,now};
- let evidence=await readSpecialEventCheckout({orderId:t.orderId},deps,input.sessionId);
- if(evidence.outcome==='pending' && input.operation==='CANCEL' && evidence.session){
-  const id=evidence.session.id;
-  await withFinancialRelease(db,async(tx,deadline)=>{
-   await assertFinancialApprover(tx,input.actorId);
-   await assertFinancialSubmission(tx,deadline);
-   await stripe.checkout.sessions.expire(id,{}, {timeout:2000,maxNetworkRetries:0});
-  });
-  evidence=await readSpecialEventCheckout({orderId:t.orderId},deps,id);
+ const evidence=await readSpecialEventCheckout({orderId:t.orderId},{db,stripe,now},input.sessionId,{
+  actorId:actor.id,reason:input.reason.trim(),operation:input.operation
+ });
+ if(evidence.fullyRefunded){
+  return archiveMissedFullRefund(db,stripe,t,evidence.fullyRefunded,input,now);
  }
  if(evidence.outcome==='expired')return;
  if(evidence.session?.status!=='complete'||evidence.session.payment_status!=='paid')throw new Error('Checkout identity or payment status requires review; seats remain held');
@@ -31,7 +27,9 @@ export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,inpu
  const load=async()=>{
   const pi=await stripe.paymentIntents.retrieve(order.stripePaymentIntentId!,{expand:['latest_charge']});
   const charge=pi.latest_charge;
-  if(pi.metadata.commerceOrderId!==order.id||pi.amount!==order.amountCents||pi.currency!==order.currency||!charge||typeof charge==='string'||charge.payment_intent!==pi.id||charge.amount!==order.amountCents||charge.currency!==order.currency)throw new Error('Provider identity or amount mismatch');
+  assertStripeObjectMode(pi);
+  if(charge && typeof charge!=='string')assertStripeObjectMode(charge);
+  if(pi.id!==order.stripePaymentIntentId||pi.metadata.commerceOrderId!==order.id||pi.amount!==order.amountCents||pi.currency!==order.currency||!charge||typeof charge==='string'||charge.payment_intent!==pi.id||charge.amount!==order.amountCents||charge.currency!==order.currency)throw new Error('Provider identity or amount mismatch');
   return {pi,charge};
  };
  let proof=await load();
@@ -90,4 +88,166 @@ export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,inpu
  if(refunds.length)await db.$transaction(tx=>applyBlackFridayRefunds(tx,order.id,proof.pi.id,refunds,now));
  if(disputeWon){const reconciled=await db.commerceOrder.findUniqueOrThrow({where:{id:order.id}});await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId:order.id,paymentIntentId:proof.pi.id,refundedAmountCents:reconciled.refundedAmountCents,disputed:false,disputeWon:true},now));}
  if((await db.commerceOrder.findUniqueOrThrow({where:{id:order.id}})).status!=='REFUNDED'&&input.operation==='CANCEL')throw new Error('Refund pending; both seats remain reserved until verified');
+}
+
+/** Recover an already-settled charge and its completed refund in one transaction. */
+async function archiveMissedFullRefund(
+  db: PrismaClient,
+  stripe: Stripe,
+  t: Ticket,
+  proof: {
+    session: Stripe.Checkout.Session;
+    charge: Stripe.Charge;
+    intentId: string;
+  },
+  staff: { actorId: string; reason: string },
+  now: Date,
+) {
+  const { session, charge, intentId } = proof;
+  const page = await stripe.refunds.list(
+    { charge: charge.id, limit: 100 },
+    { timeout: 2000, maxNetworkRetries: 0 },
+  );
+  const succeeded = page.data.filter((r) => r.status === 'succeeded');
+  if (
+    page.has_more !== false ||
+    !charge.id ||
+    !Number.isSafeInteger(charge.created) ||
+    charge.created <= 0 ||
+    new Set(page.data.map((r) => r.id)).size !== page.data.length ||
+    page.data.some(
+      (r) =>
+        !r.id ||
+        (typeof r.charge === 'string' ? r.charge : r.charge?.id) !==
+          charge.id ||
+        (typeof r.payment_intent === 'string'
+          ? r.payment_intent
+          : r.payment_intent?.id) !== intentId ||
+        r.currency !== session.currency ||
+        !Number.isSafeInteger(r.amount) ||
+        r.amount <= 0 ||
+        !['succeeded', 'failed', 'canceled'].includes(r.status || ''),
+    ) ||
+    succeeded.reduce((total, r) => total + r.amount, 0) !==
+      charge.amount_refunded
+  )
+    throw Error('Complete matching refund receipts required');
+  const paidAt = new Date(charge.created * 1000);
+  await db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT id FROM "ClassOccurrence" WHERE id=${t.occurrenceId} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM "CommerceOrder" WHERE id=${t.orderId} FOR UPDATE`;
+      const actor = await tx.user.findUnique({ where: { id: staff.actorId } });
+      if (
+        !actor ||
+        actor.status !== 'ACTIVE' ||
+        !['OWNER', 'ADMIN'].includes(actor.role)
+      )
+        throw Error('Staff authorization required');
+      const order = await tx.commerceOrder.findUniqueOrThrow({
+        where: { id: t.orderId },
+      });
+      const [ticket] = await tx.$queryRaw<
+        Ticket[]
+      >`SELECT * FROM "BlackFridayTicket" WHERE "orderId"=${t.orderId}`;
+      if (
+        !ticket ||
+        !matchesSpecialEventSession(session, order, ticket) ||
+        order.stripeCheckoutSessionId !== session.id
+      )
+        throw Error('Checkout identity changed');
+      if (
+        ticket.state === 'REFUNDED' &&
+        order.status === 'REFUNDED' &&
+        order.stripePaymentIntentId === intentId
+      )
+        return;
+      if (
+        ticket.state !== 'HELD' ||
+        ticket.buyerBookingId ||
+        ticket.guestBookingId ||
+        order.paidAt ||
+        !['PENDING', 'PAYMENT_FAILED'].includes(order.status) ||
+        order.refundedAmountCents !== 0
+      )
+        throw Error('Checkout requires staff review');
+      const records = await tx.paymentRecord.findMany({
+        where: {
+          OR: [
+            { commerceOrderId: order.id },
+            { stripeCheckoutSessionId: session.id },
+            { stripePaymentIntentId: intentId },
+          ],
+        },
+      });
+      if (
+        records.length > 1 ||
+        records.some(
+          (record) =>
+            record.commerceOrderId !== order.id ||
+            record.userId !== ticket.userId ||
+            record.kind !== 'EVENT' ||
+            record.stripePaymentIntentId !== intentId ||
+            record.stripeCheckoutSessionId !== session.id ||
+            record.amountCents !== order.amountCents ||
+            record.currency !== order.currency ||
+            !['SUCCEEDED', 'REFUNDED'].includes(record.status),
+        )
+      )
+        throw Error('Payment ownership requires review');
+      const known = await tx.commerceRefund.findMany({
+        where: { commerceOrderId: order.id },
+      });
+      if (
+        known.some(
+          (r) =>
+            !page.data.some(
+              (p) =>
+                p.id === r.stripeRefundId &&
+                p.amount === r.amountCents &&
+                (r.status !== 'SUCCEEDED' || p.status === 'succeeded'),
+            ),
+        )
+      )
+        throw Error('Refund history requires review');
+      await tx.commerceOrder.update({
+        where: { id: order.id },
+        data: { stripePaymentIntentId: intentId, paidAt },
+      });
+      if (!records.length)
+        await tx.paymentRecord.create({
+          data: {
+            userId: ticket.userId,
+            commerceOrderId: order.id,
+            kind: 'EVENT',
+            status: 'SUCCEEDED',
+            stripeEventId: `black-friday-session:${session.id}`,
+            amountCents: order.amountCents,
+            currency: order.currency,
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId: intentId,
+            occurredAt: paidAt,
+            customerName: order.customerName,
+            customerEmail: order.customerEmail,
+          },
+        });
+      await applyBlackFridayRefunds(tx, order.id, intentId, page.data, now);
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'black-friday.refund-recovered',
+          entityType: 'CommerceOrder',
+          entityId: order.id,
+          after: {
+            reason: staff.reason.trim(),
+            stripeCheckoutSessionId: session.id,
+            chargeId: charge.id,
+            paymentIntentId: intentId,
+            refundIds: succeeded.map((r) => r.id),
+          },
+        },
+      });
+    },
+    { isolationLevel: 'Serializable' },
+  );
 }

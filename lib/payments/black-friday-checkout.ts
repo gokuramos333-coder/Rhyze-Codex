@@ -1,4 +1,5 @@
 import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease } from '@/lib/payments/financial-release';
+import { assertStripeObjectMode } from './stripe-mode';
 import { blackFridaySalesEnabled } from './black-friday-release-gate';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type CommerceOrder, type PrismaClient } from '@prisma/client';
@@ -91,6 +92,7 @@ export function matchesSpecialEventSession(
   order: CommerceOrder,
   t: Ticket,
 ) {
+  assertStripeObjectMode(session);
   const meta = session.metadata;
   const intent =
     typeof session.payment_intent === 'string'
@@ -144,7 +146,35 @@ export function verifiedUnpaidExpiry(session: Stripe.Checkout.Session) {
   );
 }
 
-export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Session,now=new Date(),actorId?:string) {
+/** One current database snapshot for payment links, provider expiry and local release. */
+export async function locallyUnpaid(
+  db: Db,
+  orderId: string,
+  session: Stripe.Checkout.Session,
+) {
+  const pi =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : (session.payment_intent?.id ?? null);
+  const rows = await db.$queryRaw<{ orderId: string }[]>`
+   SELECT t."orderId" FROM "BlackFridayTicket" t JOIN "CommerceOrder" o ON o.id=t."orderId"
+   WHERE t."orderId"=${orderId} AND t.state='HELD' AND o.status IN ('PENDING','PAYMENT_FAILED')
+     AND o.kind='EVENT' AND o."amountCents"=${session.amount_total} AND o.currency=${session.currency}
+     AND o."userId"=t."userId" AND t."userId"=${session.metadata?.userId}
+     AND o."occurrenceId"=t."occurrenceId" AND t."occurrenceId"=${session.metadata?.occurrenceId}
+     AND o."paidAt" IS NULL AND o."refundedAmountCents"=0 AND o."stripeCheckoutSessionId"=${session.id}
+     AND (o."stripePaymentIntentId" IS NULL OR o."stripePaymentIntentId"=${pi})
+     AND NOT EXISTS (SELECT 1 FROM "PaymentRecord" p WHERE p.status<>'FAILED' AND
+       (p."commerceOrderId"=o.id OR p."stripeCheckoutSessionId"=${session.id} OR p."stripePaymentIntentId"=${pi}))
+     AND NOT EXISTS (SELECT 1 FROM "CommerceRefund" r WHERE r."commerceOrderId"=o.id AND r.status IN ('PENDING','SUCCEEDED'))`;
+  return rows.length === 1;
+}
+
+export function chargeRequiresReview(charge: Stripe.Charge) {
+ return charge.disputed !== false || charge.refunded === true || charge.amount_refunded !== 0;
+}
+
+export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Session,now=new Date(),actorId?:string,reason?:string) {
  const orderId=session.metadata?.commerceOrderId;
  if(!orderId||session.metadata?.blackFridayTicket!=='1')return false;
  const observed=await ticket(tx,orderId); if(!observed)throw new Error('Missing event reservation');
@@ -156,19 +186,27 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
  // recovers a unique provider session before either terminal transition.
  if(!order.stripeCheckoutSessionId)return true;
  if(session.status==='expired'){
-  if(t.state!=='HELD' || !verifiedUnpaidExpiry(session) || order.paidAt || order.refundedAmountCents ||
-     !['PENDING','PAYMENT_FAILED'].includes(order.status))return true;
-  const collected=await tx.paymentRecord.findFirst({where:{status:{not:'FAILED'},OR:[
-   {commerceOrderId:orderId},{stripeCheckoutSessionId:session.id},...(pi?[{stripePaymentIntentId:pi}]:[])
-  ]},select:{id:true}});
-  if(collected)return true;
+  // Lock the order as well as occurrence admission so a linked collected record
+  // or payment state cannot be written between the final check and cancellation.
+  await tx.$executeRaw`SELECT id FROM "CommerceOrder" WHERE id=${orderId} FOR UPDATE`;
+  if(t.state!=='HELD' || !verifiedUnpaidExpiry(session) || !await locallyUnpaid(tx,orderId,session))return true;
   await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state='EXPIRED' WHERE "orderId"=${orderId}`;
   await releaseCredit(tx,t);
   await tx.commerceOrder.update({where:{id:orderId},data:{status:'PAYMENT_FAILED',failedAt:now,stripePaymentIntentId:pi}});
-  await tx.auditLog.create({data:{actorId,action:'black-friday.expired',entityType:'CommerceOrder',entityId:orderId,after:{stripeCheckoutSessionId:session.id,paymentIntentId:pi ?? null}}});
+  const [approval]=await tx.$queryRaw<{actorId:string;reason:string}[]>`
+    SELECT "actorId",after->>'reason' AS reason FROM "AuditLog"
+    WHERE "entityType"='CommerceOrder' AND "entityId"=${orderId} AND action='black-friday.provider-expiry-accepted'
+      AND after->>'stripeCheckoutSessionId'=${session.id} AND "actorId" IS NOT NULL
+    ORDER BY "createdAt" DESC,id DESC LIMIT 1`;
+  const terminalReason=approval?.reason ?? reason;
+  await tx.auditLog.create({data:{actorId:approval?.actorId ?? actorId,action:'black-friday.expired',entityType:'CommerceOrder',entityId:orderId,
+    after:{stripeCheckoutSessionId:session.id,paymentIntentId:pi ?? null,...(terminalReason?{reason:terminalReason}:{})}}});
   return true;
  }
  if(session.status!=='complete'||session.payment_status!=='paid')return true;
+ const expandedIntent=typeof session.payment_intent==='object'?session.payment_intent:null;
+ const representedCharge=expandedIntent?.latest_charge;
+ if(representedCharge && typeof representedCharge!=='string' && chargeRequiresReview(representedCharge))return true;
  if(!pi||session.amount_total!==order.amountCents||session.currency!==order.currency)throw new Error('Ticket payment terms mismatch');
  if(['REFUNDED','DISPUTE_LOST','REVIEW','PAID','REVERSING'].includes(t.state) || (t.state==='EXPIRED' && order.paidAt))return true;
  const o=await tx.classOccurrence.findUniqueOrThrow({where:{id:t.occurrenceId}});
