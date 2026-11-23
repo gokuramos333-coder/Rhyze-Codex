@@ -62,6 +62,11 @@ export async function manageBlackFridayTicket(db:PrismaClient,stripe:Stripe,inpu
    if(previous.length)return false;
    const fresh=await tx.commerceOrder.findUniqueOrThrow({where:{id:order.id}});
    if(fresh.stripePaymentIntentId!==proof.pi.id||fresh.amountCents!==order.amountCents||fresh.refundedAmountCents!==refundedBefore||fresh.currency!=='usd')throw Error('Payment changed; reload before approval');
+   const captured=await tx.paymentRecord.findUnique({where:{stripePaymentIntentId:proof.pi.id}});
+   if(!captured || captured.commerceOrderId!==order.id || captured.userId!==t.userId || captured.kind!=='EVENT' ||
+      captured.stripeCheckoutSessionId!==fresh.stripeCheckoutSessionId || captured.amountCents!==fresh.amountCents ||
+      captured.currency!==fresh.currency || captured.refundedAmountCents!==refundedBefore ||
+      !(captured.status==='SUCCEEDED' || captured.status==='PARTIALLY_REFUNDED' || (disputeWon && captured.status==='DISPUTED'))) throw Error('Matching captured payment record required for refund approval.');
    await tx.$executeRaw`INSERT INTO "EventRefundApproval" ("orderId","actorId",reason,"paymentIntentId","chargeId","amountCents",currency,"refundedBeforeCents","providerKey") VALUES (${order.id},${input.actorId},${input.reason.trim()},${proof.pi.id},${proof.charge.id},${amount},'usd',${refundedBefore},${`approved-event-refund:${order.id}`})`;
    await tx.$executeRaw`UPDATE "BlackFridayTicket" SET "refundStartedAt"=${now.toISOString()}::timestamp,state=CASE WHEN state='EXPIRED' THEN state ELSE 'REVIEW' END WHERE "orderId"=${order.id}`;
    await tx.auditLog.create({data:{actorId:input.actorId,action:'event-refund.approved',entityType:'CommerceOrder',entityId:order.id,after:{reason:input.reason,amountCents:amount,currency:'usd',paymentIntentId:proof.pi.id,chargeId:proof.charge.id,refundedBeforeCents:refundedBefore}}});

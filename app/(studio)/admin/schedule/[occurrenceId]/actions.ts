@@ -1,5 +1,6 @@
 'use server';
 
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
 import { deleteScheduledOccurrence, DeleteOccurrenceError } from '@/lib/domain/schedule/delete-occurrence';
 import { Prisma } from '@prisma/client';
 import { hasScheduleConflict } from '@/lib/domain/schedule/conflict-service';
@@ -70,7 +71,7 @@ async function cancelOccurrencesWithNotifications(
       await lockMembershipEntitlements(tx, userId);
     }
     for (const occurrence of occurrences) {
-      if (['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(occurrence.id)) {
+      if (specialEventIdentity(occurrence.id)) {
         const liabilities = await tx.$queryRaw<{ orderId: string }[]>`SELECT "orderId" FROM "BlackFridayTicket" WHERE "occurrenceId"=${occurrence.id} AND state NOT IN ('EXPIRED','REFUNDED','DISPUTE_LOST')`;
         if (liabilities.length) throw new Error('Resolve ticket liabilities before cancelling occurrence');
       }

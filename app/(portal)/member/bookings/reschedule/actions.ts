@@ -1,4 +1,5 @@
 'use server';
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
 import { confirmAttendanceService } from '@/lib/payments/refund-review';
 import { transferCreditAccountsInclude } from '@/lib/domain/transfers/transfer-credit-accounts';
 import { completeWaitlistBooking, notifyWaitlistOpening } from '@/lib/domain/bookings/waitlist';
@@ -103,7 +104,7 @@ export async function rescheduleMemberBookingAction(formData: FormData) {
     user: preflightUser, sourceIsEvent: booking.occurrence.template.isEvent,
     destinationIsEvent: requestedDestination.template.isEvent, destinationStartsAt: requestedDestination.startAt, now: new Date(),
   })) redirect('/member/bookings?result=reschedule-destination');
-  if ([booking.occurrenceId, destinationId].some(id => ['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(id))) throw new Error('Special-event ticket changes require staff ticket management; no transfer fee was charged.');
+  if ([booking.occurrenceId, destinationId].some(id => specialEventIdentity(id))) throw new Error('Special-event ticket changes require staff ticket management; no transfer fee was charged.');
   const feeResult = feeCents > 0
     ? await chargeAttendanceFee({
         bookingId,

@@ -2,7 +2,7 @@
 import { requireArea } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { getStripe } from '@/lib/payments/stripe';
-import { claimBlackFridayGuest, BLACK_FRIDAY_ID } from '@/lib/payments/black-friday-checkout';
+import { claimBlackFridayGuest } from '@/lib/payments/black-friday-checkout';
 import { manageBlackFridayTicket } from '@/lib/payments/black-friday-management';
 import { revalidatePath } from 'next/cache';
 export async function blackFridayStaffAction(form:FormData){
@@ -16,7 +16,10 @@ export async function blackFridayStaffAction(form:FormData){
   if(operation==='CANCEL'&&form.get('cancelConfirmed')!=='on')throw new Error('Confirm cancellation and remaining cash refund');
   await manageBlackFridayTicket(prisma,getStripe(),{actorId:actor.id,orderId,operation,expectedRefundCents:Number(form.get('expectedRefundCents')),reason:String(form.get('reason')||''),sessionId:String(form.get('sessionId')||'')||undefined});
  }else throw new Error('Unknown operation');
- for (const id of [BLACK_FRIDAY_ID, 'cmw026ajl0001jn09jsqpqzij']) revalidatePath(`/admin/schedule/${id}/roster`);
- for (const id of [BLACK_FRIDAY_ID, 'cmw026ajl0001jn09jsqpqzij']) revalidatePath(`/instructor/classes/${id}/roster`);
+ const order=await prisma.commerceOrder.findUniqueOrThrow({where:{id:orderId},select:{occurrenceId:true}});
+ if(order.occurrenceId){
+  revalidatePath(`/admin/schedule/${order.occurrenceId}/roster`);
+  revalidatePath(`/instructor/classes/${order.occurrenceId}/roster`);
+ }
  revalidatePath('/member/bookings');
 }

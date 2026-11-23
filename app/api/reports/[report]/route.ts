@@ -21,20 +21,18 @@ export async function GET(
   await requireApprovedOwner();
   let rows: unknown[][] = [];
   if (params.report === 'attendance') {
-    const data = await prisma.attendanceRecord.findMany({
-      include: { user: true, occurrence: { include: { template: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-    rows = [
-      ['Member', 'Email', 'Class', 'Date', 'Status'],
-      ...data.map((item) => [
-        item.user.name,
-        item.user.email,
-        item.occurrence.template.name,
-        item.occurrence.startAt.toISOString(),
-        item.status,
-      ]),
-    ];
+    // Linking moves a ticket check-in into native attendance in one transaction.
+    // A single statement sees exactly one side of that transfer.
+    const data=await prisma.$queryRaw<{name:string|null;email:string;title:string;startAt:Date;status:string}[]>`
+      SELECT u.name,u.email,c.name AS title,o."startAt",a.status::text AS status,a."createdAt" AS recorded
+      FROM "AttendanceRecord" a JOIN "User" u ON u.id=a."userId" JOIN "ClassOccurrence" o ON o.id=a."occurrenceId"
+      JOIN "ClassTemplate" c ON c.id=o."templateId"
+      WHERE NOT EXISTS (SELECT 1 FROM "BlackFridayTicket" t WHERE a."bookingId" IN (t."buyerBookingId",t."guestBookingId")
+        AND NOT EXISTS (SELECT 1 FROM bf_paid_event_ticket paid WHERE paid."orderId"=t."orderId"))
+      UNION ALL SELECT t."guestName",'',c.name,o."startAt",'CHECKED_IN',t."guestCheckedInAt"
+      FROM bf_paid_event_ticket t JOIN "ClassOccurrence" o ON o.id=t."occurrenceId" JOIN "ClassTemplate" c ON c.id=o."templateId"
+      WHERE t."guestBookingId" IS NULL AND t."guestCheckedInAt" IS NOT NULL ORDER BY recorded DESC`;
+    rows=[['Member','Email','Class','Date','Status'],...data.map(row=>[row.name,row.email,row.title,row.startAt.toISOString(),row.status])];
   } else if (params.report === 'revenue') {
     const params = Object.fromEntries(new URL(request.url).searchParams);
     const report = await loadFinancialReport(params);

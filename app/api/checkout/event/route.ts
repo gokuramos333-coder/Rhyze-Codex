@@ -1,4 +1,4 @@
-import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
+import { specialEventIdentity, specialEventOfferMatches } from '@/lib/payments/black-friday-new-friend';
 import { blackFridaySalesEnabled } from '@/lib/payments/black-friday-release-gate';
 import { startBlackFridayCheckout } from '@/lib/payments/black-friday-checkout';
 import { buildCheckoutWalletParameters } from '@/lib/payments/checkout-config';
@@ -32,14 +32,6 @@ export async function POST(request: Request) {
   try {
     const input = requestSchema.parse(await request.json());
     const { slug, occurrenceId, childCount } = input;
-    const specialOffer = specialEventIdentity(occurrenceId, slug);
-    if (specialEventIdentity(occurrenceId) || specialEventIdentity(undefined,slug)) {
-      if (!blackFridaySalesEnabled()) return NextResponse.json({error:'Special ticket sales are not open yet.'},{status:503});
-      if (!specialOffer) throw new Error('Wrong event occurrence');
-      if (childCount !== undefined) throw new Error('Child pricing does not apply to this event.');
-      return NextResponse.json(await startBlackFridayCheckout(prisma, getStripe(), { ...input, occurrenceId: specialOffer.occurrenceId, ticketType: input.ticketType ?? 'SINGLE', userId: session.user.id, origin: new URL(request.url).origin }));
-    }
-    if (input.ticketType || input.friend || input.firstVisitDeclared !== undefined || input.useEventCredit !== undefined) throw new Error('This ticket option is not available for this event.');
     const occurrence = await prisma.classOccurrence.findFirst({
       where: {
         ...(occurrenceId ? { id: occurrenceId } : {}),
@@ -56,6 +48,14 @@ export async function POST(request: Request) {
     if (!occurrence) {
       return NextResponse.json({ error: 'No upcoming event date is available.' }, { status: 404 });
     }
+    const specialOffer = specialEventIdentity(occurrence.id);
+    if (specialOffer) {
+      if (!blackFridaySalesEnabled()) return NextResponse.json({error:'Special ticket sales are not open yet.'},{status:503});
+      if (!specialEventOfferMatches(occurrence)) throw new Error('Wrong event occurrence');
+      if (childCount !== undefined) throw new Error('Child pricing does not apply to this event.');
+      return NextResponse.json(await startBlackFridayCheckout(prisma, getStripe(), { ...input, occurrenceId: specialOffer.occurrenceId, ticketType: input.ticketType ?? 'SINGLE', userId: session.user.id, origin: new URL(request.url).origin }));
+    }
+    if (input.ticketType || input.friend || input.firstVisitDeclared !== undefined || input.useEventCredit !== undefined) throw new Error('This ticket option is not available for this event.');
     const priced = priceEventOrder({
       id: occurrence.id,
       slug: occurrence.template.slug,

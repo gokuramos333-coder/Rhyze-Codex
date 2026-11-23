@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ findOccurrence: vi.fn(), create: vi.fn(), orde
 vi.mock('@/auth', () => ({ auth: async () => ({ user: { id: 'member' } }) }));
 vi.mock('@/lib/payments/stripe', () => ({ stripeIsConfigured: () => true, getStripe: () => ({ checkout: { sessions: { create: mocks.create } } }) }));
 vi.mock('@/lib/db/prisma', () => ({ prisma: {
-  classOccurrence: { findFirst: async (args: unknown) => { mocks.findOccurrence(args); return ({ id: 'event', startAt: new Date('2099-01-01'), status: 'SCHEDULED', capacity: 20, priceCents: 3000, historicalSignupCount: 0, template: { name: 'Hip Hop', slug: 'hip-hop', isEvent: true }, _count: { bookings: 0 } }); } },
+  classOccurrence: { findFirst: async (args: unknown) => { mocks.findOccurrence(args); return ({ id: (args as {where:{id?:string}}).where.id ?? 'event', startAt: new Date('2099-01-01'), status: 'SCHEDULED', capacity: 20, priceCents: 3000, historicalSignupCount: 0, template: { name: 'Hip Hop', slug: 'hip-hop', isEvent: true }, _count: { bookings: 0 } }); } },
   user: { findUniqueOrThrow: async () => ({ id: 'member', name: 'Member', email: 'member@example.test', stripeCustomerId: 'cus_existing' }) },
   waiverVersion: { findFirst: async () => ({ id: 'waiver' }) }, waiverAcceptance: { findUnique: async () => ({ id: 'accepted' }) },
   booking: { findUnique: async () => null }, commerceOrder: { create: mocks.order, update: mocks.update },

@@ -146,6 +146,15 @@ export async function markAttendanceAction(formData: FormData): Promise<void> {
       }
       const lockedBooking = await tx.booking.findUniqueOrThrow({where:{id:booking.id},include:{attendance:true}});
       if (lockedBooking.userId !== booking.userId || lockedBooking.occurrenceId !== occurrenceId || (lockedBooking.attendance?.updatedAt.getTime() ?? null) !== (booking.attendance?.updatedAt.getTime() ?? null)) throw Error('Attendance changed; reload the roster');
+      // Recheck the staff assignment after admission is locked, including native controls
+      // used for a guest who has been linked to an account.
+      if (lockedBooking.policySnapshot && typeof lockedBooking.policySnapshot==='object' &&
+          'blackFridayOrderId' in lockedBooking.policySnapshot) {
+        const staff=await tx.user.findUniqueOrThrow({where:{id:actor.id},select:{status:true,role:true}});
+        const current=await tx.classOccurrence.findUniqueOrThrow({where:{id:occurrenceId},select:{instructorId:true}});
+        if(staff.status!=='ACTIVE' || !hasPermission(staff.role,'roster:manage-assigned') ||
+           (staff.role==='INSTRUCTOR' && current.instructorId!==actor.id)) throw Error('Staff authorization required.');
+      }
       if (transition.action === 'CLEAR') {
         await tx.attendanceRecord.deleteMany({
           where: { occurrenceId, userId: booking.userId },

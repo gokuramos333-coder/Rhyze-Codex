@@ -1,6 +1,6 @@
 'use server';
 import { assertFinancialRelease } from '@/lib/payments/financial-release';
-import { specialEventOfferMatches, specialEventCreditAllowed } from '@/lib/payments/black-friday-new-friend';
+import { specialEventOfferMatches, specialEventCreditAllowed, specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
 import { confirmAttendanceService } from '@/lib/payments/refund-review';
 import { giftCreditAllows, giftCreditKind } from '@/lib/domain/credits/gift-credit';
 import type { Prisma } from '@prisma/client';
@@ -229,7 +229,7 @@ export async function bookOccurrenceAction(formData: FormData): Promise<void> {
     if (specialEvent) await assertFinancialRelease(tx);
     const account = prioritizeMemberEventCredits(accounts, occurrence.template).find(
       (item) => {
-        if (specialEvent && !specialEventCreditAllowed(item)) return false;
+        if (specialEvent && specialEventIdentity(occurrence.id)?.vipPairCashCents != null && !specialEventCreditAllowed(item)) return false;
         const productKind = currentCreditProduct(item)?.kind ?? null;
         const isEventCredit = eventCreditCanBook({
           label: item.label,

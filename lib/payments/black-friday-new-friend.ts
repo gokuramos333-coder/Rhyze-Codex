@@ -1,22 +1,33 @@
-type EventTerms = { occurrenceId: string; slug: string; startAt: Date; endAt: Date; priceCents: number; isEvent: boolean };
+type EventTerms = { occurrenceId: string; templateId?: string; slug: string; startAt: Date; endAt: Date; priceCents: number; isEvent: boolean };
 
-// Exact owner-approved dates and prices. Event labels remain events; these dates accept only the earned VIP event benefit alongside cash tickets.
+const newFriendTerms = { singlePriceCents: 2500, pairPriceCents: 4000, requiresFirstVisit: true, vipPairCashCents: 1500 };
+const namedFriendTerms = { singlePriceCents: 3000, pairPriceCents: 5000, requiresFirstVisit: false, vipPairCashCents: null };
 export const specialEventOffers = [
-  { occurrenceId: 'cmvv9bp4g0001gt09ewtk8n57', slug: 'rhyzology-black-friday-neon-choreo-party-mvv992kn', startAt: '2026-11-28T00:30:00Z', endAt: '2026-11-28T01:45:00Z' },
-  { occurrenceId: 'cmw026ajl0001jn09jsqpqzij', slug: 'get-fit-with-the-fishers-mw000b75', startAt: '2026-11-22T16:00:00Z', endAt: '2026-11-22T17:00:00Z' },
+  { ...newFriendTerms, occurrenceId: 'cmvv9bp4g0001gt09ewtk8n57', templateId: 'cmvv992ko0001l809nmth9b44', slug: 'rhyzology-black-friday-neon-choreo-party-mvv992kn', startAt: '2026-11-28T00:30:00Z', endAt: '2026-11-28T01:45:00Z' },
+  { ...newFriendTerms, occurrenceId: 'cmw026ajl0001jn09jsqpqzij', templateId: 'cmw000b760001la097ii57bjb', slug: 'get-fit-with-the-fishers-mw000b75', startAt: '2026-11-22T16:00:00Z', endAt: '2026-11-22T17:00:00Z' },
+  { ...namedFriendTerms, occurrenceId: 'schedule-import-d7e5b1377dccf88d1d90068c557d', templateId: 'cmrykl6lq000uw921mf9kdgr7', slug: 'seat-seduction-vanessa', startAt: '2026-12-12T00:30:00Z', endAt: '2026-12-12T01:45:00Z' },
+  { ...namedFriendTerms, occurrenceId: 'schedule-import-e54e7b12d550433a85e6e7f495ec', templateId: 'cmrykl6ln000iw921odk89ebz', slug: 'hypnotic-heels-nicole', startAt: '2026-12-18T00:15:00Z', endAt: '2026-12-18T01:30:00Z' },
+  { ...newFriendTerms, occurrenceId: 'schedule-import-12cc3b9897966042d0954cb495b0', templateId: 'cmw000b760001la097ii57bjb', slug: 'get-fit-with-the-fishers-mw000b75', startAt: '2026-12-27T16:00:00Z', endAt: '2026-12-27T17:00:00Z' },
 ] as const;
+
 export function specialEventIdentity(occurrenceId?: string, slug?: string) {
-  return specialEventOffers.find(o => (!occurrenceId || o.occurrenceId === occurrenceId) && (!slug || o.slug === slug) && Boolean(occurrenceId || slug));
+  return specialEventOffers.find(o => o.occurrenceId === occurrenceId && (!slug || o.slug === slug));
+}
+export function specialEventCashPrice(offer: (typeof specialEventOffers)[number], pair: boolean, usesCredit: boolean) {
+  if (usesCredit) return pair ? offer.vipPairCashCents : null;
+  return pair ? offer.pairPriceCents : offer.singlePriceCents;
 }
 export function blackFridayOffer(terms: EventTerms) {
   const offer = specialEventIdentity(terms.occurrenceId, terms.slug);
-  if (!offer || !terms.isEvent || terms.priceCents !== 2500 ||
-      terms.startAt.getTime() !== Date.parse(offer.startAt) || terms.endAt.getTime() !== Date.parse(offer.endAt)) return null;
-  return { singlePriceCents: 2500, pairPriceCents: 4000,
-    singleLabel: 'One person — $25', pairLabel: 'Me + a NEW friend — $40 total' } as const;
+  if (!offer || offer.templateId !== terms.templateId || !terms.isEvent ||
+      terms.priceCents !== offer.singlePriceCents || terms.startAt.getTime() !== Date.parse(offer.startAt) ||
+      terms.endAt.getTime() !== Date.parse(offer.endAt)) return null;
+  return { singlePriceCents: offer.singlePriceCents, pairPriceCents: offer.pairPriceCents,
+    singleLabel: `One person — $${offer.singlePriceCents / 100}`,
+    pairLabel: `Me + a ${offer.requiresFirstVisit ? 'NEW ' : ''}friend — $${offer.pairPriceCents / 100} total` };
 }
-export function specialEventOfferMatches(occurrence: {id:string;startAt:Date;endAt:Date;priceCents:number|null;template:{slug:string;isEvent:boolean;dropInPriceCents:number|null}}) {
-  return Boolean(blackFridayOffer({occurrenceId:occurrence.id,slug:occurrence.template.slug,startAt:occurrence.startAt,endAt:occurrence.endAt,priceCents:occurrence.priceCents ?? occurrence.template.dropInPriceCents ?? 0,isEvent:occurrence.template.isEvent}));
+export function specialEventOfferMatches(occurrence: {id:string;templateId?:string;startAt:Date;endAt:Date;priceCents:number|null;template:{id?:string;slug:string;isEvent:boolean;dropInPriceCents:number|null}}) {
+  return Boolean(blackFridayOffer({occurrenceId:occurrence.id,templateId:occurrence.templateId ?? occurrence.template.id,slug:occurrence.template.slug,startAt:occurrence.startAt,endAt:occurrence.endAt,priceCents:occurrence.priceCents ?? occurrence.template.dropInPriceCents ?? 0,isEvent:occurrence.template.isEvent}));
 }
 
 /** US domestic default; international numbers require an explicit country prefix. */

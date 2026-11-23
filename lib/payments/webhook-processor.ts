@@ -1,3 +1,4 @@
+import { specialEventIdentity } from './black-friday-new-friend';
 import { preserveApprovedRecurringService } from '@/lib/payments/refund-recurring-callback';
 import { financialLock, financialLedgerLock } from '@/lib/payments/refund-review';
 import { lockMembershipEntitlements } from '@/lib/domain/credits/entitlement-lock';
@@ -749,6 +750,20 @@ async function fulfillCommerceOrder(
     },
   });
   if (!existingOrder) return;
+  const legacySpecial=existingOrder.kind==='EVENT' && specialEventIdentity(existingOrder.occurrenceId ?? undefined);
+  if(legacySpecial){
+    const session=event.data.object as Stripe.Checkout.Session;
+    assertStripeObjectMode(session);
+    if(session.mode!=='payment' || session.payment_status!=='paid' || !action.paymentIntentId ||
+      session.client_reference_id!==existingOrder.id || session.metadata?.userId!==existingOrder.userId ||
+      session.metadata?.purchaseType!=='EVENT' || session.metadata?.occurrenceId!==existingOrder.occurrenceId ||
+      action.amountCents!==existingOrder.amountCents || action.currency!==existingOrder.currency ||
+      (existingOrder.stripeCheckoutSessionId && existingOrder.stripeCheckoutSessionId!==action.sessionId) ||
+      (existingOrder.stripePaymentIntentId && existingOrder.stripePaymentIntentId!==action.paymentIntentId)) throw Error('Legacy event receipt ownership requires review.');
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${legacySpecial.occurrenceId}))`;
+    await tx.$queryRaw`SELECT id FROM "ClassOccurrence" WHERE id=${legacySpecial.occurrenceId} FOR UPDATE`;
+    if(existingOrder.paidAt && ['PAID','FULFILLMENT_REVIEW'].includes(existingOrder.status)) return;
+  }
   if (
     ['PARTIALLY_REFUNDED', 'REFUNDED', 'DISPUTED'].includes(
       existingOrder.status,
@@ -805,6 +820,7 @@ async function fulfillCommerceOrder(
       data: { stripeCustomerId: action.customerId },
     });
   }
+  let fulfillmentReview=false;
   if (
     order.kind === 'EVENT' &&
     order.userId &&
@@ -812,13 +828,17 @@ async function fulfillCommerceOrder(
     order.occurrence
   ) {
     const booked = await tx.booking.count({
-      where: { occurrenceId: order.occurrenceId, status: 'CONFIRMED' },
+      where: { occurrenceId: order.occurrenceId, status: legacySpecial ? {in:['CONFIRMED','ATTENDED']} : 'CONFIRMED' },
     });
+    const collision=legacySpecial && (await tx.$queryRaw<{id:string}[]>`
+      SELECT id FROM "Booking" WHERE "occurrenceId"=${order.occurrenceId} AND "userId"=${order.userId} AND status IN ('CONFIRMED','ATTENDED')
+      UNION ALL SELECT ${order.id} WHERE bf_active_ticket_person(${order.occurrenceId},${order.userId}) LIMIT 1`).length>0;
     if (
-      order.occurrence.archivedAt ||
+      collision || (legacySpecial && order.occurrence.status!=='SCHEDULED') || order.occurrence.archivedAt ||
       booked + order.occurrence.historicalSignupCount + (order.occurrence.pendingTicketSeats ?? 0) >=
       order.occurrence.capacity
     ) {
+      fulfillmentReview=true;
       await tx.commerceOrder.update({
         where: { id: order.id },
         data: { status: 'FULFILLMENT_REVIEW' },
@@ -872,9 +892,13 @@ async function fulfillCommerceOrder(
           : []),
       ],
     },
-    select: { id: true },
+    select: { id: true, commerceOrderId:true, userId:true, stripePaymentIntentId:true, stripeCheckoutSessionId:true, amountCents:true, currency:true, status:true },
   });
   if (existingPaymentRecord) {
+    if(legacySpecial && (existingPaymentRecord.commerceOrderId!==order.id || existingPaymentRecord.userId!==order.userId ||
+      existingPaymentRecord.stripePaymentIntentId!==action.paymentIntentId || existingPaymentRecord.stripeCheckoutSessionId!==action.sessionId ||
+      existingPaymentRecord.amountCents!==order.amountCents || existingPaymentRecord.currency!==order.currency ||
+      existingPaymentRecord.status!=='SUCCEEDED')) throw Error('Legacy payment ledger ownership requires review.');
     await tx.paymentRecord.update({
       where: { id: existingPaymentRecord.id },
       data: paymentRecordData,
@@ -890,7 +914,7 @@ async function fulfillCommerceOrder(
   const recipient = order.user?.email || order.customerEmail;
   if (recipient) {
     // A late receipt still belongs in the ledger, but a removed date is not a booking.
-    if (!order.occurrence?.archivedAt) await queueEmail(tx, {
+    if (!fulfillmentReview && !order.occurrence?.archivedAt) await queueEmail(tx, {
       userId: order.userId || undefined,
       to: recipient,
       subject:

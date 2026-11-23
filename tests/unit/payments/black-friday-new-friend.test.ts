@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { blackFridayOffer, assessNewFriend, normalizeFriendPhone } from '@/lib/payments/black-friday-new-friend';
 
-const terms = { occurrenceId: 'cmvv9bp4g0001gt09ewtk8n57', slug: 'rhyzology-black-friday-neon-choreo-party-mvv992kn', startAt: new Date('2026-11-28T00:30:00Z'), endAt: new Date('2026-11-28T01:45:00Z'), priceCents: 2500, isEvent: true };
+const terms = { templateId:'cmvv992ko0001l809nmth9b44', occurrenceId: 'cmvv9bp4g0001gt09ewtk8n57', slug: 'rhyzology-black-friday-neon-choreo-party-mvv992kn', startAt: new Date('2026-11-28T00:30:00Z'), endAt: new Date('2026-11-28T01:45:00Z'), priceCents: 2500, isEvent: true };
 const friend = { fullName: 'New Friend', phone: '(201) 555-0123' };
 const candidate = { id: 'friend', name: 'New Friend', phone: '+12015550123', attended: false, unresolvedPastBooking: false, importedWorkouts: 0, importedLastWorkoutAt: null };
 

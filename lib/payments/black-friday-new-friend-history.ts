@@ -2,7 +2,7 @@ import type { PrismaClient, Prisma } from '@prisma/client';
 import { assessNewFriend, normalizeFriendPhone, normalizedFriendName, type FriendHistoryCandidate } from './black-friday-new-friend';
 
 /** Read-only internal evidence lookup. Does not authenticate, reserve or approve a guest. */
-export async function inspectNewFriendHistory(db: PrismaClient | Prisma.TransactionClient, friend: { fullName: string; phone: string }, buyerId: string, now = new Date(), firstVisitDeclared = false) {
+export async function inspectNewFriendHistory(db: PrismaClient | Prisma.TransactionClient, friend: { fullName: string; phone: string }, buyerId: string, now = new Date(), firstVisitDeclared = false, excludeOrderId: string | null = null) {
   const phone = normalizeFriendPhone(friend.phone);
   if (!phone) return assessNewFriend(friend, buyerId, []);
   const digits = phone.slice(1);
@@ -23,5 +23,14 @@ export async function inspectNewFriendHistory(db: PrismaClient | Prisma.Transact
     WHERE regexp_replace(COALESCE(p.phone, ''), '[^0-9]', '', 'g') IN (${digits}, ${domestic})
       OR lower(regexp_replace(trim(normalize(COALESCE(u.name, ''), NFKC)), '\\s+', ' ', 'g')) = ${name}
   `;
+  const priorGuests = await db.$queryRaw<{exact:boolean}[]>`
+    SELECT bool_or("guestPhone"=${phone} AND lower(regexp_replace(trim(normalize("guestName", NFKC)), '\\s+', ' ', 'g'))=${name}) AS exact
+    FROM "BlackFridayTicket" WHERE "guestCheckedInAt" IS NOT NULL AND "guestBookingId" IS NULL
+    AND state NOT IN ('REFUNDED','DISPUTE_LOST') AND "orderId" IS DISTINCT FROM ${excludeOrderId}
+    AND ("guestPhone"=${phone} OR lower(regexp_replace(trim(normalize("guestName", NFKC)), '\\s+', ' ', 'g'))=${name})
+    HAVING count(*)>0`;
+  if (priorGuests.length) return priorGuests[0].exact
+    ? {status:'INELIGIBLE' as const,reason:'PRIOR_ATTENDANCE'}
+    : {status:'REVIEW_REQUIRED' as const,reason:'AMBIGUOUS_IDENTITY'};
   return assessNewFriend(friend, buyerId, candidates, firstVisitDeclared);
 }

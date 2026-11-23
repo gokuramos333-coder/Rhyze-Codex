@@ -31,8 +31,8 @@ beforeAll(async () => {
  vi.stubEnv('RHYZE_BLACK_FRIDAY_SALES_ENABLED','true');
  await db.waiverVersion.create({ data: { id: 'bf-waiver', title: 'Fixture', body: 'Fixture', version: 99991, isActive: true, requiresSign: true, effectiveAt: now } });
  await db.classCategory.create({ data: { id: 'bf-category', name: 'Fixture', slug: 'bf-fixture' } });
- await db.classTemplate.create({ data: { id: 'bf-template', categoryId: 'bf-category', name: 'Fixture', slug, description: 'Fixture', durationMinutes: 75, defaultCapacity: 2, tags: [], equipment: [], isEvent: true, dropInPriceCents: 2500 } });
- await db.classOccurrence.create({ data: { id: occurrenceId, templateId: 'bf-template', startAt: new Date('2026-11-28T00:30:00Z'), endAt: new Date('2026-11-28T01:45:00Z'), capacity: 2, priceCents: 2500 } });
+ await db.classTemplate.create({ data: { id: 'cmvv992ko0001l809nmth9b44', categoryId: 'bf-category', name: 'Fixture', slug, description: 'Fixture', durationMinutes: 75, defaultCapacity: 2, tags: [], equipment: [], isEvent: true, dropInPriceCents: 2500 } });
+ await db.classOccurrence.create({ data: { id: occurrenceId, templateId: 'cmvv992ko0001l809nmth9b44', startAt: new Date('2026-11-28T00:30:00Z'), endAt: new Date('2026-11-28T01:45:00Z'), capacity: 2, priceCents: 2500 } });
  buyer = await user('Buyer Person');
  await db.user.update({where:{id:buyer},data:{role:'OWNER',email:'vanessa@rhyzefit.com'}});
 });
@@ -87,7 +87,10 @@ it('charges server $40 once, holds exactly two, projects a named pending guest, 
  await expect(claimBlackFridayGuest(db,{ orderId:a.orderId,userId:outsider,actorId:buyer },now)).rejects.toThrow();
  await expect(claimBlackFridayGuest(db,{orderId:a.orderId,userId:guest,actorId:outsider},now)).rejects.toThrow('authorization');
  await db.waiverAcceptance.delete({where:{waiverVersionId_userId:{waiverVersionId:'bf-waiver',userId:guest}}});
- await expect(claimBlackFridayGuest(db,{orderId:a.orderId,userId:guest,actorId:buyer},now)).rejects.toThrow('waiver');
+ await claimBlackFridayGuest(db,{orderId:a.orderId,userId:guest,actorId:buyer},now);
+ expect(await db.waiverAcceptance.count({where:{userId:guest}})).toBe(0);
+ const guestBooking=await db.booking.findUniqueOrThrow({where:{occurrenceId_userId:{occurrenceId,userId:guest}}});
+ await expect(db.attendanceRecord.create({data:{bookingId:guestBooking.id,userId:guest,occurrenceId,status:'CHECKED_IN',checkedInAt:now,markedById:buyer}})).rejects.toThrow('waiver');
  await db.waiverAcceptance.create({data:{userId:guest,waiverVersionId:'bf-waiver',signedDate:now}});
  await claimBlackFridayGuest(db,{ orderId:a.orderId,userId:guest,actorId:buyer },now);
  expect(await db.booking.count({where:{occurrenceId,status:'CONFIRMED'}})).toBe(2);
@@ -203,6 +206,11 @@ it('reconciles staff cancellation only from succeeded provider refunds',async()=
  const charge={id:'ch_staff',payment_intent:a.session.payment_intent,amount:2500,currency:'usd',amount_refunded:0,disputed:false,paid:true,captured:true};
  const refunds:any[]=[];
  const provider:any={checkout:stripe.checkout,disputes:{list:()=>({async *[Symbol.asyncIterator](){yield {id:'dp_won',status:'won',payment_intent:a.session.payment_intent,amount:2500,currency:'usd'};}})},paymentIntents:{retrieve:async()=>({id:a.session.payment_intent,status:'succeeded',metadata:{commerceOrderId:a.orderId},amount:2500,currency:'usd',latest_charge:charge})},refunds:{create:vi.fn(async()=>{charge.amount_refunded=2500;const r={id:'re_staff',payment_intent:a.session.payment_intent,amount:2500,currency:'usd',status:'pending'};refunds.push(r);return r;}),list:()=>({async *[Symbol.asyncIterator](){yield* refunds;}})}};
+ const captured=await db.paymentRecord.findFirstOrThrow({where:{commerceOrderId:a.orderId}});
+ await db.paymentRecord.update({where:{id:captured.id},data:{status:'FAILED'}});
+ await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',expectedRefundCents:2500,reason:'Missing ledger proof'},now)).rejects.toThrow('captured payment record');
+ expect(await db.$queryRaw`SELECT "orderId" FROM "EventRefundApproval" WHERE "orderId"=${a.orderId}`).toHaveLength(0);
+ await db.paymentRecord.update({where:{id:captured.id},data:{status:'SUCCEEDED'}});
  await expect(manageBlackFridayTicket(db,provider,{actorId:buyer,orderId:a.orderId,operation:'CANCEL',expectedRefundCents:2500,reason:'Fixture cancellation'},now)).rejects.toThrow('pending');
  expect(await used()).toBe(1);
  expect(await db.$queryRaw`SELECT "amountCents","actorId" FROM "EventRefundApproval" WHERE "orderId"=${a.orderId}`).toEqual([{amountCents:2500,actorId:buyer}]);
@@ -452,8 +460,8 @@ it('routes the enabled pair request to a $40 two-seat checkout and projects both
 
 it('Fishers reserves and fulfills two seats independently of the Black Friday occurrence',async()=>{
  const fish='cmw026ajl0001jn09jsqpqzij';const fishSlug='get-fit-with-the-fishers-mw000b75';
- await db.classTemplate.create({data:{id:'fish-template',categoryId:'bf-category',name:'Fishers',slug:fishSlug,description:'Fixture',durationMinutes:60,defaultCapacity:2,isEvent:true,dropInPriceCents:2500,tags:[],equipment:[]}});
- await db.classOccurrence.create({data:{id:fish,templateId:'fish-template',startAt:new Date('2026-11-22T16:00:00Z'),endAt:new Date('2026-11-22T17:00:00Z'),capacity:2,priceCents:2500}});
+ await db.classTemplate.create({data:{id:'cmw000b760001la097ii57bjb',categoryId:'bf-category',name:'Fishers',slug:fishSlug,description:'Fixture',durationMinutes:60,defaultCapacity:2,isEvent:true,dropInPriceCents:2500,tags:[],equipment:[]}});
+ await db.classOccurrence.create({data:{id:fish,templateId:'cmw000b760001la097ii57bjb',startAt:new Date('2026-11-22T16:00:00Z'),endAt:new Date('2026-11-22T17:00:00Z'),capacity:2,priceCents:2500}});
  const u=await user('Fish Buyer');const input={userId:u,occurrenceId:fish,slug:fishSlug,origin:'http://localhost',ticketType:'PAIR' as const,friend:{fullName:'Fish Newfriend',phone:'2015550112'},firstVisitDeclared:true};
  const before=await used();const a=await startBlackFridayCheckout(db,stripe,input,now);
  expect((await db.commerceOrder.findUniqueOrThrow({where:{id:a.orderId}})).amountCents).toBe(4000);
@@ -944,4 +952,168 @@ it('keeps an incoming sync payment writer outside an in-flight provider expiry a
  });
  await db.paymentRecord.delete({where:{stripePaymentIntentId:pi}});
  await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+});
+
+const decemberEvents = [
+ { id:'schedule-import-d7e5b1377dccf88d1d90068c557d',templateId:'cmrykl6lq000uw921mf9kdgr7',slug:'seat-seduction-vanessa',start:'2026-12-12T00:30Z',end:'2026-12-12T01:45Z',single:3000,pair:5000 },
+ { id:'schedule-import-e54e7b12d550433a85e6e7f495ec',templateId:'cmrykl6ln000iw921odk89ebz',slug:'hypnotic-heels-nicole',start:'2026-12-18T00:15Z',end:'2026-12-18T01:30Z',single:3000,pair:5000 },
+ { id:'schedule-import-12cc3b9897966042d0954cb495b0',templateId:'cmw000b760001la097ii57bjb',slug:'get-fit-with-the-fishers-mw000b75',start:'2026-12-27T16:00Z',end:'2026-12-27T17:00Z',single:2500,pair:4000 },
+];
+async function decemberDate(e: typeof decemberEvents[number]) {
+ await db.classTemplate.upsert({where:{slug:e.slug},update:{},create:{id:e.templateId,categoryId:'bf-category',name:e.slug,slug:e.slug,description:'Fixture',durationMinutes:75,defaultCapacity:2,isEvent:true,dropInPriceCents:e.single,tags:[],equipment:[]}});
+ return db.classOccurrence.upsert({where:{id:e.id},update:{},create:{id:e.id,templateId:e.templateId,startAt:new Date(e.start),endAt:new Date(e.end),capacity:2,priceCents:e.single}});
+}
+it.each(decemberEvents)('December $slug charges exact single and pair amounts with its guest policy',async e=>{
+ await decemberDate(e);
+ const u=await user('December Buyer '+e.slug);
+ const input={userId:u,slug:e.slug,occurrenceId:e.id,origin:'http://localhost',ticketType:'SINGLE' as const};
+ const one=await startBlackFridayCheckout(db,stripe,input,now);
+ const session=sessions.get('black-friday:'+one.orderId);expect(session.amount_total).toBe(e.single);
+ session.payment_intent='pi_'+randomUUID();await expect(startBlackFridayCheckout(db,stripe,input,now)).rejects.toThrow('review');session.payment_intent=null;
+ session.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+ const {specialEventRoster}=await import('@/lib/payments/special-event-roster');
+ expect((await specialEventRoster(e.id,{id:buyer})).reviewItems).toContainEqual(expect.objectContaining({orderId:one.orderId,state:'EXPIRED',collectedCents:0,canRefund:false}));
+ const friend={fullName:'December Friend '+e.slug,phone:'20155501'+decemberEvents.indexOf(e)+'8'};
+ const pair={...input,ticketType:'PAIR' as const,friend};
+ if(e.single===3000){
+  await expect(startBlackFridayCheckout(db,stripe,{...pair,useEventCredit:true},now)).rejects.toThrow();
+  const guest=await user(friend.fullName,friend.phone);
+  const history=await db.classOccurrence.create({data:{templateId:e.templateId,startAt:now,endAt:now,capacity:4}});
+  await db.booking.create({data:{userId:guest,occurrenceId:history.id,status:'ATTENDED'}});
+ }else await expect(startBlackFridayCheckout(db,stripe,pair,now)).rejects.toThrow();
+ const order=await startBlackFridayCheckout(db,stripe,{...pair,firstVisitDeclared:e.single===2500},now);
+ const two=sessions.get('black-friday:'+order.orderId);
+ expect(two.amount_total).toBe(e.pair);await paid(two);
+ const {refundCommerceOrderFullRemainder}=await import('@/lib/payments/commerce-refunds');
+ await expect(refundCommerceOrderFullRemainder(db,stripe,{orderId:order.orderId,actorId:buyer,reason:'Fixture route proof',confirmation:'REFUND'})).rejects.toThrow('ticket cancellation/refund workflow');
+ expect((await db.commerceOrder.findUniqueOrThrow({where:{id:order.orderId}})).status).toBe('PAID');
+ if(e.single===3000){
+  const {linkGuestAccount}=await import('@/lib/payments/special-event-guests');
+  const guest=await db.user.findFirstOrThrow({where:{name:friend.fullName}});
+  await linkGuestAccount({orderId:order.orderId,selectedUserId:guest.id,identityConfirmed:true},{id:buyer});
+ }
+ await refund(two);
+});
+it('December guest signs paper, arrives without account, links later and appears in attendance exactly once',async ()=>{
+ const e=decemberEvents[0];await decemberDate(e);
+ const instructor=await user('Assigned Instructor'),other=await user('Different Instructor');
+ await db.user.updateMany({where:{id:{in:[instructor,other]}},data:{role:'INSTRUCTOR'}});
+ await db.classOccurrence.update({where:{id:e.id},data:{instructorId:instructor,capacity:3}});
+ const friend={fullName:'Paper Arrival',phone:'2015550147'};
+ const {orderId}=await startBlackFridayCheckout(db,stripe,{userId:await user('Paper Buyer'),slug:e.slug,occurrenceId:e.id,origin:'http://localhost',ticketType:'PAIR',friend},now);
+ const s=sessions.get('black-friday:'+orderId);await paid(s);
+ const {recordGuestPaperWaiver,checkInGuest,linkGuestAccount,searchGuestAccounts}=await import('@/lib/payments/special-event-guests');
+ const {specialEventRoster,paidEventDisplayCount}=await import('@/lib/payments/special-event-roster');
+ const owner={id:buyer},assigned={id:instructor};
+ await expect(checkInGuest({orderId},assigned)).rejects.toThrow();
+ await expect(recordGuestPaperWaiver({orderId,displayedWaiverVersionId:'bf-waiver'},{id:other})).rejects.toThrow();
+ await expect(recordGuestPaperWaiver({orderId,displayedWaiverVersionId:'obsolete'},assigned)).rejects.toThrow();
+ await recordGuestPaperWaiver({orderId,displayedWaiverVersionId:'bf-waiver'},assigned);
+ await checkInGuest({orderId},assigned);await checkInGuest({orderId},owner);
+ const {inspectNewFriendHistory}=await import('@/lib/payments/black-friday-new-friend-history');
+ expect((await inspectNewFriendHistory(db,friend,buyer,new Date(),true)).status).toBe('INELIGIBLE');
+ const {GET}=await import('@/app/api/reports/[report]/route');
+ async function countVisits(){const res=await GET(new Request('http://localhost/reports/attendance'),{params:Promise.resolve({report:'attendance'})});return (await res.text()).split('\n').filter(row=>row.includes(friend.fullName)).length;}
+ expect(await countVisits()).toBe(1);
+ const guest=await user(friend.fullName,friend.phone);
+ await expect(db.booking.create({data:{occurrenceId:e.id,userId:guest}})).rejects.toThrow('reserved ticket');
+ await db.waiverAcceptance.deleteMany({where:{userId:guest}});
+ await expect(searchGuestAccounts({orderId,query:'Paper'},assigned)).rejects.toThrow();
+ expect(await searchGuestAccounts({orderId,query:'Paper'},owner)).toEqual([expect.objectContaining({id:guest})]);
+ await expect(linkGuestAccount({orderId,selectedUserId:guest,identityConfirmed:false},owner)).rejects.toThrow();
+ vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date(+new Date(e.start)+60000));
+ try{await linkGuestAccount({orderId,selectedUserId:guest,identityConfirmed:true},owner);}finally{vi.useRealTimers();}
+ expect(await countVisits()).toBe(1);
+ expect(await db.attendanceRecord.findFirst({where:{occurrenceId:e.id,userId:guest}})).toMatchObject({markedById:instructor,status:'CHECKED_IN'});
+ expect(await db.waiverAcceptance.count({where:{userId:guest}})).toBe(0);
+ const roster=await specialEventRoster(e.id,assigned);expect(roster.groups).toHaveLength(1);expect(roster.linkedBookingIds).toEqual(expect.arrayContaining(roster.groups[0].attendees.map(a=>a.bookingId)));
+ expect(await paidEventDisplayCount(e.id)).toBe(2);
+ await db.$transaction(tx=>reverseBlackFridayTicket(tx,{orderId,paymentIntentId:s.payment_intent,refundedAmountCents:1000,disputed:false},now));
+ expect((await specialEventRoster(e.id,assigned)).groups).toHaveLength(0);
+ expect((await specialEventRoster(e.id,assigned)).reviewItems).toHaveLength(0);
+ expect(await paidEventDisplayCount(e.id)).toBe(0);
+ await refund(s);await paid(s);expect(await countVisits()).toBe(0);
+});
+
+
+async function legacyDecember(occ:string,userId:string,amountCents=3000) {
+ const id=randomUUID(), sessionId='cs_'+randomUUID();
+ await db.commerceOrder.create({data:{id,kind:'EVENT',occurrenceId:occ,userId,amountCents,stripeCheckoutSessionId:sessionId}});
+ const session={id:sessionId,mode:'payment',status:'open',payment_status:'unpaid',currency:'usd',amount_total:amountCents,
+   client_reference_id:id,payment_intent:null as string|null,metadata:{purchaseType:'EVENT',userId,occurrenceId:occ,commerceOrderId:id}};
+ sessions.set('legacy:'+id,session);
+ return session;
+}
+async function payLegacy(session:Awaited<ReturnType<typeof legacyDecember>>) {
+ const {processStripeEvent}=await import('@/lib/payments/webhook-processor');
+ session.status='complete';session.payment_status='paid';session.payment_intent ??= 'pi_'+randomUUID();
+ const event={id:'evt_'+randomUUID(),type:'checkout.session.completed',created:Math.floor(+now/1000),data:{object:session}};
+ await db.$transaction(tx=>processStripeEvent(tx,event as any));
+}
+it('December verifies legacy expiry before retry, records late conflicting money once, and preserves native single on replay',async()=>{
+ const e=decemberEvents[1];await decemberDate(e);
+ const userId=await user('Legacy Conflict Buyer'),guest={fullName:'Conflict Friend',phone:'2015550156'};
+ const legacy=await legacyDecember(e.id,userId);
+ await expect(legacyDecember(e.id,userId)).rejects.toThrow('earlier checkout');
+ const input={userId,occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'PAIR' as const,friend:guest};
+ await expect(startBlackFridayCheckout(db,stripe,input,now)).rejects.toThrow('earlier event');
+ legacy.status='expired';
+ const pair=await startBlackFridayCheckout(db,stripe,input,now);
+ await payLegacy(legacy);await payLegacy(legacy);
+ expect((await db.commerceOrder.findUniqueOrThrow({where:{id:legacy.client_reference_id}})).status).toBe('FULFILLMENT_REVIEW');
+ expect(await db.paymentRecord.count({where:{commerceOrderId:legacy.client_reference_id}})).toBe(1);
+ const {specialEventRoster}=await import('@/lib/payments/special-event-roster');
+ expect((await specialEventRoster(e.id,{id:buyer})).reviewItems).toContainEqual(expect.objectContaining({orderId:legacy.client_reference_id,management:'LEGACY_ORDER',collectedCents:3000}));
+ expect(await db.booking.count({where:{occurrenceId:e.id,userId}})).toBe(0);
+ const held=sessions.get('black-friday:'+pair.orderId);held.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,held,now));
+ const independent=await legacyDecember(e.id,await user('Valid Native Single'));await payLegacy(independent);
+ const {paidEventDisplayCount}=await import('@/lib/payments/special-event-roster');
+ expect(await paidEventDisplayCount(e.id)).toBe(1);
+ const booking=await db.booking.findUniqueOrThrow({where:{occurrenceId_userId:{occurrenceId:e.id,userId:independent.metadata.userId}}});
+ await db.booking.update({where:{id:booking.id},data:{status:'ATTENDED'}});
+ await payLegacy(independent);
+ expect((await db.booking.findUniqueOrThrow({where:{id:booking.id}})).status).toBe('ATTENDED');
+ expect(await paidEventDisplayCount(e.id)).toBe(1);
+});
+it('December serializes a last-two-seat legacy callback and a pair',async()=>{
+ const e=decemberEvents[0];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:2}});
+ const legacy=await legacyDecember(e.id,await user('Concurrent Legacy Single'));
+ const input={userId:await user('Concurrent Pair Buyer'),occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'PAIR' as const,friend:{fullName:'Concurrent Friend',phone:'2015550194'}};
+ const [callback,pair]=await Promise.allSettled([payLegacy(legacy),startBlackFridayCheckout(db,stripe,input,now)]);
+ expect(callback.status).toBe('fulfilled');
+ const order=await db.commerceOrder.findUniqueOrThrow({where:{id:legacy.client_reference_id}});
+ expect(order.status).toBe(pair.status==='fulfilled'?'FULFILLMENT_REVIEW':'PAID');
+ expect(await db.paymentRecord.count({where:{commerceOrderId:order.id}})).toBe(1);
+ const [cap]=await db.$queryRaw<{used:number}[]>`SELECT used FROM "BlackFridayCapacity" WHERE "occurrenceId"=${e.id}`;
+ expect(cap.used).toBe(pair.status==='fulfilled'?2:1);
+});
+it('December selects the next actual Fishers date, keeps later ordinary dates single and rejects a Tricia pair',async()=>{
+ const e=decemberEvents[2];await decemberDate(e);
+ const oldBuyer=buyer;buyer=await user('December Slug Customer');
+ const {POST}=await import('@/app/api/checkout/event/route');
+ const post=(body:object)=>POST(new Request('http://localhost/api/checkout/event',{method:'POST',body:JSON.stringify(body)}));
+ vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-12-01T16:00Z'));
+ try{
+  const response=await post({slug:e.slug});expect(response.status).toBe(200);const {orderId}=await response.json();
+  expect((await db.commerceOrder.findUniqueOrThrow({where:{id:orderId}})).occurrenceId).toBe(e.id);
+  const later=await db.classOccurrence.create({data:{templateId:e.templateId,startAt:new Date('2027-01-20'),endAt:new Date('2027-01-21'),capacity:2,priceCents:2500}});
+  expect((await post({slug:e.slug,occurrenceId:later.id,ticketType:'PAIR'})).status).toBe(400);
+  expect((await post({slug:e.slug,occurrenceId:later.id})).status).toBe(200);
+  const tricia=await db.classTemplate.create({data:{categoryId:'bf-category',slug:'tricia-fixture',name:'Tricia',isEvent:true,description:'Fixture',durationMinutes:75,tags:[],equipment:[],defaultCapacity:2,dropInPriceCents:3000}});
+  await db.classOccurrence.create({data:{templateId:tricia.id,startAt:new Date('2026-12-04T23:30Z'),endAt:new Date('2026-12-05T00:45Z'),capacity:2}});
+  expect((await post({slug:tricia.slug,ticketType:'PAIR'})).status).toBe(400);
+  expect((await post({slug:tricia.slug})).status).toBe(200);
+ }finally{vi.useRealTimers();buyer=oldBuyer;}
+});
+it('December Fishers consumes the current earned credit plus $15; a November bucket cannot roll over',async()=>{
+ const e=decemberEvents[2];await decemberDate(e);await db.classOccurrence.update({where:{id:e.id},data:{capacity:6}});
+ const f=await vipFixture('December VIP Buyer');const dec=new Date('2026-12-03T16:00:00Z');
+ const w=vipMonthlyBenefitWindowForDate(dec);
+ const input={userId:f.u,occurrenceId:e.id,slug:e.slug,origin:'http://localhost',ticketType:'PAIR' as const,useEventCredit:true,firstVisitDeclared:true,friend:{fullName:'December VIP Guest',phone:'2015550175'}};
+ await expect(startBlackFridayCheckout(db,stripe,input,now)).rejects.toThrow();
+ await db.membership.update({where:{id:f.m.id},data:{currentPeriodStart:w.validFrom,currentPeriodEnd:w.validUntil}});
+ await db.creditAccount.updateMany({where:{userId:f.u,isUnlimited:true},data:{validUntil:w.validUntil}});
+ await db.creditAccount.create({data:{userId:f.u,label:w.eventCreditLabel,isUnlimited:false,validFrom:w.validFrom,validUntil:w.validUntil,entries:{create:{type:'GRANT',quantity:1}}}});
+ const {orderId}=await startBlackFridayCheckout(db,stripe,input,dec);const s=sessions.get('black-friday:'+orderId);
+ expect(s.amount_total).toBe(1500);await paid(s);await refund(s);
 });

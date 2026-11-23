@@ -1,3 +1,4 @@
+import { specialEventIdentity } from '@/lib/payments/black-friday-new-friend';
 import { assertFinancialRelease, assertFinancialSubmission } from '@/lib/payments/financial-release';
 import { assertUnrefundedAttendanceReceipt, financialLock, requestFinancialReview } from './refund-review';
 import { resolveTrialAttendancePaymentSource, type TrialPaymentSource } from '@/lib/payments/trial-attendance-card';
@@ -231,7 +232,7 @@ const productionGateway: AttendanceFeeGateway = {
 
 export async function chargeAttendanceFee(input: AttendanceFeeInput): Promise<AttendanceFeeResult> {
   const booking = await prisma.booking.findUnique({ where: { id: input.bookingId }, select: { occurrenceId: true } });
-  if (booking && ['cmvv9bp4g0001gt09ewtk8n57', 'cmw026ajl0001jn09jsqpqzij'].includes(booking.occurrenceId)) return { status: 'FAILED', paymentIntentId: null, reason: 'INELIGIBLE_ACCESS' } as const;
+  if (booking && specialEventIdentity(booking.occurrenceId)) return { status: 'FAILED', paymentIntentId: null, reason: 'INELIGIBLE_ACCESS' } as const;
   await assertFinancialRelease(prisma);
   const owned = await prisma.$transaction(async tx => {
     await financialLock(tx, input.bookingId, input.idempotencyKey);
