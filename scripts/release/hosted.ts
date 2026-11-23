@@ -182,7 +182,7 @@ async function main() {
       if (!file) throw Error('Bridge reconciliation file required');
       cutoverEvidence = verifyBridgeReconciliation(
         JSON.parse(readFileSync(file, 'utf8')),
-        { deployId: current.id, sourceSha: base },
+        { deployId: current.id, sourceSha: base, candidateSha: revision },
       );
     }
   }
@@ -239,6 +239,7 @@ async function main() {
     closedCutover: closed,
     priorQuarantine,
     cutoverEvidenceHash: cutoverEvidence?.evidenceHash,
+    databaseIdentity: databaseId,
     at: new Date().toISOString(),
   };
   const save = () =>
@@ -266,7 +267,7 @@ async function main() {
         JSON.parse(
           readFileSync(process.env.RHYZE_CUTOVER_EVIDENCE_FILE!, 'utf8'),
         ),
-        { deployId: current.id, sourceSha: base },
+        { deployId: current.id, sourceSha: base, candidateSha: revision },
       );
       if (refreshed.evidenceHash !== cutoverEvidence.evidenceHash)
         throw Error('Cutover evidence changed during release');

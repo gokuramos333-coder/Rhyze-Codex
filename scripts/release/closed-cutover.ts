@@ -124,7 +124,7 @@ export async function verifyQuarantine(
 }
 export function verifyBridgeReconciliation(
   value: unknown,
-  expected: { deployId: string; sourceSha: string },
+  expected: { deployId: string; sourceSha: string; candidateSha: string },
   now = Date.now(),
 ) {
   const e = value as any;
@@ -147,6 +147,35 @@ export function verifyBridgeReconciliation(
     e.review.reviewer.length < 3
   )
     throw Error('Explicit reviewed bridge conclusion required');
+  const approval = e.approval;
+  if (!/^[a-f0-9]{40}$/.test(expected.candidateSha) ||
+      approval?.candidateSha !== expected.candidateSha ||
+      !approval.auditId || !Number.isSafeInteger(approval.closedGeneration) ||
+      !/^[a-f0-9]{64}$/.test(approval.evidenceHash)) {
+    throw Error('Audited CLOSE for the exact candidate required');
+  }
+  const reviewBytes = readFileSync(approval.reviewPath);
+  const review = JSON.parse(reviewBytes.toString());
+  if (sha(reviewBytes) !== approval.reviewSha256 || review.verdict !== 'APPROVED' ||
+      review.candidateSha !== expected.candidateSha || review.reportSha256 !== approval.reportSha256 ||
+      sha(readFileSync(review.reportPath)) !== review.reportSha256 ||
+      !Object.keys(review.operationalFiles).length ||
+      JSON.stringify(review.operationalFiles) !== JSON.stringify(approval.operationalFiles) ||
+      Object.entries(review.operationalFiles).some(([name, hash]) =>
+        !/^[a-z0-9_.-]+$/.test(name) || sha(readFileSync(join(approval.operationalRoot, name))) !== hash)) {
+    throw Error('Technical review or operational files changed');
+  }
+  // CLOSE on the previous artifact protects its registered November offers.
+  // December's legacy writers are fenced by the new migration, so this
+  // pre-build inventory cannot replace a drained, bidirectional final receipt.
+  if (
+    e.decemberAdmission?.phase !== 'PRE_MIGRATION_INVENTORY' ||
+    e.decemberAdmission?.legacyAdmissionUntilMigration !== true ||
+    e.decemberAdmission?.boundaryMigration !==
+      '20261123013000_special_event_admission_review' ||
+    e.decemberAdmission?.activationRequiresFinalReceipt !== true
+  )
+    throw Error('Scoped December inventory and final receipt requirement missing');
   if (
     !Array.isArray(e.receipts) ||
     e.receipts.length !== 4 ||
@@ -251,7 +280,13 @@ export function verifyBridgeReconciliation(
     )
   )
     throw Error('Provider operations unresolved');
-  const eventIds = ['cmw026ajl0001jn09jsqpqzij', 'cmvv9bp4g0001gt09ewtk8n57'];
+  const eventIds = [
+    'cmw026ajl0001jn09jsqpqzij',
+    'cmvv9bp4g0001gt09ewtk8n57',
+    'schedule-import-d7e5b1377dccf88d1d90068c557d',
+    'schedule-import-e54e7b12d550433a85e6e7f495ec',
+    'schedule-import-12cc3b9897966042d0954cb495b0',
+  ];
   if (
     events.paginationComplete !== true ||
     !Array.isArray(events.occurrenceIds) ||

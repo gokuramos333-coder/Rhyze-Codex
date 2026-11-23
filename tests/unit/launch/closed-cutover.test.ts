@@ -65,7 +65,7 @@ it('checks immutable and canonical skew ingress and current runtime separately',
   expect(e.limitation).toContain('not scheduler drain');
 });
 it('requires fresh exact independently saved drain/provider/session receipts', () => {
-  const expected = { deployId: 'a'.repeat(24), sourceSha: 'b'.repeat(40) };
+  const expected = { candidateSha: 'c'.repeat(40), deployId: 'a'.repeat(24), sourceSha: 'b'.repeat(40) };
   expect(() =>
     verifyBridgeReconciliation(
       {
@@ -92,6 +92,17 @@ it('requires fresh exact independently saved drain/provider/session receipts', (
 it('accepts bound canonical request evidence and rejects substitutions, incomplete logs and unresolved operations', () => {
   const root = mkdtempSync(join(tmpdir(), 'bridge-receipts-'));
   const bridge = { deployId: 'a'.repeat(24), sourceSha: 'b'.repeat(40) };
+  const candidateSha = 'c'.repeat(40);
+  const expected = { ...bridge, candidateSha };
+  const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+  const reportPath = join(root,'report.md');
+  writeFileSync(reportPath,'reviewed');
+  const reviewPath = join(root,'review.json');
+  const operationalFiles = { 'verifier.py': hash('fixture') };
+  writeFileSync(join(root,'verifier.py'),'fixture');
+  const review = { verdict:'APPROVED', candidateSha, reportPath, reportSha256:hash('reviewed'), operationalFiles };
+  writeFileSync(reviewPath,JSON.stringify(review));
+  const approval = { operationalRoot: root, candidateSha, reviewPath, reviewSha256:hash(JSON.stringify(review)), reportSha256:review.reportSha256, operationalFiles, auditId:'close-audit', closedGeneration:2, evidenceHash:'a'.repeat(64) };
   const now = Date.now(),
     fencedAt = new Date(now - 120000).toISOString(),
     completedAt = new Date(now - 1000).toISOString();
@@ -166,7 +177,13 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
     events: {
       ...common,
       paginationComplete: true,
-      occurrenceIds: ['cmw026ajl0001jn09jsqpqzij', 'cmvv9bp4g0001gt09ewtk8n57'],
+      occurrenceIds: [
+        'cmw026ajl0001jn09jsqpqzij',
+        'cmvv9bp4g0001gt09ewtk8n57',
+        'schedule-import-d7e5b1377dccf88d1d90068c557d',
+        'schedule-import-e54e7b12d550433a85e6e7f495ec',
+        'schedule-import-12cc3b9897966042d0954cb495b0',
+      ],
       sessions: [
         {
           id: 'cs_fixture',
@@ -181,12 +198,19 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
   const record: any = {
     version: 1,
     phase: 'BRIDGE_RECONCILED',
+    approval,
     bridge,
     fencedAt,
     completedAt,
     review: {
       reviewer: 'independent-review',
       conclusion: 'NO_UNRESOLVED_PRE_BRIDGE_OPERATIONS',
+    },
+    decemberAdmission: {
+      phase: 'PRE_MIGRATION_INVENTORY',
+      legacyAdmissionUntilMigration: true,
+      boundaryMigration: '20261123013000_special_event_admission_review',
+      activationRequiresFinalReceipt: true,
     },
     receipts: [],
   };
@@ -205,19 +229,36 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
   try {
     save();
     expect(
-      verifyBridgeReconciliation(record, bridge, now).reports.scheduler
+      verifyBridgeReconciliation(record, expected, now).reports.scheduler
         .requests,
     ).toHaveLength(1);
-    reports.scheduler.publishedIdentity.after.observedAt = 'invalid'; save(); expect(()=>verifyBridgeReconciliation(record,bridge,now)).toThrow('boundary'); reports.scheduler.publishedIdentity.after.observedAt=completedAt;
+    expect(() => verifyBridgeReconciliation(record, { ...expected, candidateSha: 'd'.repeat(40) }, now)).toThrow('candidate');
+    writeFileSync(reportPath,'changed');
+    expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow('review');
+    writeFileSync(reportPath,'reviewed');
+    const decemberAdmission = record.decemberAdmission;
+    delete record.decemberAdmission;
+    expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow('Scoped December');
+    record.decemberAdmission = { ...decemberAdmission, activationRequiresFinalReceipt: false };
+    expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow('Scoped December');
+    record.decemberAdmission = decemberAdmission;
+    const coveredEvents = [...reports.events.occurrenceIds];
+    for (const omitted of coveredEvents) {
+      reports.events.occurrenceIds = coveredEvents.filter(id => id !== omitted);
+      save();
+      expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow('Event sessions unresolved');
+    }
+    reports.events.occurrenceIds = coveredEvents;
+    reports.scheduler.publishedIdentity.after.observedAt = 'invalid'; save(); expect(()=>verifyBridgeReconciliation(record,expected,now)).toThrow('boundary'); reports.scheduler.publishedIdentity.after.observedAt=completedAt;
     reports.scheduler.requestPaginationComplete = false;
     save();
-    expect(() => verifyBridgeReconciliation(record, bridge, now)).toThrow(
+    expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow(
       'boundary',
     );
     reports.scheduler.requestPaginationComplete = true;
     reports.provider.operations[0].status = 'pending';
     save();
-    expect(() => verifyBridgeReconciliation(record, bridge, now)).toThrow(
+    expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow(
       'unresolved',
     );
     reports.provider.operations[0].status = 'succeeded';
@@ -230,9 +271,9 @@ it('accepts bound canonical request evidence and rejects substitutions, incomple
       accountingReconciled: true,
     };
     save();
-    expect(() => verifyBridgeReconciliation(record, bridge, now)).not.toThrow();
+    expect(() => verifyBridgeReconciliation(record, expected, now)).not.toThrow();
     writeFileSync(record.receipts[0].path, '{}');
-    expect(() => verifyBridgeReconciliation(record, bridge, now)).toThrow(
+    expect(() => verifyBridgeReconciliation(record, expected, now)).toThrow(
       'changed',
     );
   } finally {
