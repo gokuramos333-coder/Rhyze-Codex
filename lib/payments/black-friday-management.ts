@@ -2,6 +2,7 @@ import { assertFinancialRelease, assertFinancialSubmission, withFinancialRelease
 import { assertFinancialApprover } from '@/lib/auth/financial-owner-access';
 import type { PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
+import { financialLock, financialLedgerLock } from './refund-review';
 import { assertStripeObjectMode } from './stripe-mode';
 import { readSpecialEventCheckout } from './special-event-reconciliation';
 import { applyBlackFridayRefunds, matchesSpecialEventSession, reverseBlackFridayTicket, type Ticket } from './black-friday-checkout';
@@ -133,8 +134,31 @@ async function archiveMissedFullRefund(
   )
     throw Error('Complete matching refund receipts required');
   const paidAt = new Date(charge.created * 1000);
+  const syncOrigin = 'stripe-sync-charge-' + charge.id;
+  const syncRecord = await db.paymentRecord.findUnique({
+    where: { stripeEventId: syncOrigin },
+    select: { id: true },
+  });
+  const account = syncRecord
+    ? await stripe.accounts.retrieve(
+        {},
+        { timeout: 2000, maxNetworkRetries: 0 },
+      )
+    : null;
+
   await db.$transaction(
     async (tx) => {
+      // A sync-origin charge has no booking/entitlement ownership. Reject
+      // conflicting ownership before taking its standard payment-ledger lock.
+      await financialLock(tx, null, intentId);
+      const original = await tx.paymentRecord.findUnique({
+        where: { stripePaymentIntentId: intentId },
+      });
+      if (original) {
+        if (original.bookingId || original.purchaseId || original.membershipId)
+          throw Error('Payment ownership requires review');
+        await financialLedgerLock(tx, original.id);
+      }
       await tx.$executeRaw`SELECT id FROM "ClassOccurrence" WHERE id=${t.occurrenceId} FOR UPDATE`;
       await tx.$executeRaw`SELECT id FROM "CommerceOrder" WHERE id=${t.orderId} FOR UPDATE`;
       const actor = await tx.user.findUnique({ where: { id: staff.actorId } });
@@ -180,19 +204,84 @@ async function archiveMissedFullRefund(
           ],
         },
       });
+      const record = records[0];
       if (
         records.length > 1 ||
-        records.some(
-          (record) =>
-            record.commerceOrderId !== order.id ||
-            record.userId !== ticket.userId ||
-            record.kind !== 'EVENT' ||
+        (record &&
+          (record.userId !== ticket.userId ||
+            record.purchaseId ||
+            record.membershipId ||
+            record.bookingId ||
+            record.stripeInvoiceId ||
+            record.stripeSubscriptionId ||
             record.stripePaymentIntentId !== intentId ||
             record.stripeCheckoutSessionId !== session.id ||
             record.amountCents !== order.amountCents ||
-            record.currency !== order.currency ||
-            !['SUCCEEDED', 'REFUNDED'].includes(record.status),
+            record.currency !== order.currency))
+      )
+        throw Error('Payment ownership requires review');
+      if (record && record.commerceOrderId === null) {
+        if (
+          !account?.id ||
+          record.id !== syncRecord?.id ||
+          record.kind !== 'PRODUCT_PURCHASE' ||
+          record.stripeEventId !== syncOrigin ||
+          record.status !== 'REFUNDED' ||
+          record.refundedAmountCents !== order.amountCents ||
+          record.occurredAt.getTime() !== paidAt.getTime()
         )
+          throw Error('Payment ownership requires review');
+        const receiptId = `rhyze-payment-reconciled-${account.id}-${charge.id}`;
+        const source = {
+          id: receiptId,
+          type: 'rhyze.payment.reconciled',
+          account: account.id,
+          livemode: session.livemode,
+          data: {
+            object: {
+              id: charge.id,
+              payment_intent: intentId,
+              currency: order.currency,
+              amount: order.amountCents,
+              status: 'succeeded',
+              paid: true,
+              captured: true,
+              refunded: true,
+              disputed: false,
+              amount_captured: order.amountCents,
+              amount_refunded: order.amountCents,
+              created: charge.created,
+              refunds: {
+                data: page.data.map((r) => ({
+                  id: r.id,
+                  amount: r.amount,
+                  currency: r.currency,
+                  status: r.status,
+                  charge: charge.id,
+                  payment_intent: intentId,
+                })),
+              },
+            },
+          },
+        };
+        const receipt = await tx.$queryRaw<
+          { id: string }[]
+        >`SELECT id FROM "StripeEvent" WHERE id=${receiptId}
+          AND type='rhyze.payment.reconciled' AND "processedAt" IS NOT NULL AND error IS NULL AND payload @> ${JSON.stringify(source)}::jsonb
+          AND CASE WHEN jsonb_typeof(payload #> '{data,object,refunds,data}')='array'
+            THEN jsonb_array_length(payload #> '{data,object,refunds,data}') ELSE -1 END=${page.data.length}`;
+        if (receipt.length !== 1)
+          throw Error('Original sync receipt requires review');
+        // Preserve the original ledger ID, charge provenance and receipt history.
+        await tx.paymentRecord.update({
+          where: { id: record.id },
+          data: { kind: 'EVENT', commerceOrderId: order.id },
+        });
+      } else if (
+        record &&
+        (record.commerceOrderId !== order.id ||
+          record.kind !== 'EVENT' ||
+          !['SUCCEEDED', 'REFUNDED'].includes(record.status))
       )
         throw Error('Payment ownership requires review');
       const known = await tx.commerceRefund.findMany({

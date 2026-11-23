@@ -6,11 +6,13 @@ import {
   chargeRequiresReview,
   matchesSpecialEventSession,
   locallyUnpaid,
+  lockCheckoutEvidence,
   verifiedUnpaidExpiry,
   type Ticket,
 } from './black-friday-checkout';
 import {
   assertFinancialSubmission,
+  assertFinancialRelease,
   withFinancialRelease,
 } from './financial-release';
 import { assertFinancialApprover } from '@/lib/auth/financial-owner-access';
@@ -170,9 +172,28 @@ export async function readSpecialEventCheckout(
       if (!input.explicitBuyerCancel && staff?.operation !== 'CANCEL')
         return { outcome: 'pending', session };
       const openSession = session;
+      // Commit the instruction before any possible provider submission. A lost
+      // response or rolled-back submission transaction cannot erase this fact.
+      const instruction = staff
+        ? await db.$transaction(async (tx) => {
+            await assertFinancialRelease(tx);
+            await assertFinancialApprover(tx, staff.actorId);
+            return tx.auditLog.create({
+              data: {
+                actorId: staff.actorId,
+                action: 'black-friday.expiry-requested',
+                entityType: 'CommerceOrder',
+                entityId: order.id,
+                after: { stripeCheckoutSessionId: id, reason: staff.reason },
+              },
+              select: { id: true },
+            });
+          })
+        : null;
       await withFinancialRelease(db, async (tx, deadline) => {
         await tx.$executeRaw`SELECT id FROM "ClassOccurrence" WHERE id=${ticket.occurrenceId} FOR UPDATE`;
         await tx.$executeRaw`SELECT id FROM "CommerceOrder" WHERE id=${order.id} FOR UPDATE`;
+        await lockCheckoutEvidence(tx, order.id, openSession);
         const fresh = await tx.commerceOrder.findUniqueOrThrow({
           where: { id: order.id },
         });
@@ -207,7 +228,11 @@ export async function readSpecialEventCheckout(
               action: 'black-friday.provider-expiry-accepted',
               entityType: 'CommerceOrder',
               entityId: order.id,
-              after: { stripeCheckoutSessionId: id, reason: staff.reason },
+              after: {
+                stripeCheckoutSessionId: id,
+                reason: staff.reason,
+                instructionId: instruction?.id,
+              },
             },
           });
         }

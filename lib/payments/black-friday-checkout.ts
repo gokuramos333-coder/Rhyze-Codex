@@ -146,6 +146,18 @@ export function verifiedUnpaidExpiry(session: Stripe.Checkout.Session) {
   );
 }
 
+export async function lockCheckoutEvidence(
+  tx: Tx,
+  orderId: string,
+  session: Stripe.Checkout.Session,
+) {
+  const intent =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : (session.payment_intent?.id ?? null);
+  await tx.$executeRaw`SELECT bf_lock_checkout_evidence(${orderId},${intent},${session.id})`;
+}
+
 /** One current database snapshot for payment links, provider expiry and local release. */
 export async function locallyUnpaid(
   db: Db,
@@ -189,18 +201,23 @@ export async function applyBlackFridaySession(tx:Tx,session:Stripe.Checkout.Sess
   // Lock the order as well as occurrence admission so a linked collected record
   // or payment state cannot be written between the final check and cancellation.
   await tx.$executeRaw`SELECT id FROM "CommerceOrder" WHERE id=${orderId} FOR UPDATE`;
+  await lockCheckoutEvidence(tx,orderId,session);
   if(t.state!=='HELD' || !verifiedUnpaidExpiry(session) || !await locallyUnpaid(tx,orderId,session))return true;
   await tx.$executeRaw`UPDATE "BlackFridayTicket" SET state='EXPIRED' WHERE "orderId"=${orderId}`;
   await releaseCredit(tx,t);
   await tx.commerceOrder.update({where:{id:orderId},data:{status:'PAYMENT_FAILED',failedAt:now,stripePaymentIntentId:pi}});
-  const [approval]=await tx.$queryRaw<{actorId:string;reason:string}[]>`
-    SELECT "actorId",after->>'reason' AS reason FROM "AuditLog"
-    WHERE "entityType"='CommerceOrder' AND "entityId"=${orderId} AND action='black-friday.provider-expiry-accepted'
+  const [instruction]=await tx.$queryRaw<{actorId:string;reason:string;instructionId:string|null;accepted:boolean}[]>`
+    SELECT "actorId",after->>'reason' AS reason,
+      CASE WHEN action='black-friday.expiry-requested' THEN id ELSE after->>'instructionId' END AS "instructionId",
+      action='black-friday.provider-expiry-accepted' AS accepted
+    FROM "AuditLog" WHERE "entityType"='CommerceOrder' AND "entityId"=${orderId}
+      AND action IN ('black-friday.expiry-requested','black-friday.provider-expiry-accepted')
       AND after->>'stripeCheckoutSessionId'=${session.id} AND "actorId" IS NOT NULL
-    ORDER BY "createdAt" DESC,id DESC LIMIT 1`;
-  const terminalReason=approval?.reason ?? reason;
-  await tx.auditLog.create({data:{actorId:approval?.actorId ?? actorId,action:'black-friday.expired',entityType:'CommerceOrder',entityId:orderId,
-    after:{stripeCheckoutSessionId:session.id,paymentIntentId:pi ?? null,...(terminalReason?{reason:terminalReason}:{})}}});
+    ORDER BY (action='black-friday.provider-expiry-accepted') DESC, "createdAt" DESC,id DESC LIMIT 1`;
+  const terminalReason=instruction?.reason ?? reason;
+  await tx.auditLog.create({data:{actorId:instruction?.actorId ?? actorId,action:'black-friday.expired',entityType:'CommerceOrder',entityId:orderId,
+    after:{stripeCheckoutSessionId:session.id,paymentIntentId:pi ?? null,...(terminalReason?{reason:terminalReason}:{}),
+      ...(instruction?{staffInstructionId:instruction.instructionId,providerAcceptanceObserved:instruction.accepted}:{})}}});
   return true;
  }
  if(session.status!=='complete'||session.payment_status!=='paid')return true;

@@ -798,3 +798,150 @@ it('preserves the approving staff identity when the expiry webhook wins the term
  expect(audits).toHaveLength(1);
  expect(audits[0]).toMatchObject({actorId:buyer,after:{reason:'Canceled by front desk'}});
 });
+
+async function withSyncCharge<T>(charge:any,session:any,receipts:any[],work:()=>Promise<T>){
+ const saved=stripe.checkout.sessions.list;
+ stripe.checkout.sessions.list=async(params:any)=>({data:params.payment_intent===charge.payment_intent?[session]:[],has_more:false});
+ Object.assign(stripe,{accounts:{retrieve:async()=>({id:'acct_round_two'})},charges:{list:async()=>({data:[charge],has_more:false})},refunds:{list:async()=>({data:receipts,has_more:false}),create:()=>{throw Error('Unexpected refund submission');}}});
+ try{return await work();}finally{stripe.checkout.sessions.list=saved;delete stripe.accounts;delete stripe.charges;delete stripe.refunds;}
+}
+
+it('recovers one original sync-first refunded payment, then reconciles both replays without creating a booking',async()=>{
+ await emptySeats();const {orderId,session,input}=await single('First writer is sync');
+ const pi='pi_sync_first_refund',ch='ch_sync_first_refund';
+ const charge={id:ch,payment_intent:pi,livemode:false,status:'succeeded',paid:true,captured:true,refunded:true,disputed:false,currency:'usd',amount:2500,amount_captured:2500,amount_refunded:2500,created:Math.floor(now.getTime()/1000),metadata:{userId:input.userId}};
+ const intent={id:pi,status:'succeeded',livemode:false,amount:2500,amount_received:2500,currency:'usd',metadata:session.metadata,latest_charge:charge};
+ const refund={id:'re_sync_first',status:'succeeded',payment_intent:pi,charge:ch,currency:'usd',amount:2500,created:charge.created+30};
+ Object.assign(session,{status:'complete',payment_status:'paid',livemode:false,payment_intent:intent});
+ const {syncRecentStripePaymentRecords}=await import('@/lib/payments/stripe-payment-sync');
+ await withSyncCharge(charge,session,[refund],async()=>{
+  await syncRecentStripePaymentRecords(db);
+  const original=await db.paymentRecord.findUniqueOrThrow({where:{stripePaymentIntentId:pi}});
+  expect(original).toMatchObject({kind:'PRODUCT_PURCHASE',commerceOrderId:null,stripeCheckoutSessionId:session.id,stripeEventId:'stripe-sync-charge-'+ch,status:'REFUNDED',userId:input.userId});
+  const staff={actorId:buyer,orderId,operation:'RECONCILE' as const,reason:'Reconcile original charge receipt'};
+  await db.paymentRecord.update({where:{id:original.id},data:{stripeEventId:'unrelated-'+ch}});
+  await expect(manageBlackFridayTicket(db,stripe,staff,now)).rejects.toThrow();
+  await db.paymentRecord.update({where:{id:original.id},data:{stripeEventId:original.stripeEventId}});
+  const sourceId='rhyze-payment-reconciled-acct_round_two-'+ch;
+  const source=await db.stripeEvent.findUniqueOrThrow({where:{id:sourceId}});
+  await db.stripeEvent.update({where:{id:sourceId},data:{payload:{other:'receipt'}}});
+  await expect(manageBlackFridayTicket(db,stripe,staff,now)).rejects.toThrow('receipt');
+  await db.stripeEvent.update({where:{id:sourceId},data:{payload:source.payload as any}});
+  await manageBlackFridayTicket(db,stripe,staff,now);
+  expect(await db.stripeEvent.findUniqueOrThrow({where:{id:sourceId}})).toEqual(source);
+  await syncRecentStripePaymentRecords(db);await manageBlackFridayTicket(db,stripe,staff,now);
+  expect(await db.paymentRecord.findMany({where:{stripePaymentIntentId:pi}})).toMatchObject([{id:original.id,stripeEventId:original.stripeEventId,commerceOrderId:orderId,kind:'EVENT',status:'REFUNDED',refundedAmountCents:2500}]);
+  expect(await db.stripeEvent.count({where:{id:'rhyze-payment-reconciled-acct_round_two-'+ch}})).toBe(1);
+  expect(await db.booking.count({where:{userId:input.userId,occurrenceId}})).toBe(0);
+  expect(await db.commerceRefund.count({where:{commerceOrderId:orderId}})).toBe(1);
+  expect(await used()).toBe(0);
+ });
+});
+
+it.each([['insert','expire'],['update','release']] as const)('waits for a nullable-order sync %s before the final %s decision',async(writer,operation)=>{
+ await emptySeats();const {orderId,session,input}=await single('Ledger lock '+writer);
+ const pi='pi_lock_'+writer,ch='ch_lock_'+writer;
+ const charge={id:ch,payment_intent:pi,metadata:{userId:input.userId},livemode:false,status:'succeeded',paid:true,captured:true,amount:2500,amount_captured:2500,amount_refunded:0,currency:'usd',created:Math.floor(now.getTime()/1000)};
+ const paidSource={...session,status:'complete',payment_status:'paid',payment_intent:pi};
+ if(writer==='update')await db.paymentRecord.create({data:{kind:'EVENT',status:'FAILED',userId:input.userId,amountCents:2500,stripeEventId:'stripe-sync-charge-'+ch,stripeCheckoutSessionId:session.id,stripePaymentIntentId:pi,occurredAt:now}});
+ let hold!:()=>void;const gate=new Promise<void>(r=>hold=r);
+ let started!:()=>void;const wrote=new Promise<void>(r=>started=r);
+ const synchronized=db.$extends({query:{paymentRecord:{$allOperations:async({operation:op,args,query})=>{
+  const result=await query(args);if(op===(writer==='insert'?'create':'update')){started();await gate;}return result;
+ }}}});
+ const {syncRecentStripePaymentRecords}=await import('@/lib/payments/stripe-payment-sync');
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ await withSyncCharge(charge,paidSource,[],async()=>{
+  const writing=syncRecentStripePaymentRecords(synchronized as unknown as PrismaClient,{financialOnly:true});
+  try{
+   await Promise.race([wrote,writing.then(()=>{throw Error('Expected pending writer');})]);
+   if(operation==='release')session.status='expired';
+   const expire=vi.fn(async()=>{session.status='expired';return session;});
+   const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,expire}}};
+   const checking=reconcileSpecialEventCheckout({orderId,actorUserId:input.userId,explicitBuyerCancel:operation==='expire'},{db,stripe:provider,now});
+   const early=await Promise.race([checking.then(()=>true),new Promise<false>(r=>setTimeout(()=>r(false),70))]);
+   hold();await writing;const outcome=await checking;
+   expect(early).toBe(false);expect(outcome).toBe('review');expect(expire).not.toHaveBeenCalled();
+   expect(await used()).toBe(1);
+  }finally{hold();await writing;}
+ });
+ // Fixture-only cleanup leaves subsequent cases independent.
+ await db.paymentRecord.delete({where:{stripePaymentIntentId:pi}});
+ session.status='expired';await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+});
+
+it.each(['lost-response','commit-ambiguity'])('retains the staff instruction after provider expiry and %s',async failure=>{
+ await emptySeats();const {orderId,session}=await single('Lost expiry receipt');
+ const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,expire:async()=>{
+   const instruction=await db.auditLog.findFirstOrThrow({where:{entityId:orderId,action:'black-friday.expiry-requested'}});
+   expect(instruction).toMatchObject({actorId:buyer,after:{stripeCheckoutSessionId:session.id}});
+   session.status='expired';if(failure==='lost-response')throw Error('lost response');return session;}}}};
+ const reason='Shopper called to abandon checkout';
+ const ambiguous=db.$extends({query:{auditLog:{create:async({args,query})=>{
+  const row=await query(args);if(failure==='commit-ambiguity' && args.data.action==='black-friday.provider-expiry-accepted')throw Error('Rollback after provider call');
+  return row;
+ }}}});
+ await expect(manageBlackFridayTicket(ambiguous as unknown as PrismaClient,provider,{actorId:buyer,orderId,operation:'CANCEL',reason},now)).rejects.toThrow();
+ expect(await used()).toBe(1);
+ expect(await db.auditLog.count({where:{entityId:orderId,action:'black-friday.provider-expiry-accepted'}})).toBe(0);
+ await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+ const settled=await db.auditLog.findFirstOrThrow({where:{entityId:orderId,action:'black-friday.expired'}});
+ expect(settled).toMatchObject({actorId:buyer,after:{reason,providerAcceptanceObserved:false,staffInstructionId:expect.any(String)}});
+ expect(await db.auditLog.findFirstOrThrow({where:{entityId:orderId,action:'black-friday.expiry-requested'}})).toMatchObject({actorId:buyer,after:{reason,stripeCheckoutSessionId:session.id}});
+ expect(await used()).toBe(0);
+});
+
+it('refuses release from a serializable snapshot that predates the session-only collected writer',async()=>{
+ await emptySeats();const {session,orderId,input}=await single('Stale checkout ledger');
+ const pi='pi_stale_checkout',ch='ch_stale_checkout';
+ const charge={id:ch,payment_intent:pi,metadata:{userId:input.userId},livemode:false,status:'succeeded',paid:true,captured:true,amount:2500,amount_captured:2500,amount_refunded:0,currency:'usd',created:Math.floor(now.getTime()/1000)};
+ let started!:()=>void;const observed=new Promise<void>(r=>started=r);
+ let resume!:()=>void;const gate=new Promise<void>(r=>resume=r);
+ const old=db.$transaction(async tx=>{
+  await tx.commerceOrder.findUniqueOrThrow({where:{id:orderId}});started();await gate;
+  return applyBlackFridaySession(tx,{...session,status:'expired'},now);
+ },{isolationLevel:'Serializable'});
+ const result=Promise.allSettled([old]);await observed;
+ const {syncRecentStripePaymentRecords}=await import('@/lib/payments/stripe-payment-sync');
+ try{
+  await withSyncCharge(charge,{...session,status:'complete',payment_status:'paid',payment_intent:pi},[],()=>syncRecentStripePaymentRecords(db,{financialOnly:true}));
+ }finally{resume();}
+ const [stale]=await result;
+ expect(stale.status).toBe('rejected');
+ if(stale.status==='rejected')expect(String(stale.reason)).toMatch(/40001|serialize|write conflict/i);
+ expect(await used()).toBe(1);
+ await db.paymentRecord.delete({where:{stripePaymentIntentId:pi}});
+ await db.$transaction(tx=>applyBlackFridaySession(tx,{...session,status:'expired'},now));
+});
+
+it('keeps an incoming sync payment writer outside an in-flight provider expiry and rechecks the ledger before release',async()=>{
+ await emptySeats();const {session,orderId,input}=await single('Provider expiry already running');
+ const pi='pi_provider_expiring',ch='ch_provider_expiring';
+ const charge={id:ch,payment_intent:pi,metadata:{userId:input.userId},livemode:false,status:'succeeded',paid:true,captured:true,amount:2500,amount_captured:2500,amount_refunded:0,currency:'usd',created:Math.floor(now.getTime()/1000)};
+ const paidSource={...session,status:'complete',payment_status:'paid',payment_intent:pi};
+ const {syncRecentStripePaymentRecords}=await import('@/lib/payments/stripe-payment-sync');
+ const {reconcileSpecialEventCheckout}=await import('@/lib/payments/special-event-reconciliation');
+ let entering!:()=>void;const inProvider=new Promise<void>(r=>entering=r);
+ let resume!:()=>void;const gate=new Promise<void>(r=>resume=r);
+ let atWrite!:()=>void;const attemptedWrite=new Promise<void>(r=>atWrite=r);
+ const writer=db.$extends({query:{paymentRecord:{create:async({query,args})=>{atWrite();return query(args);}}}});
+ await withSyncCharge(charge,paidSource,[],async()=>{
+  let writing:Promise<unknown>=Promise.resolve();
+  const provider={...stripe,checkout:{sessions:{...stripe.checkout.sessions,
+    expire:async()=>{entering();await gate;session.status='expired';return session;},
+    retrieve:async()=>{if(session.status==='expired')await writing;return session;},
+  }}};
+  const checking=reconcileSpecialEventCheckout({orderId,actorUserId:input.userId,explicitBuyerCancel:true},{db,stripe:provider,now});
+  try{
+   await Promise.race([inProvider,checking.then(()=>{throw Error('Provider expiry was not invoked');})]);
+   writing=syncRecentStripePaymentRecords(writer as unknown as PrismaClient,{financialOnly:true});
+   await Promise.race([attemptedWrite,writing.then(()=>{throw Error('Expected ledger writer');})]);
+   const early=await Promise.race([writing.then(()=>true),new Promise<false>(r=>setTimeout(()=>r(false),70))]);
+   resume();
+   expect(await checking).toBe('review');expect(early).toBe(false);
+   expect(await used()).toBe(1);
+  }finally{resume();await writing;await checking;}
+ });
+ await db.paymentRecord.delete({where:{stripePaymentIntentId:pi}});
+ await db.$transaction(tx=>applyBlackFridaySession(tx,session,now));
+});
